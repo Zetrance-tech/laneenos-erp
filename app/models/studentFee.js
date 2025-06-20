@@ -1,4 +1,135 @@
-// models/studentFee.js
+// // import mongoose from "mongoose";
+
+// // const studentFeeSchema = new mongoose.Schema({
+// //   studentId: {
+// //     type: mongoose.Schema.Types.ObjectId,
+// //     ref: "Student",
+// //     required: true,
+// //   },
+// //   classId: {
+// //     type: mongoose.Schema.Types.ObjectId,
+// //     ref: "Class",
+// //     required: true,
+// //   },
+// //   sessionId: {
+// //     type: mongoose.Schema.Types.ObjectId,
+// //     ref: "Session",
+// //     required: true,
+// //   },
+// //   feesGroup: {
+// //     type: mongoose.Schema.Types.ObjectId,
+// //     ref: "FeesGroup",
+// //     required: true,
+// //   },
+// //   amount: {
+// //     type: Number,
+// //     required: true,
+// //     min: 0,
+// //   },
+// //   isCustom: {
+// //     type: Boolean,
+// //     default: false,
+// //   },
+// //   status: {
+// //     type: String,
+// //     enum: ["pending", "paid", "overdue"],
+// //     default: "pending",
+// //   },
+// //   createdAt: {
+// //     type: Date,
+// //     default: Date.now,
+// //   },
+// //   updatedAt: {
+// //     type: Date,
+// //     default: Date.now,
+// //   },
+// // });
+// // studentFeeSchema.pre("save", function (next) {
+// //   this.updatedAt = Date.now();
+// //   next();
+// // });
+
+// // export default mongoose.model("StudentFee", studentFeeSchema);
+
+// import mongoose from "mongoose";
+
+// const studentFeeSchema = new mongoose.Schema({
+//   studentId: {
+//     type: mongoose.Schema.Types.ObjectId,
+//     ref: "Student",
+//     required: true,
+//   },
+//   classId: {
+//     type: mongoose.Schema.Types.ObjectId,
+//     ref: "Class",
+//     required: true,
+//   },
+//   sessionId: {
+//     type: mongoose.Schema.Types.ObjectId,
+//     ref: "Session",
+//     required: true,
+//   },
+//   feesGroup: {
+//     type: mongoose.Schema.Types.ObjectId,
+//     ref: "FeesGroup",
+//     required: true,
+//   },
+//   amount: {
+//     type: Number,
+//     required: true,
+//     min: 0,
+//   },
+//   originalAmount: {
+//     type: Number,
+//     required: true,
+//     min: 0,
+//   },
+//   discount: {
+//     type: Number,
+//     default: 0,
+//     min: 0,
+//   },
+//   dueDate: {
+//     type: Date,
+//     default:null,
+//   },
+//   month: {
+//     type: String,
+//     enum: ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"],
+//     required: true,
+//   },
+//   isCustom: {
+//     type: Boolean,
+//     default: false,
+//   },
+//   status: {
+//     type: String,
+//     enum: ["pending", "paid", "overdue"],
+//     default: "pending",
+//   },
+//   createdAt: {
+//     type: Date,
+//     default: Date.now,
+//   },
+//   updatedAt: {
+//     type: Date,
+//     default: Date.now,
+//   },
+//   generatedAt: {
+//     type: Date,
+//     default: null,
+//   },
+//   generationGroupId: { type: String },
+// });
+
+// studentFeeSchema.pre("save", function (next) {
+//   this.updatedAt = Date.now();
+//   next();
+// });
+
+// export default mongoose.model("StudentFee", studentFeeSchema);
+
+
 import mongoose from "mongoose";
 
 const studentFeeSchema = new mongoose.Schema({
@@ -7,63 +138,76 @@ const studentFeeSchema = new mongoose.Schema({
     ref: "Student",
     required: true,
   },
-  sessionId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Session",
-    required: true,
-  },
   classId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Class",
     required: true,
   },
-  feeTemplateId: {
+  sessionId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "FeesTemplate",
+    ref: "Session",
     required: true,
   },
-  customFees: [
-    {
-      feesGroup: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "FeesGroup",
-        required: true,
-      },
-      feeTypes: [
-        {
-          feesType: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "FeesType",
-            required: true,
-          },
-          amount: {
-            type: Number,
-            required: true,
-            min: 0,
-          },
-          originalAmount: { // New field to track the template's original amount
-            type: Number,
-            required: true,
-            min: 0,
-          },
-          discount: { // New field for discount amount or percentage
-            type: Number,
-            default: 0,
-            min: 0,
-          },
-          discountType: { // New field to specify if discount is fixed or percentage
-            type: String,
-            enum: ["fixed", "percentage"],
-            default: "fixed",
-          },
-          dueDate: { // New field for due date
-            type: Date,
-            required: true, // Make it required if you want to enforce it
-          },
-        },
-      ],
-    },
-  ],
+  feesGroup: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "FeesGroup",
+    required: true,
+  },
+  amount: {
+    type: Number,
+    required: true,
+    min: 0,
+  },
+  originalAmount: {
+    type: Number,
+    required: true,
+    min: 0,
+  },
+  discount: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  dueDate: {
+    type: Date,
+    default: null,
+  },
+  month: {
+    type: String,
+    enum: ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"],
+    required: true,
+  },
+  isCustom: {
+    type: Boolean,
+    default: false,
+  },
+  status: {
+    type: String,
+    enum: ["pending", "paid", "overdue"],
+    default: "pending",
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now,
+  },
+  generatedAt: {
+    type: Date,
+    default: null,
+  },
+  generationGroupId: { type: String },
+  merchantTransactionId: {
+    type: String,
+    default: null,
+  },
+});
+
+studentFeeSchema.pre("save", function (next) {
+  this.updatedAt = Date.now();
+  next();
 });
 
 export default mongoose.model("StudentFee", studentFeeSchema);

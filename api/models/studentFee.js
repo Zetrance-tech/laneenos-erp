@@ -120,6 +120,10 @@ const studentFeeSchema = new mongoose.Schema({
     default: null,
   },
   generationGroupId: { type: String },
+  merchantTransactionId: {
+    type: String,
+    default: null,
+  },
 });
 
 studentFeeSchema.pre("save", function (next) {

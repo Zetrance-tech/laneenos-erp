@@ -12,6 +12,7 @@ import { format } from "date-fns";
 import { toast, Toaster } from "react-hot-toast";
 import { Spin } from "antd";
 import { useAuth } from "../../../../context/AuthContext";
+
 // Interfaces
 interface Leave {
   _id: string;
@@ -85,7 +86,7 @@ const ApproveRequest: React.FC = () => {
   const { token, user } = useAuth();
   const [leaves, setLeaves] = useState<TableData[]>([]);
   const [filteredLeaves, setFilteredLeaves] = useState<TableData[]>([]);
-  const [responseData, setResponseData] = useState<Leave[]>([]); // Store raw API response
+  const [responseData, setResponseData] = useState<Leave[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [selectedClass, setSelectedClass] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -145,7 +146,7 @@ const ApproveRequest: React.FC = () => {
       }
     };
     fetchInitialData();
-  }, []);
+  }, [token]);
 
   // Fetch leave requests
   useEffect(() => {
@@ -180,7 +181,7 @@ const ApproveRequest: React.FC = () => {
 
         console.log("Raw API Response:", response.data);
         if (Array.isArray(response.data)) {
-          setResponseData(response.data); // Store raw response
+          setResponseData(response.data);
           const mappedData: TableData[] = response.data
             .filter((leave: Leave) => {
               if (!leave.studentId?.name) {
@@ -238,7 +239,7 @@ const ApproveRequest: React.FC = () => {
     if (currentUser) {
       fetchLeaves();
     }
-  }, [currentUser, selectedClass]);
+  }, [currentUser, selectedClass, token]);
 
   // Handle status filter and date range changes
   useEffect(() => {
@@ -464,7 +465,10 @@ const ApproveRequest: React.FC = () => {
               <select
                 className="form-select"
                 value={selectedClass}
-                onChange={(e) => setSelectedClass(e.target.value)}
+                onChange={(e) => {
+                  setSelectedClass(e.target.value);
+                  setStatusFilter("");
+                }}
               >
                 <option value="">All Classes</option>
                 {classes.map((c) => (
@@ -479,7 +483,22 @@ const ApproveRequest: React.FC = () => {
             <div className="card-header d-flex align-items-center justify-content-between flex-wrap pb-0">
               <h4 className="mb-3">Approved Leave Request List</h4>
               <div className="d-flex align-items-center flex-wrap">
+                <div className="me-3 mb-3">
+                  <label className="form-label">Status</label>
+                  <select
+                    className="form-select"
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                  >
+                    {statusOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div className="input-icon-start mb-3 me-2 position-relative">
+                  <label className="form-label">Date Range</label>
                   <CustomDateRangePicker onChange={(range) => setDateRange(range)} />
                 </div>
               </div>
@@ -491,7 +510,11 @@ const ApproveRequest: React.FC = () => {
                 </div>
               ) : filteredLeaves.length === 0 ? (
                 <div className="text-center py-3">
-                  <p>{selectedClass ? "No leave requests found for this class." : "No leave requests found."}</p>
+                  <p>
+                    {selectedClass
+                      ? `No leave requests found for this class${statusFilter ? ` with status "${statusFilter}"` : ""}.`
+                      : `No leave requests found${statusFilter ? ` with status "${statusFilter}"` : ""}.`}
+                  </p>
                 </div>
               ) : (
                 <Table dataSource={filteredLeaves} columns={columns} Selection={true} />

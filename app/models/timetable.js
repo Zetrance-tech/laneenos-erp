@@ -42,12 +42,6 @@ const timetableSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "User" 
       },
-      status: {
-        type: String,
-        enum: ["pending", "completed"],
-        default: "pending"
-      },
-      notes: String
     }]
   }],
   createdBy: {
@@ -60,8 +54,5 @@ const timetableSchema = new mongoose.Schema({
     ref: "User"
   }
 }, { timestamps: true });
-
-// Index for faster queries
-timetableSchema.index({ sessionId: 1, classId: 1, weekStartDate: 1 });
 
 export default mongoose.model("Timetable", timetableSchema);

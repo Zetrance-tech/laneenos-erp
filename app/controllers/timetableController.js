@@ -68,41 +68,103 @@ export const createOrUpdateTimetable = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+function formatTimetableForParent(timetable) {
+  const formattedDays = timetable.days.map((day) => ({
+    day: day.day,
+    date: day.date,
+    slots: day.slots.map((slot) => ({
+      description: slot.description,
+      activity: slot.activity,
+      teacher: slot.teacherId ? slot.teacherId.name : "Unassigned",
+    })),
+  }));
 
+  return {
+    _id: timetable._id,
+    sessionId: timetable.sessionId,
+    classId: timetable.classId,
+    weekStartDate: timetable.weekStartDate,
+    weekEndDate: timetable.weekEndDate,
+    days: formattedDays,
+  };
+}
 // Get timetable for a specific week and class
 export const getTimetable = async (req, res) => {
   try {
-    const { sessionId, classId, weekStartDate } = req.params;
+    const { year, month } = req.params;
+    const { email, role } = req.user;
 
-    // Validate session and class
-    const session = await Session.findById(sessionId);
-    if (!session) {
-      return res.status(404).json({ message: "Session not found" });
+    // Verify user is a parent
+    if (role !== "parent") {
+      return res.status(403).json({ message: "Only parents can access this resource" });
     }
 
-    const classData = await Class.findById(classId);
-    if (!classData) {
-      return res.status(404).json({ message: "Class not found" });
+    // Validate year and month
+    const yearNum = parseInt(year, 10);
+    const monthNum = parseInt(month, 10);
+    if (isNaN(yearNum) || isNaN(monthNum) || monthNum < 1 || monthNum > 12) {
+      return res.status(400).json({ message: "Invalid year or month" });
     }
 
-    // Check if class belongs to the session
-    if (classData.sessionId.toString() !== sessionId.toString()) {
-      return res.status(400).json({ message: "Class does not belong to the specified session" });
+    // Find students associated with the parent's email
+    const students = await Student.find({
+      $or: [
+        { "fatherInfo.email": email },
+        { "motherInfo.email": email },
+      ],
+    })
+      .populate("classId", "name")
+      .populate("sessionId", "name");
+
+    if (!students || students.length === 0) {
+      return res.status(404).json({ message: "No students found associated with this parent" });
     }
 
-    // Find timetable for the week
-    const startDate = new Date(weekStartDate);
-    const timetable = await Timetable.findOne({
-      sessionId,
-      classId,
-      weekStartDate: startDate
-    }).populate("teacherId", "name");
+    // Calculate date range for the month
+    const startOfMonth = new Date(Date.UTC(yearNum, monthNum - 1, 1));
+    const endOfMonth = new Date(Date.UTC(yearNum, monthNum, 0, 23, 59, 59, 999));
 
-    if (!timetable) {
-      return res.status(404).json({ message: "Timetable not found for this week" });
+    // Collect timetables for all students
+    const result = [];
+    for (const student of students) {
+      if (!student.classId || !student.sessionId) {
+        continue; // Skip students not assigned to a class or session
+      }
+
+      // Fetch timetables for the student's class and session within the month
+      const timetables = await Timetable.find({
+        sessionId: student.sessionId,
+        classId: student.classId,
+        weekStartDate: {
+          $gte: startOfMonth,
+          $lte: endOfMonth,
+        },
+      }).populate("days.slots.teacherId", "name");
+
+      // Format timetables for parent view
+      const formattedTimetables = timetables.map((timetable) => formatTimetableForParent(timetable));
+
+      // Include all timetables, even those with no days (for completeness)
+      if (formattedTimetables.length > 0) {
+        result.push({
+          studentId: student._id,
+          studentName: student.name,
+          className: student.classId.name,
+          sessionName: student.sessionId.name,
+          timetables: formattedTimetables,
+        });
+      }
     }
 
-    res.status(200).json(timetable);
+    if (result.length === 0) {
+      return res.status(404).json({ message: "No timetables found for this month for any associated students" });
+    }
+
+    res.status(200).json({
+      year: yearNum,
+      month: monthNum,
+      students: result,
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

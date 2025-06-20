@@ -8,10 +8,6 @@ export const createConsentRequest = async (req, res) => {
   try {
     const { title, description, sessionId, classId } = req.body;
 
-    // if (req.user.role !== "admin") {
-    //   return res.status(403).json({ message: "Unauthorized" });
-    // }
-
     if (!title || !description || !sessionId || !classId) {
       return res.status(400).json({ message: "All fields are required" });
     }
@@ -159,8 +155,6 @@ export const getParentConsents = async (req, res) => {
 export const respondToConsent = async (req, res) => {
   try {
     const { consentResponseId, status } = req.body;
-    console.log("Request body:", req.body);
-    console.log("Authenticated user:", req.user);
 
     if (req.user.role !== "parent") {
       return res.status(403).json({ message: "Unauthorized" });
@@ -177,8 +171,6 @@ export const respondToConsent = async (req, res) => {
 
     if (!response) {
       console.log(`No response found for consentResponseId: ${consentResponseId}, parentId: ${req.user.userId}`);
-      const allResponses = await ConsentResponse.find({ _id: consentResponseId });
-      console.log("All responses with this ID:", allResponses);
       return res.status(404).json({ message: "Consent response not found" });
     }
 
@@ -196,6 +188,7 @@ export const respondToConsent = async (req, res) => {
       return res.status(400).json({ message: "Another parent has already responded for this student" });
     }
 
+    // Fix: Use response.consentId instead of undefined consentId
     const updateResult = await ConsentResponse.updateMany(
       { 
         consentId: response.consentId, 

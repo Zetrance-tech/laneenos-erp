@@ -14,7 +14,7 @@ router.post("/", authMiddleware(["teacher"]), createOrUpdateTimetable);
 router.get("/student/:weekStartDate", authMiddleware(["parent"]), getStudentTimetable1);
 
 // Get timetable for a class (admin, teacher, and parents of students in that class)
-router.get("/:classId/:weekStartDate", authMiddleware(["admin", "parent", "teacher"]), getTimetable);
+router.get("/:year/:month", authMiddleware(["admin", "parent", "teacher"]), getTimetable);
 
 // Teachers can update activity status
 router.put("/status", authMiddleware(["admin", "parent", "teacher"]), updateActivityStatus);

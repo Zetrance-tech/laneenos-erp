@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import * as bootstrap from "bootstrap";
 import toast, { Toaster } from "react-hot-toast";
-import { Table, Spin } from "antd";
+import { Table, Spin, Input } from "antd";
 import { useAuth } from "../../../context/AuthContext";
+
 const API_URL = process.env.REACT_APP_URL;
 
 interface User {
@@ -55,6 +56,7 @@ const ClassHomeWork: React.FC = () => {
       return null;
     }
   };
+
   const { token, user } = useAuth();
   const decoded = token ? decodeToken(token) : null;
   const currentUser: User = decoded
@@ -62,15 +64,17 @@ const ClassHomeWork: React.FC = () => {
     : { userId: "", role: "teacher" };
 
   const [homework, setHomework] = useState<Homework[]>([]);
+  const [filteredHomework, setFilteredHomework] = useState<Homework[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [selectedClass, setSelectedClass] = useState<string>("");
+  const [searchCreatedBy, setSearchCreatedBy] = useState<string>("");
+  const [searchSubject, setSearchSubject] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState<boolean>(false);
   const [selectedHomework, setSelectedHomework] = useState<Homework | null>(null);
   const dropdownMenuRef = useRef<HTMLDivElement>(null);
 
-  
   useEffect(() => {
     if (error) {
       toast.error(error);
@@ -99,6 +103,7 @@ const ClassHomeWork: React.FC = () => {
           (h): h is Homework => h != null && h._id != null
         );
         setHomework(validHomework);
+        setFilteredHomework(validHomework);
       } catch (err: any) {
         setError(err.response?.data?.message || "Failed to fetch data");
       } finally {
@@ -107,6 +112,19 @@ const ClassHomeWork: React.FC = () => {
     };
     fetchData();
   }, [currentUser.role, selectedClass, token]);
+
+  useEffect(() => {
+    const filtered = homework.filter((item) => {
+      const matchesCreatedBy = searchCreatedBy
+        ? item.teacherId?.name?.toLowerCase().includes(searchCreatedBy.toLowerCase())
+        : true;
+      const matchesSubject = searchSubject
+        ? item.subject?.toLowerCase().includes(searchSubject.toLowerCase())
+        : true;
+      return matchesCreatedBy && matchesSubject;
+    });
+    setFilteredHomework(filtered);
+  }, [searchCreatedBy, searchSubject, homework]);
 
   const handleAddHomework = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -140,6 +158,7 @@ const ClassHomeWork: React.FC = () => {
         (h): h is Homework => h != null && h._id != null
       );
       setHomework(validHomework);
+      setFilteredHomework(validHomework);
       (e.target as HTMLFormElement).reset();
       const modalElement = document.getElementById("add_home_work");
       if (modalElement) {
@@ -184,6 +203,7 @@ const ClassHomeWork: React.FC = () => {
         (h): h is Homework => h != null && h._id != null
       );
       setHomework(validHomework);
+      setFilteredHomework(validHomework);
       (e.target as HTMLFormElement).reset();
       const modalElement = document.getElementById("edit_home_work");
       if (modalElement) {
@@ -211,6 +231,7 @@ const ClassHomeWork: React.FC = () => {
         (h): h is Homework => h != null && h._id != null
       );
       setHomework(validHomework);
+      setFilteredHomework(validHomework);
       const modalElement = document.getElementById("delete-modal");
       if (modalElement) {
         const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
@@ -242,7 +263,7 @@ const ClassHomeWork: React.FC = () => {
     }
   };
 
-  const dataSource = homework?.map((item) => ({
+  const dataSource = filteredHomework?.map((item) => ({
     key: item._id,
     className: item.classId && item.classId._id && item.classId.name ? item.classId.name : "Class Deleted",
     subject: item.subject ?? "N/A",
@@ -257,26 +278,39 @@ const ClassHomeWork: React.FC = () => {
       title: "Class",
       dataIndex: "className",
       key: "className",
+      sorter: (a:any, b:any) => a.className.localeCompare(b.className),
     },
     {
       title: "Subject",
       dataIndex: "subject",
       key: "subject",
+      sorter: (a:any, b:any) => a.subject.localeCompare(b.subject),
     },
     {
       title: "Homework Date",
       dataIndex: "createdAt",
       key: "createdAt",
+      sorter: (a:any, b:any) => {
+        const dateA = a.homework.createdAt ? new Date(a.homework.createdAt).getTime() : 0;
+        const dateB = b.homework.createdAt ? new Date(b.homework.createdAt).getTime() : 0;
+        return dateA - dateB;
+      },
     },
     {
       title: "Submission Date",
       dataIndex: "dueDate",
       key: "dueDate",
+      sorter: (a:any, b:any) => {
+        const dateA = a.homework.dueDate ? new Date(a.homework.dueDate).getTime() : 0;
+        const dateB = b.homework.dueDate ? new Date(b.homework.dueDate).getTime() : 0;
+        return dateA - dateB;
+      },
     },
     {
       title: "Created By",
       dataIndex: "teacherName",
       key: "teacherName",
+      sorter: (a:any, b:any) => a.teacherName.localeCompare(b.teacherName),
     },
     {
       title: "Action",
@@ -383,6 +417,9 @@ const ClassHomeWork: React.FC = () => {
           .ant-table-tbody > tr:nth-child(odd) > td {
             background-color: #ffffff !important;
           }
+          .ant-table-container {
+            margin-left: 20px !important;
+          }
         `}
       </style>
       <div className="content">
@@ -416,25 +453,45 @@ const ClassHomeWork: React.FC = () => {
             </div>
           </div>
         </div>
-        {currentUser.role === "admin" && (
-          <div className="mb-3">
-            <label className="form-label">Select Class</label>
-            <select
-              className="form-select"
-              value={selectedClass}
-              onChange={(e) => setSelectedClass(e.target.value)}
-            >
-              <option value="">All Classes</option>
-              {classes?.map((c) =>
-                c && c._id && c.name ? (
-                  <option key={c._id} value={c._id}>
-                    {c.name}
-                  </option>
-                ) : null
-              ) ?? []}
-            </select>
+        <div className="mb-3">
+          <div className="row">
+            {currentUser.role === "admin" && (
+              <div className="col-md-4">
+                <label className="form-label">Select Class</label>
+                <select
+                  className="form-select"
+                  value={selectedClass}
+                  onChange={(e) => setSelectedClass(e.target.value)}
+                >
+                  <option value="">All Classes</option>
+                  {classes?.map((c) =>
+                    c && c._id && c.name ? (
+                      <option key={c._id} value={c._id}>
+                        {c.name}
+                      </option>
+                    ) : null
+                  ) ?? []}
+                </select>
+              </div>
+            )}
+            <div className="col-md-4">
+              <label className="form-label">Search by Subject</label>
+              <Input
+                placeholder="Search by subject"
+                value={searchSubject}
+                onChange={(e) => setSearchSubject(e.target.value)}
+              />
+            </div>
+            <div className="col-md-4">
+              <label className="form-label">Search by Created By</label>
+              <Input
+                placeholder="Search by teacher name"
+                value={searchCreatedBy}
+                onChange={(e) => setSearchCreatedBy(e.target.value)}
+              />
+            </div>
           </div>
-        )}
+        </div>
         <div className="card">
           <div className="card-header d-flex align-items-center justify-content-between flex-wrap pb-0">
             <h4 className="mb-3">Class Home Work</h4>
@@ -452,138 +509,136 @@ const ClassHomeWork: React.FC = () => {
                   columns={columns}
                   dataSource={dataSource}
                   rowKey="key"
-                  rowSelection={{ type: "checkbox" }}
                 />
               )}
             </div>
           </div>
         </div>
         <div className="modal fade" id="add_home_work">
-  <div className="modal-dialog modal-dialog-centered">
-    <div className="modal-content">
-      <div className="modal-header">
-        <h4 className="modal-title">Add Home Work</h4>
-        <button
-          type="button"
-          className="btn-close custom-btn-close"
-          onClick={() => {
-            const modalElement = document.getElementById("add_home_work");
-            if (modalElement) {
-              const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
-              modal.hide();
-            }
-          }}
-        >
-          <i className="ti ti-x" />
-        </button>
-      </div>
-      <form onSubmit={handleAddHomework}>
-        <div className="modal-body">
-          <div className="row">
-            <div className="col-md-12">
-              <div className="mb-3">
-                <label className="form-label">Class</label>
-                <div className="form-check">
-                  <input
-                    className="form-check-input"
-                    type="checkbox"
-                    name="classId"
-                    value="all"
-                    id="allClasses"
-                    onChange={(e) => {
-                      const checkboxes = document.querySelectorAll<HTMLInputElement>('input[name="classId"]');
-                      checkboxes.forEach((checkbox) => {
-                        if (checkbox.value !== "all") {
-                          checkbox.checked = e.target.checked;
-                          checkbox.disabled = e.target.checked;
-                        }
-                      });
-                    }}
-                  />
-                  <label className="form-check-label" htmlFor="allClasses">
-                    All Classes
-                  </label>
-                </div>
-                {classes?.map((c) =>
-                  c && c._id && c.name ? (
-                    <div className="form-check" key={c._id}>
-                      <input
-                        className="form-check-input"
-                        type="checkbox"
-                        name="classId"
-                        value={c._id}
-                        id={`class-${c._id}`}
-                      />
-                      <label className="form-check-label" htmlFor={`class-${c._id}`}>
-                        {c.name}
-                      </label>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h4 className="modal-title">Add Home Work</h4>
+                <button
+                  type="button"
+                  className="btn-close custom-btn-close"
+                  onClick={() => {
+                    const modalElement = document.getElementById("add_home_work");
+                    if (modalElement) {
+                      const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                      modal.hide();
+                    }
+                  }}
+                >
+                  <i className="ti ti-x" />
+                </button>
+              </div>
+              <form onSubmit={handleAddHomework}>
+                <div className="modal-body">
+                  <div className="row">
+                    <div className="col-md-12">
+                      <div className="mb-3">
+                        <label className="form-label">Class</label>
+                        <div className="form-check">
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            name="classId"
+                            value="all"
+                            id="allClasses"
+                            onChange={(e) => {
+                              const checkboxes = document.querySelectorAll<HTMLInputElement>('input[name="classId"]');
+                              checkboxes.forEach((checkbox) => {
+                                if (checkbox.value !== "all") {
+                                  checkbox.checked = e.target.checked;
+                                  checkbox.disabled = e.target.checked;
+                                }
+                              });
+                            }}
+                          />
+                          <label className="form-check-label" htmlFor="allClasses">
+                            All Classes
+                          </label>
+                        </div>
+                        {classes?.map((c) =>
+                          c && c._id && c.name ? (
+                            <div className="form-check" key={c._id}>
+                              <input
+                                className="form-check-input"
+                                type="checkbox"
+                                name="classId"
+                                value={c._id}
+                                id={`class-${c._id}`}
+                              />
+                              <label className="form-check-label" htmlFor={`class-${c._id}`}>
+                                {c.name}
+                              </label>
+                            </div>
+                          ) : null
+                        ) ?? []}
+                      </div>
+                      <div className="mb-3">
+                        <label className="form-label">Title</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          name="title"
+                          required
+                        />
+                      </div>
+                      <div className="mb-3">
+                        <label className="form-label">Subject</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          name="subject"
+                          placeholder="Enter subject"
+                          required
+                        />
+                      </div>
+                      <div className="mb-3">
+                        <label className="form-label">Description</label>
+                        <textarea
+                          className="form-control"
+                          rows={4}
+                          name="description"
+                          required
+                        />
+                      </div>
+                      <div className="mb-3">
+                        <label className="form-label">Due Date</label>
+                        <input
+                          type="date"
+                          className="form-control"
+                          name="dueDate"
+                          required
+                        />
+                      </div>
                     </div>
-                  ) : null
-                ) ?? []}
-              </div>
-              <div className="mb-3">
-                <label className="form-label">Title</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  name="title"
-                  required
-                />
-              </div>
-              <div className="mb-3">
-                <label className="form-label">Subject</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  name="subject"
-                  placeholder="Enter subject"
-                  required
-                />
-              </div>
-              <div className="mb-3">
-                <label className="form-label">Description</label>
-                <textarea
-                  className="form-control"
-                  rows={4}
-                  name="description"
-                  required
-                />
-              </div>
-              <div className="mb-3">
-                <label className="form-label">Due Date</label>
-                <input
-                  type="date"
-                  className="form-control"
-                  name="dueDate"
-                  required
-                />
-              </div>
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button
+                    type="button"
+                    className="btn btn-light me-2"
+                    onClick={() => {
+                      const modalElement = document.getElementById("add_home_work");
+                      if (modalElement) {
+                        const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                        modal.hide();
+                      }
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary">
+                    Add Homework
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>
-        <div className="modal-footer">
-          <button
-            type="button"
-            className="btn btn-light me-2"
-            onClick={() => {
-              const modalElement = document.getElementById("add_home_work");
-              if (modalElement) {
-                const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
-                modal.hide();
-              }
-            }}
-          >
-            Cancel
-          </button>
-          <button type="submit" className="btn btn-primary">
-            Add Homework
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-        
         <div className="modal fade" id="edit_home_work">
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">

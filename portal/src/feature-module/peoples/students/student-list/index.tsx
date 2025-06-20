@@ -6,8 +6,10 @@ import StudentModals from "../studentModals";
 import Table from "../../../../core/common/dataTable/index";
 import TooltipOption from "../../../../core/common/tooltipOption";
 import axios from "axios";
-import { Spin } from "antd";
+import { Spin, Select } from "antd";
 import { useAuth } from "../../../../context/AuthContext";
+
+const { Option } = Select;
 const API_URL = process.env.REACT_APP_URL;
 
 interface Student {
@@ -18,21 +20,19 @@ interface Student {
   gender: string;
   status: string;
   admissionDate: string;
-  class?: string; // Optional as not in API response
+  class: string | null;
+  classId?: { id: string; name: string };
 }
 
 const StudentList = () => {
   const routes = all_routes;
   const dropdownMenuRef = useRef<HTMLDivElement | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
+  const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
+  const [classes, setClasses] = useState<string[]>([]);
+  const [selectedClass, setSelectedClass] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const {token} = useAuth();
-
-  // const handleApplyClick = () => {
-  //   if (dropdownMenuRef.current) {
-  //     dropdownMenuRef.current.classList.remove("show");
-  //   }
-  // };
+  const { token } = useAuth();
 
   const fetchStudents = async () => {
     try {
@@ -40,12 +40,22 @@ const StudentList = () => {
       const res = await axios.get(`${API_URL}/api/student`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setStudents(res.data);
-      console.log(res.data)
+      // Map classId.name to class field
+      const mappedStudents = res.data.map((student: any) => ({
+        ...student,
+        class: student.classId?.name || "N/A",
+      }));
+      setStudents(mappedStudents);
+      setFilteredStudents(mappedStudents);
+
+      // Extract unique classes for dropdown
+      const uniqueClasses = Array.from(
+        new Set(mappedStudents.map((student: Student) => student.class).filter((cls: string) => cls !== "N/A"))
+      ) as string[];
+      setClasses(uniqueClasses);
     } catch (error) {
       console.error("Error fetching students:", error);
-    }
-    finally{
+    } finally {
       setIsLoading(false);
     }
   };
@@ -53,6 +63,15 @@ const StudentList = () => {
   useEffect(() => {
     fetchStudents();
   }, []);
+
+  // Filter students by selected class
+  useEffect(() => {
+    if (selectedClass) {
+      setFilteredStudents(students.filter((student) => student.class === selectedClass));
+    } else {
+      setFilteredStudents(students);
+    }
+  }, [selectedClass, students]);
 
   const columns = [
     {
@@ -86,12 +105,12 @@ const StudentList = () => {
       ),
       sorter: (a: Student, b: Student) => a.name.localeCompare(b.name),
     },
-    // {
-    //   title: "Class",
-    //   dataIndex: "class",
-    //   render: (text: string) => text || "N/A",
-    //   sorter: (a: Student, b: Student) => (a.class || "").localeCompare(b.class || ""),
-    // },
+    {
+      title: "Class",
+      dataIndex: "class",
+      render: (text: string) => text,
+      sorter: (a: Student, b: Student) => (a.class || "").localeCompare(b.class || ""),
+    },
     {
       title: "Gender",
       dataIndex: "gender",
@@ -146,15 +165,6 @@ const StudentList = () => {
       dataIndex: "action",
       render: (_: any, record: Student) => (
         <div className="d-flex align-items-center">
-
-          <Link
-            to="#"
-            data-bs-toggle="modal"
-            data-bs-target="#add_fees_collect"
-            className="btn btn-light fs-12 fw-semibold me-3"
-          >
-            Collect Fees
-          </Link>
           <div className="dropdown">
             <Link
               to="#"
@@ -183,32 +193,6 @@ const StudentList = () => {
                   Edit
                 </Link>
               </li>
-              {/* <li>
-                <Link
-                  className="dropdown-item rounded-1"
-                  to="#"
-                  data-bs-toggle="modal"
-                  data-bs-target="#login_detail"
-                >
-                  <i className="ti ti-lock me-2" />
-                  Login Details
-                </Link>
-              </li>
-              <li>
-                <Link className="dropdown-item rounded-1" to="#">
-                  <i className="ti ti-toggle-right me-2" />
-                  Disable
-                </Link>
-              </li>
-              <li>
-                <Link
-                  className="dropdown-item rounded-1"
-                  to={routes.studentPromotion}
-                >
-                  <i className="ti ti-arrow-ramp-right-2 me-2" />
-                  Promote Student
-                </Link>
-              </li> */}
               <li>
                 <Link
                   className="dropdown-item rounded-1"
@@ -260,93 +244,21 @@ const StudentList = () => {
             <div className="card-header d-flex align-items-center justify-content-between flex-wrap pb-0">
               <h4 className="mb-3">Students List</h4>
               <div className="d-flex align-items-center flex-wrap">
-                {/* <div className="input-icon-start mb-3 me-2 position-relative">
-                  <PredefinedDateRanges />
-                </div>
-                <div className="dropdown mb-3 me-2">
-                  <Link
-                    to="#"
-                    className="btn btn-outline-light bg-white dropdown-toggle"
-                    data-bs-toggle="dropdown"
-                    data-bs-auto-close="outside"
+                <div className="me-3 mb-3">
+                  <Select
+                    style={{ width: 200 }}
+                    placeholder="Select Class"
+                    onChange={(value) => setSelectedClass(value)}
+                    allowClear
+                    onClear={() => setSelectedClass(null)}
                   >
-                    <i className="ti ti-filter me-2" />
-                    Filter
-                  </Link>
-                  <div className="dropdown-menu drop-width" ref={dropdownMenuRef}>
-                    <form>
-                      <div className="d-flex align-items-center border-bottom p-3">
-                        <h4>Filter</h4>
-                      </div>
-                      <div className="p-3 pb-0 border-bottom">
-                        <div className="row">
-                          <div className="col-md-6">
-                            <div className="mb-3">
-                              <label className="form-label">Class</label>
-                              <CommonSelect
-                                className="select"
-                                options={allClass}
-                                defaultValue={allClass[0]}
-                              />
-                            </div>
-                          </div>
-                          <div className="col-md-6">
-                            <div className="mb-3">
-                              <label className="form-label">Section</label>
-                              <CommonSelect
-                                className="select"
-                                options={allSection}
-                                defaultValue={allSection[0]}
-                              />
-                            </div>
-                          </div>
-                          <div className="col-md-12">
-                            <div className="mb-3">
-                              <label className="form-label">Name</label>
-                              <CommonSelect
-                                className="select"
-                                options={names}
-                                defaultValue={names[0]}
-                              />
-                            </div>
-                          </div>
-                          <div className="col-md-6">
-                            <div className="mb-3">
-                              <label className="form-label">Gender</label>
-                              <CommonSelect
-                                className="select"
-                                options={gender}
-                                defaultValue={gender[0]}
-                              />
-                            </div>
-                          </div>
-                          <div className="col-md-6">
-                            <div className="mb-3">
-                              <label className="form-label">Status</label>
-                              <CommonSelect
-                                className="select"
-                                options={status}
-                                defaultValue={status[0]}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="p-3 d-flex align-items-center justify-content-end">
-                        <Link to="#" className="btn btn-light me-3">
-                          Reset
-                        </Link>
-                        <Link
-                          to={routes.studentGrid}
-                          className="btn btn-primary"
-                          onClick={handleApplyClick}
-                        >
-                          Apply
-                        </Link>
-                      </div>
-                    </form>
-                  </div>
-                </div> */}
+                    {classes.map((cls) => (
+                      <Option key={cls} value={cls}>
+                        {cls}
+                      </Option>
+                    ))}
+                  </Select>
+                </div>
                 <div className="d-flex align-items-center bg-white border rounded-2 p-1 mb-3 me-2">
                   <Link
                     to={routes.studentList}
@@ -369,10 +281,9 @@ const StudentList = () => {
                   <Spin size="large" />
                 </div>
               ) : (
-                <Table dataSource={students} columns={columns} Selection={true} />
+                <Table dataSource={filteredStudents} columns={columns} Selection={true} />
               )}
             </div>
-            
           </div>
         </div>
       </div>

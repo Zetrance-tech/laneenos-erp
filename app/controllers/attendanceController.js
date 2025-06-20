@@ -136,58 +136,6 @@ export const markAttendance = async (req, res) => {
   }
 };
 
-// // Get attendance for a student (for parents or authorized users)
-// export const getStudentAttendance = async (req, res) => {
-//   console.log("getStudentAttendance INITIATED - params:", req.params, "user:", req.user);
-
-//   const { studentId, date } = req.params;
-//   const parentId = req.user.userId;
-//   const role = req.user.role;
-
-//   try {
-//     console.log("Step 1: Input - studentId:", studentId, "date:", date);
-//     if (!studentId || !date) {
-//       console.log("Step 1a: Validation failed");
-//       return res.status(400).json({ message: "Student ID and date are required" });
-//     }
-
-//     // Validate student exists
-//     const student = await Student.findById(studentId);
-//     console.log("Step 2: Student query result:", student);
-//     if (!student) {
-//       return res.status(404).json({ message: "Student not found" });
-//     }
-
-//     // For parents: Check linkage via email
-//     if (role === "parent") {
-//       const parentEmail = req.user.email;
-//       if (!parentEmail || !["fatherInfo.email", "motherInfo.email", "guardianInfo.email"].some(field => student[field.split(".")[0]].email === parentEmail)) {
-//         console.log("Step 3: Parent not linked to student");
-//         return res.status(403).json({ message: "You are not authorized to view this student’s data" });
-//       }
-//     }
-
-//     // Get attendance for the date
-//     const attendance = await Attendance.findOne({
-//       studentId,
-//       date: new Date(date)
-//     });
-//     console.log("Step 4: Attendance result:", attendance);
-
-//     if (!attendance) {
-//       console.log("Step 4a: No attendance record for date:", date);
-//       return res.status(404).json({ message: "No attendance record found for this date" });
-//     }
-
-//     return res.status(200).json({
-//       attendance,
-//       isStudentIn: attendance.isStudentIn()
-//     });
-//   } catch (error) {
-//     console.error("Error in getStudentAttendance:", error.message, "Stack:", error.stack);
-//     return res.status(500).json({ message: "Server error while fetching attendance" });
-//   }
-// };
 
 
 export const getStudentAttendance = async (req, res) => {

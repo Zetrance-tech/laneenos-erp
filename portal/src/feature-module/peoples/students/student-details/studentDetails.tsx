@@ -24,6 +24,7 @@ interface Student {
   bloodGroup: string;
   religion: string;
   category: string;
+  class:string;
   motherTongue: string;
   languagesKnown: string[];
   currentAddress: string;
@@ -196,16 +197,6 @@ const StudentDetails = () => {
                                 <p className="text-dark fw-medium mb-1">Email</p>
                                 <p className="text-truncate">{student.fatherInfo.email || 'N/A'}</p>
                               </div>
-                              {/* <Link
-                                to="#"
-                                data-bs-toggle="tooltip"
-                                data-bs-placement="top"
-                                aria-label="Reset Password"
-                                data-bs-original-title="Reset Password"
-                                className="btn btn-dark btn-icon btn-sm mb-3"
-                              >
-                                <i className="ti ti-lock-x" />
-                              </Link> */}
                             </div>
                           </div>
                         </div>
@@ -241,16 +232,6 @@ const StudentDetails = () => {
                                 <p className="text-dark fw-medium mb-1">Email</p>
                                 <p className="text-truncate">{student.motherInfo.email || 'N/A'}</p>
                               </div>
-                              {/* <Link
-                                to="#"
-                                data-bs-toggle="tooltip"
-                                data-bs-placement="top"
-                                aria-label="Reset Password"
-                                data-bs-original-title="Reset Password"
-                                className="btn btn-dark btn-icon btn-sm mb-3"
-                              >
-                                <i className="ti ti-lock-x" />
-                              </Link> */}
                             </div>
                           </div>
                         </div>
@@ -304,134 +285,112 @@ const StudentDetails = () => {
                   </div>
 
                   {/* Documents */}
-                  <div className="col-xxl-6 d-flex">
-                    <div className="card flex-fill">
-                      <div className="card-header">
-                        <h5>Documents</h5>
-                      </div>
-                      <div className="card-body">
-                        {Object.entries(student.documents).some(([_, value]) => value) ? (
-                          Object.entries(student.documents).map(([key, value], index) => (
-                            value ? (
-                              <div
-                                key={index}
-                                className="bg-light-300 border rounded d-flex align-items-center justify-content-between mb-3 p-2"
-                              >
-                                <div className="d-flex align-items-center overflow-hidden">
-                                  <span className="avatar avatar-md bg-white rounded flex-shrink-0 text-default">
-                                    <i className="ti ti-pdf fs-15" />
-                                  </span>
-                                  <div className="ms-2">
-                                    <p className="text-truncate fw-medium text-dark">
-                                      {key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1')}
-                                    </p>
-                                  </div>
-                                </div>
-                                <Link to={value} className="btn btn-dark btn-icon btn-sm" download>
-                                  <i className="ti ti-download" />
-                                </Link>
-                              </div>
-                            ) : null
-                          ))
-                        ) : (
-                          <p>No documents available</p>
-                        )}
-                      </div>
-                    </div>
+                  <div className="row">
+  {/* Documents */}
+  <div className="col-md-6">
+    <div className="card flex-fill">
+      <div className="card-header">
+        <h5>Documents</h5>
+      </div>
+      <div className="card-body">
+        {Object.entries(student.documents).some(([_, value]) => value) ? (
+          Object.entries(student.documents).map(([key, value], index) => (
+            value ? (
+              <div
+                key={index}
+                className="bg-light-300 border rounded d-flex align-items-center justify-content-between mb-3 p-2"
+              >
+                <div className="d-flex align-items-center overflow-hidden">
+                  <span className="avatar avatar-md bg-white rounded flex-shrink-0 text-default">
+                    <i className="ti ti-pdf fs-15" />
+                  </span>
+                  <div className="ms-2">
+                    <p className="text-truncate fw-medium text-dark">
+                      {key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1')}
+                    </p>
                   </div>
+                </div>
+                <Link to={value} className="btn btn-dark btn-icon btn-sm" download>
+                  <i className="ti ti-download" />
+                </Link>
+              </div>
+            ) : null
+          ))
+        ) : (
+          <p>No documents available</p>
+        )}
+      </div>
+    </div>
+  </div>
 
-                  {/* Address */}
-                  <div className="col-xxl-6 d-flex">
-                    <div className="card flex-fill">
-                      <div className="card-header">
-                        <h5>Address</h5>
-                      </div>
-                      <div className="card-body">
-                        <div className="d-flex align-items-center mb-3">
-                          <span className="avatar avatar-md bg-light-300 rounded me-2 flex-shrink-0 text-default">
-                            <i className="ti ti-map-pin-up" />
-                          </span>
-                          <div>
-                            <p className="text-dark fw-medium mb-1">Current Address</p>
-                            <p>{student.currentAddress || 'N/A'}</p>
-                          </div>
-                        </div>
-                        <div className="d-flex align-items-center">
-                          <span className="avatar avatar-md bg-light-300 rounded me-2 flex-shrink-0 text-default">
-                            <i className="ti ti-map-pins" />
-                          </span>
-                          <div>
-                            <p className="text-dark fw-medium mb-1">Permanent Address</p>
-                            <p>{student.permanentAddress || 'N/A'}</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+  {/* Address */}
+  <div className="col-md-6">
+    <div className="card flex-fill">
+      <div className="card-header">
+        <h5>Address</h5>
+      </div>
+      <div className="card-body">
+        <div className="d-flex align-items-center mb-3">
+          <span className="avatar avatar-md bg-light-300 rounded me-2 flex-shrink-0 text-default">
+            <i className="ti ti-map-pin-up" />
+          </span>
+          <div>
+            <p className="text-dark fw-medium mb-1">Current Address</p>
+            <p>{student.currentAddress || 'N/A'}</p>
+          </div>
+        </div>
+        <div className="d-flex align-items-center">
+          <span className="avatar avatar-md bg-light-300 rounded me-2 flex-shrink-0 text-default">
+            <i className="ti ti-map-pins" />
+          </span>
+          <div>
+            <p className="text-dark fw-medium mb-1">Permanent Address</p>
+            <p>{student.permanentAddress || 'N/A'}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-                  {/* Previous School Details */}
-                  {/* <div className="col-xxl-12">
-                    <div className="card">
-                      <div className="card-header">
-                        <h5>Previous School Details</h5>
-                      </div>
-                      <div className="card-body pb-1">
-                        <div className="row">
-                          <div className="col-md-6">
-                            <div className="mb-3">
-                              <p className="text-dark fw-medium mb-1">Previous School Name</p>
-                              <p>{student.previousSchool.name || 'N/A'}</p>
-                            </div>
-                          </div>
-                          <div className="col-md-6">
-                            <div className="mb-3">
-                              <p className="text-dark fw-medium mb-1">School Address</p>
-                              <p>{student.previousSchool.address || 'N/A'}</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div> */}
-
-                  {/* Medical History */}
-                  <div className="col-xxl-6 d-flex">
-                    <div className="card flex-fill">
-                      <div className="card-header">
-                        <h5>Medical History</h5>
-                      </div>
-                      <div className="card-body pb-1">
-                        <div className="row">
-                          <div className="col-md-6">
-                            <div className="mb-3">
-                              <p className="text-dark fw-medium mb-1">Known Allergies</p>
-                              {student.medicalHistory.allergies.length > 0 ? (
-                                student.medicalHistory.allergies.map((allergy, index) => (
-                                  <span key={index} className="badge bg-light text-dark me-1">
-                                    {allergy}
-                                  </span>
-                                ))
-                              ) : (
-                                <p>N/A</p>
-                              )}
-                            </div>
-                          </div>
-                          <div className="col-md-6">
-                            <div className="mb-3">
-                              <p className="text-dark fw-medium mb-1">Medications</p>
-                              {student.medicalHistory.medications.length > 0 ? (
-                                student.medicalHistory.medications.map((med, index) => (
-                                  <p key={index}>{med}</p>
-                                ))
-                              ) : (
-                                <p>N/A</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+  {/* Medical History */}
+  <div className="col-md-6">
+    <div className="card flex-fill">
+      <div className="card-header">
+        <h5>Medical History</h5>
+      </div>
+      <div className="card-body pb-1">
+        <div className="row">
+          <div className="col-md-6">
+            <div className="mb-3">
+              <p className="text-dark fw-medium mb-1">Known Allergies</p>
+              {student.medicalHistory.allergies.length > 0 ? (
+                student.medicalHistory.allergies.map((allergy, index) => (
+                  <span key={index} className="badge bg-light text-dark me-1">
+                    {allergy}
+                  </span>
+                ))
+              ) : (
+                <p>N/A</p>
+              )}
+            </div>
+          </div>
+          <div className="col-md-6">
+            <div className="mb-3">
+              <p className="text-dark fw-medium mb-1">Medications</p>
+              {student.medicalHistory.medications.length > 0 ? (
+                student.medicalHistory.medications.map((med, index) => (
+                  <p key={index}>{med}</p>
+                ))
+              ) : (
+                <p>N/A</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
                 </div>
               </div>
             </div>

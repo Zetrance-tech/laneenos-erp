@@ -166,50 +166,6 @@ const TeacherGrid = () => {
           <div className="bg-white p-3 border rounded-1 d-flex align-items-center justify-content-between flex-wrap mb-4 pb-0">
             <h4 className="mb-3">Staffs Grid</h4>
             <div className="d-flex align-items-center flex-wrap">
-              <div className="input-icon-start mb-3 me-2 position-relative">
-                <PredefinedDateRanges />
-              </div>
-              <div className="dropdown mb-3 me-2">
-                <Link
-                  to="#"
-                  className="btn btn-outline-light bg-white dropdown-toggle"
-                  data-bs-toggle="dropdown"
-                  data-bs-auto-close="outside"
-                >
-                  <i className="ti ti-filter me-2" />
-                  Filter
-                </Link>
-                <div className="dropdown-menu drop-width" ref={dropdownMenuRef}>
-                  <form>
-                    <div className="d-flex align-items-center border-bottom p-3">
-                      <h4>Filter</h4>
-                    </div>
-                    <div className="p-3 pb-0 border-bottom">
-                      <div className="row">
-                        <div className="col-md-6">
-                          <div className="mb-3">
-                            <label className="form-label">Role</label>
-                            <CommonSelect
-                              className="select"
-                              options={roleOptions}
-                              defaultValue={roleOptions.find((option) => option.value === selectedRole) || roleOptions[0]}
-                              onChange={(option) => setSelectedRole(option?.value || "")}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="p-3 d-flex align-items-center justify-content-end">
-                      <Link to="#" className="btn btn-light me-3" onClick={handleResetFilters}>
-                        Reset
-                      </Link>
-                      <Link to={routes.teacherGrid} onClick={handleApplyClick} className="btn btn-primary">
-                        Apply
-                      </Link>
-                    </div>
-                  </form>
-                </div>
-              </div>
               <div className="d-flex align-items-center bg-white border rounded-2 p-1 mb-3 me-2">
                 <Link
                   to={routes.teacherList}
@@ -223,38 +179,6 @@ const TeacherGrid = () => {
                 >
                   <i className="ti ti-grid-dots" />
                 </Link>
-              </div>
-              <div className="dropdown mb-3">
-                <Link
-                  to="#"
-                  className="btn btn-outline-light bg-white dropdown-toggle"
-                  data-bs-toggle="dropdown"
-                >
-                  <i className="ti ti-sort-ascending-2 me-2" />
-                  Sort by A-Z
-                </Link>
-                <ul className="dropdown-menu p-3">
-                  <li>
-                    <Link to="#" className="dropdown-item rounded-1 active">
-                      Ascending
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="#" className="dropdown-item rounded-1">
-                      Descending
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="#" className="dropdown-item rounded-1">
-                      Recently Viewed
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="#" className="dropdown-item rounded-1">
-                      Recently Added
-                    </Link>
-                  </li>
-                </ul>
               </div>
             </div>
           </div>

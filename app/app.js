@@ -29,7 +29,7 @@ import attendanceRoute from './routes/attendanceRouter.js';
 dotenv.config();
 const app = express();
 const MongoURL = process.env.MONGODB_URI;
-const PORT = 5000;
+const PORT = 5001;
 
 app.use(cors());
 app.use(bodyParser.json());
@@ -57,7 +57,7 @@ app.use("/api/meals", mealRoute);
 app.use("/api/leaves", leaveRoute);
 app.use("/api/feesPayment", feePaymentRoute);
 app.get("/", (req, res) => {
-  res.send("hehehehe");
+  res.send("App Backend");
 });
 
 const generateStudent = () => ({

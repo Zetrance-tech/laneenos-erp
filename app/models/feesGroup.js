@@ -1,17 +1,12 @@
 import mongoose from 'mongoose';
 
 const feesGroupSchema = new mongoose.Schema({
-  id: {
-    type: String,
-    required: true,
-    unique: true
-  },
   name: {
     type: String,
     required: true,
     trim: true
   },
-  description: {
+  periodicity: {
     type: String,
     trim: true
   },

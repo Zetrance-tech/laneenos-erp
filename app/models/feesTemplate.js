@@ -28,20 +28,11 @@ const feeTemplateSchema = new mongoose.Schema({
         ref: 'FeesGroup',
         required: true,
       },
-      feeTypes: [
-        {
-          feesType: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'FeesType',
-            required: true,
-          },
-          amount: {
-            type: Number,
-            required: true,
-            min: 0, 
-          },
-        },
-      ],
+      amount: {
+        type: Number,
+        required: true,
+        min: 0
+      }
     },
   ],
   status: {

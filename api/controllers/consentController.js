@@ -333,20 +333,169 @@ import Student from "../models/student.js";
 import User from "../models/user.js";
 import Class from "../models/class.js";
 import Session from "../models/session.js"
+// export const createConsentRequest = async (req, res) => {
+//   try {
+//     const { title, description, sessionId, classId, file, validity, applyToAllClasses } = req.body;
+//     const { userId } = req.user;
+//     console.log(req.body)
+//     if (!title || !description || !sessionId || (!classId && !applyToAllClasses)) {
+//       return res.status(400).json({ message: "Title, description, session, and either class or applyToAllClasses are required" });
+//     }
+
+//     let classIds = [];
+//     if (applyToAllClasses) {
+//       const classes = await Class.find({}).select("_id");
+//       classIds = classes.map((cls) => cls._id);
+//     } else {
+//       classIds = [classId];
+//     }
+
+//     const savedConsents = [];
+//     const allConsentResponses = [];
+
+//     for (const clsId of classIds) {
+//       const consent = new Consent({
+//         title,
+//         description,
+//         sessionId,
+//         classId: clsId,
+//         file: file || null,
+//         validity: validity || null,
+//         createdBy: userId,
+//       });
+//       const savedConsent = await consent.save();
+//       savedConsents.push(savedConsent);
+
+//       const students = await Student.find({ 
+//         classId: clsId, 
+//         sessionId,
+//         status: "active"
+//       }).lean();
+
+//       if (!students.length) {
+//         console.warn(`No active students found for class ${clsId}`);
+//         continue;
+//       }
+
+//       const consentResponses = await Promise.all(
+//         students.map(async (student) => {
+//           try {
+//             const fatherEmail = student.fatherInfo?.email;
+//             const motherEmail = student.motherInfo?.email;
+
+//             const father = fatherEmail 
+//               ? await User.findOne({ email: fatherEmail, role: "parent", status: "active" })
+//               : null;
+
+//             const mother = motherEmail 
+//               ? await User.findOne({ email: motherEmail, role: "parent", status: "active" })
+//               : null;
+
+//             if (!father && fatherEmail) {
+//               const parentData = await Student.findOne({ fatherEmail });
+//               if (parentData) {
+//                 const newFather = await User.findOneAndUpdate(
+//                   { email: parentData.fatherEmail },
+//                   {
+//                     role: "parent",
+//                     name: parentData.fatherName || "Father",
+//                     email: parentData.fatherEmail,
+//                     phone: parentData.fatherMobile,
+//                     status: "active",
+//                     password: "password"
+//                   },
+//                   { upsert: true, new: true }
+//                 );
+//                 if (newFather) return newFather;
+//               }
+//             }
+
+//             if (!mother && motherEmail) {
+//               const parentData = await Student.findOne({ fatherEmail: motherEmail });
+//               if (parentData) {
+//                 const newMother = await User.findOneAndUpdate(
+//                   { email: motherEmail },
+//                   {
+//                     role: "parent",
+//                     name: parentData.motherName || "Mother",
+//                     email: motherEmail,
+//                     phone: parentData.motherNumber || parentData.fatherMobile,
+//                     status: "active",
+//                     password: "password"
+//                   },
+//                   { upsert: true, new: true }
+//                 );
+//                 if (newMother) return newMother;
+//               }
+//             }
+
+//             const responses = [];
+//             if (father) {
+//               responses.push(new ConsentResponse({
+//                 consentId: savedConsent._id,
+//                 studentId: student._id,
+//                 parentId: father._id,
+//                 status: "pending"
+//               }).save());
+//             }
+
+//             if (mother && motherEmail !== fatherEmail) {
+//               responses.push(new ConsentResponse({
+//                 consentId: savedConsent._id,
+//                 studentId: student._id,
+//                 parentId: mother._id,
+//                 status: "pending"
+//               }).save());
+//             }
+
+//             return responses.length ? Promise.all(responses) : null;
+//           } catch (error) {
+//             console.error(`Error processing student ${student._id}:`, error);
+//             return null;
+//           }
+//         })
+//       );
+
+//       allConsentResponses.push(...consentResponses.flat().filter(Boolean));
+//     }
+
+//     res.status(201).json({ 
+//       message: `Consent request${classIds.length > 1 ? "s" : ""} created successfully`,
+//       consentIds: savedConsents.map((c) => c._id),
+//       responseCount: allConsentResponses.length
+//     });
+//   } catch (error) {
+//     console.error("Create consent error:", error);
+//     res.status(500).json({ message: "Server error while creating consent" });
+//   }
+// };
 export const createConsentRequest = async (req, res) => {
   try {
     const { title, description, sessionId, classId, file, validity, applyToAllClasses } = req.body;
-    const { userId } = req.user;
-    console.log(req.body)
+    const { userId, role } = req.user;
+
+
+    // Validate inputs
     if (!title || !description || !sessionId || (!classId && !applyToAllClasses)) {
       return res.status(400).json({ message: "Title, description, session, and either class or applyToAllClasses are required" });
     }
 
+    // Validate sessionId
+    const sessionExists = await Session.findById(sessionId);
+    if (!sessionExists) {
+      return res.status(400).json({ message: "Invalid session ID" });
+    }
+
+    // Determine class IDs
     let classIds = [];
     if (applyToAllClasses) {
       const classes = await Class.find({}).select("_id");
       classIds = classes.map((cls) => cls._id);
     } else {
+      const classExists = await Class.findById(classId);
+      if (!classExists) {
+        return res.status(400).json({ message: "Invalid class ID" });
+      }
       classIds = [classId];
     }
 
@@ -354,6 +503,14 @@ export const createConsentRequest = async (req, res) => {
     const allConsentResponses = [];
 
     for (const clsId of classIds) {
+      // Validate class existence
+      const classExists = await Class.findById(clsId);
+      if (!classExists) {
+        console.warn(`Class ${clsId} does not exist`);
+        continue;
+      }
+
+      // Create consent
       const consent = new Consent({
         title,
         description,
@@ -366,6 +523,7 @@ export const createConsentRequest = async (req, res) => {
       const savedConsent = await consent.save();
       savedConsents.push(savedConsent);
 
+      // Fetch active students
       const students = await Student.find({ 
         classId: clsId, 
         sessionId,
@@ -383,6 +541,13 @@ export const createConsentRequest = async (req, res) => {
             const fatherEmail = student.fatherInfo?.email;
             const motherEmail = student.motherInfo?.email;
 
+            // Log missing emails
+            if (!fatherEmail && !motherEmail) {
+              console.warn(`No parent emails for student ${student._id}`);
+              return null;
+            }
+
+            // Find existing parent accounts
             const father = fatherEmail 
               ? await User.findOne({ email: fatherEmail, role: "parent", status: "active" })
               : null;
@@ -390,44 +555,6 @@ export const createConsentRequest = async (req, res) => {
             const mother = motherEmail 
               ? await User.findOne({ email: motherEmail, role: "parent", status: "active" })
               : null;
-
-            if (!father && fatherEmail) {
-              const parentData = await Student.findOne({ fatherEmail });
-              if (parentData) {
-                const newFather = await User.findOneAndUpdate(
-                  { email: parentData.fatherEmail },
-                  {
-                    role: "parent",
-                    name: parentData.fatherName || "Father",
-                    email: parentData.fatherEmail,
-                    phone: parentData.fatherMobile,
-                    status: "active",
-                    password: "password"
-                  },
-                  { upsert: true, new: true }
-                );
-                if (newFather) return newFather;
-              }
-            }
-
-            if (!mother && motherEmail) {
-              const parentData = await Student.findOne({ fatherEmail: motherEmail });
-              if (parentData) {
-                const newMother = await User.findOneAndUpdate(
-                  { email: motherEmail },
-                  {
-                    role: "parent",
-                    name: parentData.motherName || "Mother",
-                    email: motherEmail,
-                    phone: parentData.motherNumber || parentData.fatherMobile,
-                    status: "active",
-                    password: "password"
-                  },
-                  { upsert: true, new: true }
-                );
-                if (newMother) return newMother;
-              }
-            }
 
             const responses = [];
             if (father) {
@@ -531,10 +658,6 @@ export const deleteConsentRequest = async (req, res) => {
     const consent = await Consent.findById(consentId);
     if (!consent) {
       return res.status(404).json({ message: "Consent not found" });
-    }
-
-    if (role !== "admin" && consent.createdBy.toString() !== userId) {
-      return res.status(403).json({ message: "Unauthorized to delete this consent" });
     }
 
     await ConsentResponse.deleteMany({ consentId });

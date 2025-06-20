@@ -3,7 +3,9 @@ import {
   createOrUpdateTimetable,
   getTimetable,
   updateActivityStatus,
-  getStudentTimetable1
+  getStudentTimetable1,
+  editTimetableSlot,
+  deleteTimetableSlot
 } from "../controllers/timetableController.js";
 import authMiddleware from "../middleware/auth.js";
 
@@ -18,6 +20,11 @@ router.get("/:classId/:weekStartDate",authMiddleware(["admin", "parent", "teache
 
 // Teachers can update activity status
 router.put("/status",authMiddleware(["admin", "parent", "teacher"]), updateActivityStatus);
+
+router.put("/slot", authMiddleware(["admin", "teacher"]), editTimetableSlot);
+
+// Teachers can delete a specific timetable slot
+router.delete("/slot", authMiddleware(["admin", "teacher"]), deleteTimetableSlot);
 
 
 export default router;

@@ -292,70 +292,7 @@ const TeacherList = () => {
             <div className="card-header d-flex align-items-center justify-content-between flex-wrap pb-0">
               <h4 className="mb-3">Staff List</h4>
               <div className="d-flex align-items-center flex-wrap">
-                <div className="input-icon-start mb-3 me-2 position-relative">
-                  <PredefinedDateRanges />
-                </div>
-                <div className="dropdown mb-3 me-2">
-                  <Link
-                    to="#"
-                    className="btn btn-outline-light bg-white dropdown-toggle"
-                    data-bs-toggle="dropdown"
-                    data-bs-auto-close="outside"
-                  >
-                    <i className="ti ti-filter me-2" />
-                    Filter
-                  </Link>
-                  <div className="dropdown-menu drop-width" ref={dropdownMenuRef}>
-                    <form>
-                      <div className="d-flex align-items-center border-bottom p-3">
-                        <h4>Filter</h4>
-                      </div>
-                      <div className="p-3 border-bottom pb-0">
-                        <div className="row">
-                          <div className="col-md-6">
-                            <div className="mb-3">
-                              <label className="form-label">Name</label>
-                              <CommonSelect
-                                className="select"
-                                options={names}
-                                defaultValue={names[0]}
-                              />
-                            </div>
-                          </div>
-                          <div className="col-md-6">
-                            <div className="mb-3">
-                              <label className="form-label">Class</label>
-                              <CommonSelect
-                                className="select"
-                                options={allClass}
-                                defaultValue={allClass[0]}
-                              />
-                            </div>
-                          </div>
-                          <div className="col-md-6">
-                            <div className="mb-3">
-                              <label className="form-label">Role</label>
-                              <CommonSelect
-                                className="select"
-                                options={roleOptions}
-                                defaultValue={roleOptions.find((option) => option.value === selectedRole) || roleOptions[0]}
-                                onChange={(option) => setSelectedRole(option?.value || "")}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="p-3 d-flex align-items-center justify-content-end">
-                        <Link to="#" className="btn btn-light me-3" onClick={handleResetFilters}>
-                          Reset
-                        </Link>
-                        <Link to="#" className="btn btn-primary" onClick={handleApplyClick}>
-                          Apply
-                        </Link>
-                      </div>
-                    </form>
-                  </div>
-                </div>
+
                 <div className="d-flex align-items-center bg-white border rounded-2 p-1 mb-3 me-2">
                   <Link to="#" className="active btn btn-icon btn-sm me-1 primary-hover">
                     <i className="ti ti-list-tree" />
@@ -366,38 +303,6 @@ const TeacherList = () => {
                   >
                     <i className="ti ti-grid-dots" />
                   </Link>
-                </div>
-                <div className="dropdown mb-3">
-                  <Link
-                    to="#"
-                    className="btn btn-outline-light bg-white dropdown-toggle"
-                    data-bs-toggle="dropdown"
-                  >
-                    <i className="ti ti-sort-ascending-2 me-2" />
-                    Sort by A-Z
-                  </Link>
-                  <ul className="dropdown-menu p-3">
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1 active">
-                        Ascending
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        Descending
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        Recently Viewed
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="#" className="dropdown-item rounded-1">
-                        Recently Added
-                      </Link>
-                    </li>
-                  </ul>
                 </div>
               </div>
             </div>

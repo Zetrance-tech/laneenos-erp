@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import * as bootstrap from "bootstrap";
 import toast, { Toaster } from "react-hot-toast";
-import { Table, Spin } from "antd";
+import { Table, Spin, Input } from "antd";
 import { useAuth } from "../../../context/AuthContext";
+
 const API_URL = process.env.REACT_APP_URL;
 
 interface User {
@@ -81,6 +82,7 @@ const Consents: React.FC = () => {
       return null;
     }
   };
+
   const { token, user } = useAuth();
   const decoded = token ? decodeToken(token) : null;
   const currentUser: User = decoded
@@ -88,10 +90,14 @@ const Consents: React.FC = () => {
     : { userId: "", role: "teacher" };
 
   const [consents, setConsents] = useState<Consent[]>([]);
+  const [filteredConsents, setFilteredConsents] = useState<Consent[]>([]);
   const [consentResponses, setConsentResponses] = useState<ConsentResponse[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedClass, setSelectedClass] = useState<string>("");
+  const [searchClass, setSearchClass] = useState<string>("");
+  const [searchTitle, setSearchTitle] = useState<string>("");
+  const [searchCreatedBy, setSearchCreatedBy] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState<boolean>(false);
@@ -104,6 +110,7 @@ const Consents: React.FC = () => {
   const dropdownMenuRef = useRef<HTMLDivElement>(null);
   const [applyToAllClasses, setApplyToAllClasses] = useState<boolean>(false);
   const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
+
   useEffect(() => {
     if (error) {
       toast.error(error);
@@ -144,12 +151,10 @@ const Consents: React.FC = () => {
           }
         }
 
-        console.log(`Fetching consents from ${consentEndpoint} with params:`, params);
         const consentResponse = await axios.get<Consent[] | ConsentResponse[]>(consentEndpoint, {
           params,
           headers: { Authorization: `Bearer ${token}` },
         });
-        console.log("Consent response:", consentResponse.data);
 
         if (currentUser.role === "parent") {
           const validResponses = (consentResponse.data as ConsentResponse[]).filter(
@@ -164,17 +169,19 @@ const Consents: React.FC = () => {
             ).values()
           );
           setConsents(uniqueConsents);
-          console.log("Set consents for parent:", uniqueConsents);
+          setFilteredConsents(uniqueConsents);
         } else {
           const validConsents = (consentResponse.data as Consent[]).filter(
             (c): c is Consent => c != null && c._id != null
           );
           setConsents(validConsents);
+          setFilteredConsents(validConsents);
         }
       } catch (err: any) {
         console.error("Failed to fetch data:", err.response?.data?.message || err.message);
         setError(err.response?.data?.message || "Failed to fetch consents");
         setConsents([]);
+        setFilteredConsents([]);
         setConsentResponses([]);
       } finally {
         setLoading(false);
@@ -183,57 +190,72 @@ const Consents: React.FC = () => {
     fetchData();
   }, [currentUser.role, selectedClass, token]);
 
+  useEffect(() => {
+    const filtered = consents.filter((consent) => {
+      const matchesClass = searchClass
+        ? consent.classId?.name?.toLowerCase().includes(searchClass.toLowerCase())
+        : true;
+      const matchesTitle = searchTitle
+        ? consent.title.toLowerCase().includes(searchTitle.toLowerCase())
+        : true;
+      const matchesCreatedBy = searchCreatedBy
+        ? consent.createdBy?.name?.toLowerCase().includes(searchCreatedBy.toLowerCase())
+        : true;
+      return matchesClass && matchesTitle && matchesCreatedBy;
+    });
+    setFilteredConsents(filtered);
+  }, [searchClass, searchTitle, searchCreatedBy, consents]);
+
   const handleAddConsent = async (e: React.FormEvent<HTMLFormElement>) => {
-  e.preventDefault();
-  const formData = new FormData(e.target as HTMLFormElement);
-  const consentData = {
-    title: formData.get("title") as string,
-    description: formData.get("description") as string,
-    sessionId: formData.get("sessionId") as string,
-    classId: applyToAllClasses ? [] : selectedClasses, // Send array of class IDs
-    file: formData.get("file") ? (formData.get("file") as File).name : null,
-    validity: formData.get("validity") as string,
-    applyToAllClasses: applyToAllClasses,
-  };
+    e.preventDefault();
+    const formData = new FormData(e.target as HTMLFormElement);
+    const consentData = {
+      title: formData.get("title") as string,
+      description: formData.get("description") as string,
+      sessionId: formData.get("sessionId") as string,
+      classId: applyToAllClasses ? [] : selectedClasses,
+      file: formData.get("file") ? (formData.get("file") as File).name : null,
+      validity: formData.get("validity") as string,
+      applyToAllClasses: applyToAllClasses,
+    };
 
-  console.log("Sending consent data:", consentData);
-
-  if (!consentData.sessionId || (!consentData.classId.length && !consentData.applyToAllClasses)) {
-    setError("Please select a session and at least one class or apply to all classes");
-    return;
-  }
-
-  try {
-    const response = await axios.post(`${API_URL}/api/consent/create`, consentData, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    const consentEndpoint = currentUser.role === "teacher" ? `${API_URL}/api/consent/teacher` : `${API_URL}/api/consent/admin`;
-    const params = currentUser.role === "admin" && selectedClass ? { classId: selectedClass } : {};
-    const consentResponse = await axios.get<Consent[]>(consentEndpoint, {
-      params,
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const validConsents = consentResponse.data.filter(
-      (c): c is Consent => c != null && c._id != null
-    );
-    setConsents(validConsents);
-
-    (e.target as HTMLFormElement).reset();
-    setApplyToAllClasses(false);
-    setSelectedClasses([]); // Reset selected classes
-    const modalElement = document.getElementById("add_consent");
-    if (modalElement) {
-      const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
-      modal.hide();
+    if (!consentData.sessionId || (!consentData.classId.length && !consentData.applyToAllClasses)) {
+      setError("Please select a session and at least one class or apply to all classes");
+      return;
     }
-    toast.success(response.data.message || "Consent request created successfully");
-  } catch (err: any) {
-    const errorMsg = err.response?.data?.message || "Failed to create consent";
-    setError(errorMsg);
-    toast.error(errorMsg);
-  }
-};
+
+    try {
+      const response = await axios.post(`${API_URL}/api/consent/create`, consentData, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const consentEndpoint = currentUser.role === "teacher" ? `${API_URL}/api/consent/teacher` : `${API_URL}/api/consent/admin`;
+      const params = currentUser.role === "admin" && selectedClass ? { classId: selectedClass } : {};
+      const consentResponse = await axios.get<Consent[]>(consentEndpoint, {
+        params,
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const validConsents = consentResponse.data.filter(
+        (c): c is Consent => c != null && c._id != null
+      );
+      setConsents(validConsents);
+      setFilteredConsents(validConsents);
+
+      (e.target as HTMLFormElement).reset();
+      setApplyToAllClasses(false);
+      setSelectedClasses([]);
+      const modalElement = document.getElementById("add_consent");
+      if (modalElement) {
+        const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+        modal.hide();
+      }
+      toast.success(response.data.message || "Consent request created successfully");
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.message || "Failed to create consent";
+      setError(errorMsg);
+      toast.error(errorMsg);
+    }
+  };
 
   const handleEditConsent = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -251,8 +273,6 @@ const Consents: React.FC = () => {
       file: formData.get("file") ? (formData.get("file") as File).name : selectedConsent.file,
       validity: formData.get("validity") as string,
     };
-
-    console.log("Sending edit consent data:", consentData);
 
     if (!consentData.sessionId || !consentData.classId) {
       setError("Please select a session and a class");
@@ -274,6 +294,7 @@ const Consents: React.FC = () => {
         (c): c is Consent => c != null && c._id != null
       );
       setConsents(validConsents);
+      setFilteredConsents(validConsents);
 
       (e.target as HTMLFormElement).reset();
       setShowEditModal(false);
@@ -311,6 +332,7 @@ const Consents: React.FC = () => {
         (c): c is Consent => c != null && c._id != null
       );
       setConsents(validConsents);
+      setFilteredConsents(validConsents);
 
       setShowDeleteModal(false);
       const modalElement = document.getElementById("delete_consent");
@@ -339,8 +361,6 @@ const Consents: React.FC = () => {
       status: formData.get("status") as "approved" | "rejected",
     };
 
-    console.log("Sending consent response data:", responseData);
-
     try {
       const response = await axios.put(`${API_URL}/api/consent/respond`, responseData, {
         headers: { Authorization: `Bearer ${token}` },
@@ -357,6 +377,7 @@ const Consents: React.FC = () => {
         new Map(validResponses.map((r) => [r.consentId._id, r.consentId])).values()
       );
       setConsents(uniqueConsents);
+      setFilteredConsents(uniqueConsents);
 
       setShowRespondModal(false);
       const modalElement = document.getElementById("respond_consent");
@@ -457,11 +478,12 @@ const Consents: React.FC = () => {
     }
   };
 
-  const dataSource = consents?.map((consent) => ({
+  const dataSource = filteredConsents?.map((consent) => ({
     key: consent._id,
     title: consent.title ?? "N/A",
     className: consent.classId && consent.classId._id && consent.classId.name ? consent.classId.name : "Class Deleted",
     sessionName: consent.sessionId && consent.sessionId._id && consent.sessionId.name ? consent.sessionId.name : "Session Deleted",
+    createdBy: consent.createdBy?.name ?? "N/A",
     createdAt: consent.createdAt ? new Date(consent.createdAt).toLocaleDateString() : "N/A",
     consent,
   })) ?? [];
@@ -471,22 +493,30 @@ const Consents: React.FC = () => {
       title: "Title",
       dataIndex: "title",
       key: "title",
+      sorter: (a:any, b:any) => a.title.localeCompare(b.title),
     },
     {
       title: "Class",
       dataIndex: "className",
       key: "className",
+      sorter: (a:any, b:any) => a.className.localeCompare(b.className),
     },
     {
-      title: "Session",
-      dataIndex: "sessionName",
-      key: "sessionName",
+      title: "Created By",
+      dataIndex: "createdBy",
+      key: "createdBy",
+      sorter: (a:any, b:any) => a.createdBy.localeCompare(b.createdBy),
     },
     {
-      title: "Created Date",
-      dataIndex: "createdAt",
-      key: "createdAt",
+    title: "Created Date",
+    dataIndex: "createdAt",
+    key: "createdAt",
+    sorter: (a:any, b:any) => {
+      const dateA = a.consent.createdAt ? new Date(a.consent.createdAt).getTime() : 0;
+      const dateB = b.consent.createdAt ? new Date(b.consent.createdAt).getTime() : 0;
+      return dateA - dateB;
     },
+  },
     {
       title: "Action",
       key: "action",
@@ -618,6 +648,9 @@ const Consents: React.FC = () => {
           .ant-table-tbody > tr:nth-child(odd) > td {
             background-color: #ffffff !important;
           }
+          .ant-table-container {
+            margin-left: 20px !important;
+          }
         `}
       </style>
       <div className="content">
@@ -653,23 +686,44 @@ const Consents: React.FC = () => {
             </div>
           )}
         </div>
-        {currentUser.role === "admin" && (
-          <div className="mb-3">
-            <label className="form-label">Select Class</label>
-            <select
-              className="form-select"
-              value={selectedClass}
-              onChange={(e) => setSelectedClass(e.target.value)}
-            >
-              <option value="">All Classes</option>
-              {classes?.map((c) => (
-                <option key={c._id} value={c._id}>
-                  {c.name}
-                </option>
-              )) ?? []}
-            </select>
+        <div className="mb-3">
+          <div className="row">
+            {currentUser.role === "admin" && (
+              <div className="col-md-3">
+                <label className="form-label">Select Class</label>
+                <select
+                  className="form-select"
+                  value={selectedClass}
+                  onChange={(e) => setSelectedClass(e.target.value)}
+                >
+                  <option value="">All Classes</option>
+                  {classes?.map((c) => (
+                    <option key={c._id} value={c._id}>
+                      {c.name}
+                    </option>
+                  )) ?? []}
+                </select>
+              </div>
+            )}
+            
+            <div className="col-md-3">
+              <label className="form-label">Search by Title</label>
+              <Input
+                placeholder="Search by consent title"
+                value={searchTitle}
+                onChange={(e) => setSearchTitle(e.target.value)}
+              />
+            </div>
+            <div className="col-md-3">
+              <label className="form-label">Search by Created By</label>
+              <Input
+                placeholder="Search by creator name"
+                value={searchCreatedBy}
+                onChange={(e) => setSearchCreatedBy(e.target.value)}
+              />
+            </div>
           </div>
-        )}
+        </div>
         <div className="card">
           <div className="card-header d-flex align-items-center justify-content-between flex-wrap pb-0">
             <h4 className="mb-3">Consent Requests</h4>
@@ -680,14 +734,13 @@ const Consents: React.FC = () => {
                 <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%" }}>
                   <Spin size="large" />
                 </div>
-              ) : consents.length === 0 ? (
+              ) : filteredConsents.length === 0 ? (
                 <p>{selectedClass ? "No consents found for this class" : "No consents found"}</p>
               ) : (
                 <Table
                   columns={columns}
                   dataSource={dataSource}
                   rowKey="key"
-                  rowSelection={{ type: "checkbox" }}
                 />
               )}
             </div>
@@ -696,155 +749,155 @@ const Consents: React.FC = () => {
         {(currentUser.role === "admin" || currentUser.role === "teacher") && (
           <>
             <div className="modal fade" id="add_consent">
-  <div className="modal-dialog modal-dialog-centered">
-    <div className="modal-content">
-      <div className="modal-header">
-        <h4 className="modal-title">Add Consent Request</h4>
-        <button
-          type="button"
-          className="btn-close custom-btn-close"
-          onClick={() => {
-            setApplyToAllClasses(false);
-            setSelectedClasses([]); // Reset selected classes
-            const modalElement = document.getElementById("add_consent");
-            if (modalElement) {
-              const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
-              modal.hide();
-            }
-          }}
-        >
-          <i className="ti ti-x" />
-        </button>
-      </div>
-      <form onSubmit={handleAddConsent}>
-        <div className="modal-body">
-          <div className="row">
-            <div className="col-md-12">
-              <div className="mb-3">
-                <label className="form-label">Session</label>
-                <select className="form-select" name="sessionId" required>
-                  <option value="">Select a session</option>
-                  {sessions?.map((s) => (
-                    <option key={s._id} value={s._id}>
-                      {s.name}
-                    </option>
-                  )) ?? []}
-                </select>
-              </div>
-              <div className="mb-3">
-                <label className="form-label">Select Classes</label>
-                <div className="form-check">
-                  <input
-                    type="checkbox"
-                    className="form-check-input"
-                    id="applyToAllClasses"
-                    checked={applyToAllClasses}
-                    onChange={(e) => {
-                      setApplyToAllClasses(e.target.checked);
-                      if (e.target.checked) {
-                        setSelectedClasses([]); // Clear selected classes when applying to all
-                      }
-                    }}
-                  />
-                  <label className="form-check-label" htmlFor="applyToAllClasses">
-                    Apply to all classes
-                  </label>
-                </div>
-                {!applyToAllClasses && (
-                  <div className="mt-2">
-                    {classes?.map((c) =>
-                      c && c._id && c.name ? (
-                        <div key={c._id} className="form-check">
-                          <input
-                            type="checkbox"
-                            className="form-check-input"
-                            id={`class-${c._id}`}
-                            value={c._id}
-                            checked={selectedClasses.includes(c._id)}
-                            onChange={(e) => {
-                              const classId = e.target.value;
-                              setSelectedClasses((prev) =>
-                                e.target.checked
-                                  ? [...prev, classId]
-                                  : prev.filter((id) => id !== classId)
-                              );
-                            }}
-                            disabled={applyToAllClasses}
-                          />
-                          <label className="form-check-label" htmlFor={`class-${c._id}`}>
-                            {c.name}
-                          </label>
-                        </div>
-                      ) : null
-                    ) ?? []}
+              <div className="modal-dialog modal-dialog-centered">
+                <div className="modal-content">
+                  <div className="modal-header">
+                    <h4 className="modal-title">Add Consent Request</h4>
+                    <button
+                      type="button"
+                      className="btn-close custom-btn-close"
+                      onClick={() => {
+                        setApplyToAllClasses(false);
+                        setSelectedClasses([]);
+                        const modalElement = document.getElementById("add_consent");
+                        if (modalElement) {
+                          const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                          modal.hide();
+                        }
+                      }}
+                    >
+                      <i className="ti ti-x" />
+                    </button>
                   </div>
-                )}
-              </div>
-              <div className="mb-3">
-                <label className="form-label">Title</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  name="title"
-                  placeholder="e.g., Annual Picnic Consent"
-                  required
-                />
-              </div>
-              <div className="mb-3">
-                <label className="form-label">Description</label>
-                <textarea
-                  className="form-control"
-                  rows={4}
-                  name="description"
-                  placeholder="Describe the activity (e.g., picnic details)"
-                  required
-                />
-              </div>
-              <div className="mb-3">
-                <label className="form-label">Attachment</label>
-                <input
-                  type="file"
-                  className="form-control"
-                  name="file"
-                  accept=".pdf,.doc,.docx"
-                />
-              </div>
-              <div className="mb-3">
-                <label className="form-label">Validity</label>
-                <input
-                  type="date"
-                  className="form-control"
-                  name="validity"
-                  min={new Date().toISOString().split("T")[0]}
-                />
+                  <form onSubmit={handleAddConsent}>
+                    <div className="modal-body">
+                      <div className="row">
+                        <div className="col-md-12">
+                          <div className="mb-3">
+                            <label className="form-label">Session</label>
+                            <select className="form-select" name="sessionId" required>
+                              <option value="">Select a session</option>
+                              {sessions?.map((s) => (
+                                <option key={s._id} value={s._id}>
+                                  {s.name}
+                                </option>
+                              )) ?? []}
+                            </select>
+                          </div>
+                          <div className="mb-3">
+                            <label className="form-label">Select Classes</label>
+                            <div className="form-check">
+                              <input
+                                type="checkbox"
+                                className="form-check-input"
+                                id="applyToAllClasses"
+                                checked={applyToAllClasses}
+                                onChange={(e) => {
+                                  setApplyToAllClasses(e.target.checked);
+                                  if (e.target.checked) {
+                                    setSelectedClasses([]);
+                                  }
+                                }}
+                              />
+                              <label className="form-check-label" htmlFor="applyToAllClasses">
+                                Apply to all classes
+                              </label>
+                            </div>
+                            {!applyToAllClasses && (
+                              <div className="mt-2">
+                                {classes?.map((c) =>
+                                  c && c._id && c.name ? (
+                                    <div key={c._id} className="form-check">
+                                      <input
+                                        type="checkbox"
+                                        className="form-check-input"
+                                        id={`class-${c._id}`}
+                                        value={c._id}
+                                        checked={selectedClasses.includes(c._id)}
+                                        onChange={(e) => {
+                                          const classId = e.target.value;
+                                          setSelectedClasses((prev) =>
+                                            e.target.checked
+                                              ? [...prev, classId]
+                                              : prev.filter((id) => id !== classId)
+                                          );
+                                        }}
+                                        disabled={applyToAllClasses}
+                                      />
+                                      <label className="form-check-label" htmlFor={`class-${c._id}`}>
+                                        {c.name}
+                                      </label>
+                                    </div>
+                                  ) : null
+                                ) ?? []}
+                              </div>
+                            )}
+                          </div>
+                          <div className="mb-3">
+                            <label className="form-label">Title</label>
+                            <input
+                              type="text"
+                              className="form-control"
+                              name="title"
+                              placeholder="e.g., Annual Picnic Consent"
+                              required
+                            />
+                          </div>
+                          <div className="mb-3">
+                            <label className="form-label">Description</label>
+                            <textarea
+                              className="form-control"
+                              rows={4}
+                              name="description"
+                              placeholder="Describe the activity (e.g., picnic details)"
+                              required
+                            />
+                          </div>
+                          <div className="mb-3">
+                            <label className="form-label">Attachment</label>
+                            <input
+                              type="file"
+                              className="form-control"
+                              name="file"
+                              accept=".pdf,.doc,.docx"
+                            />
+                          </div>
+                          <div className="mb-3">
+                            <label className="form-label">Validity</label>
+                            <input
+                              type="date"
+                              className="form-control"
+                              name="validity"
+                              min={new Date().toISOString().split("T")[0]}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="modal-footer">
+                      <button
+                        type="button"
+                        className="btn btn-light me-2"
+                        onClick={() => {
+                          setApplyToAllClasses(false);
+                          setSelectedClasses([]);
+                          const modalElement = document.getElementById("add_consent");
+                          if (modalElement) {
+                            const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                            modal.hide();
+                          }
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button type="submit" className="btn btn-primary">
+                        Add Consent
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-        <div className="modal-footer">
-          <button
-            type="button"
-            className="btn btn-light me-2"
-            onClick={() => {
-              setApplyToAllClasses(false);
-              setSelectedClasses([]); // Reset selected classes
-              const modalElement = document.getElementById("add_consent");
-              if (modalElement) {
-                const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
-                modal.hide();
-              }
-            }}
-          >
-            Cancel
-          </button>
-          <button type="submit" className="btn btn-primary">
-            Add Consent
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
             <div className="modal fade" id="edit_consent">
               <div className="modal-dialog modal-dialog-centered">
                 <div className="modal-content">
@@ -1039,6 +1092,7 @@ const Consents: React.FC = () => {
                     <p><strong>Title:</strong> {selectedConsent.title ?? "N/A"}</p>
                     <p><strong>Class:</strong> {selectedConsent.classId && selectedConsent.classId._id && selectedConsent.classId.name ? selectedConsent.classId.name : "Class Deleted"}</p>
                     <p><strong>Session:</strong> {selectedConsent.sessionId && selectedConsent.sessionId._id && selectedConsent.sessionId.name ? selectedConsent.sessionId.name : "Session Deleted"}</p>
+                    <p><strong>Created By:</strong> {selectedConsent.createdBy?.name ?? "N/A"}</p>
                     <p><strong>Description:</strong> {selectedConsent.description ?? "N/A"}</p>
                     <p><strong>Attachment:</strong> {selectedConsent.file ? selectedConsent.file : "None"}</p>
                     <p><strong>Validity:</strong> {selectedConsent.validity ? new Date(selectedConsent.validity).toLocaleDateString() : "Not specified"}</p>
@@ -1156,7 +1210,7 @@ const Consents: React.FC = () => {
                       }
                     }}
                   >
-                        Close
+                    Close
                   </button>
                 </div>
               </div>
@@ -1180,7 +1234,7 @@ const Consents: React.FC = () => {
                         const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
                         modal.hide();
                       }
-                  }}
+                    }}
                   >
                     <i className="ti ti-x"></i>
                   </button>

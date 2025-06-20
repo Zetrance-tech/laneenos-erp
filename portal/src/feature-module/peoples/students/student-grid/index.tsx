@@ -5,8 +5,10 @@ import ImageWithBasePath from '../../../../core/common/imageWithBasePath';
 import StudentModals from '../studentModals';
 import TooltipOption from '../../../../core/common/tooltipOption';
 import axios from 'axios';
-import { Spin } from 'antd';
+import { Spin, Select } from 'antd';
 import { useAuth } from '../../../../context/AuthContext';
+
+const { Option } = Select;
 const API_URL = process.env.REACT_APP_URL;
 
 interface Student {
@@ -27,10 +29,12 @@ const StudentGrid = () => {
   const routes = all_routes;
   const dropdownMenuRef = useRef<HTMLDivElement | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
+  const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [classes, setClasses] = useState<{ value: string; label: string }[]>([]);
-  const {token} = useAuth();
+  const [selectedClass, setSelectedClass] = useState<string | null>(null);
+  const { token } = useAuth();
 
   const handleApplyClick = () => {
     if (dropdownMenuRef.current) {
@@ -45,6 +49,7 @@ const StudentGrid = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       setStudents(res.data);
+      setFilteredStudents(res.data);
       console.log('Students fetched:', res.data);
     } catch (error) {
       console.error('Error fetching students:', error);
@@ -69,6 +74,21 @@ const StudentGrid = () => {
     fetchStudents();
     fetchClasses();
   }, []);
+
+  // Filter students by selected class
+  useEffect(() => {
+    if (selectedClass) {
+      setFilteredStudents(
+        students.filter((student) =>
+          typeof student.classId === 'object' && student.classId?.name
+            ? student.classId.name === classes.find((c) => c.value === selectedClass)?.label
+            : false
+        )
+      );
+    } else {
+      setFilteredStudents(students);
+    }
+  }, [selectedClass, students, classes]);
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'N/A';
@@ -111,6 +131,21 @@ const StudentGrid = () => {
         <div className="bg-white p-3 border rounded-1 d-flex align-items-center justify-content-between flex-wrap mb-4 pb-0">
           <h4 className="mb-3">Students Grid</h4>
           <div className="d-flex align-items-center flex-wrap">
+            <div className="me-3 mb-3">
+              <Select
+                style={{ width: 200 }}
+                placeholder="Select Class"
+                onChange={(value) => setSelectedClass(value)}
+                allowClear
+                onClear={() => setSelectedClass(null)}
+              >
+                {classes.map((cls) => (
+                  <Option key={cls.value} value={cls.value}>
+                    {cls.label}
+                  </Option>
+                ))}
+              </Select>
+            </div>
             <div className="d-flex align-items-center bg-white border rounded-2 p-1 mb-3 me-2">
               <Link to={routes.studentList} className="btn btn-icon btn-sm me-1 bg-light primary-hover">
                 <i className="ti ti-list-tree" />
@@ -129,8 +164,8 @@ const StudentGrid = () => {
             </div>
           ) : error ? (
             <p className="alert alert-danger mx-3" role="alert">{error}</p>
-          ) : students.length > 0 ? (
-            students.map((item) => (
+          ) : filteredStudents.length > 0 ? (
+            filteredStudents.map((item) => (
               <div className="col-xxl-3 col-xl-4 col-md-6 d-flex" key={item._id}>
                 <div className="card flex-fill">
                   <div className="card-header d-flex align-items-center justify-content-between">
@@ -159,7 +194,7 @@ const StudentGrid = () => {
                           <li>
                             <Link
                               className="dropdown-item rounded-1"
-                              to={routes.studentDetail.replace(":admissionNumber", item.admissionNumber)} // Changed to admissionNumber
+                              to={routes.studentDetail.replace(":admissionNumber", item.admissionNumber)}
                             >
                               <i className="ti ti-menu me-2" />
                               View Student
@@ -168,7 +203,7 @@ const StudentGrid = () => {
                           <li>
                             <Link
                               className="dropdown-item rounded-1"
-                              to={routes.editStudent.replace(":regNo", item.admissionNumber)} // Changed to admissionNumber
+                              to={routes.editStudent.replace(":regNo", item.admissionNumber)}
                             >
                               <i className="ti ti-edit-circle me-2" />
                               Edit
@@ -190,7 +225,7 @@ const StudentGrid = () => {
                               data-bs-toggle="modal"
                               data-bs-target="#delete-modal"
                             >
-                              <i className="ti ti-trash-x me-2" /> {/* Fixed typo */}
+                              <i className="ti ti-trash-x me-2" />
                               Delete
                             </Link>
                           </li>
@@ -202,8 +237,7 @@ const StudentGrid = () => {
                     <div className="bg-light-300 rounded-2 p-3 mb-3">
                       <div className="d-flex align-items-center">
                         <Link
-                          // /:admissionNumber routes.studentDetail.replace(":admissionNumber", item.admissionNumber)
-                          to={routes.studentDetail.replace(":admissionNumber", item.admissionNumber)} // Changed to admissionNumber
+                          to={routes.studentDetail.replace(":admissionNumber", item.admissionNumber)}
                           className="avatar avatar-lg flex-shrink-0"
                         >
                           <ImageWithBasePath
@@ -214,23 +248,17 @@ const StudentGrid = () => {
                         </Link>
                         <div className="ms-2">
                           <h5 className="mb-0">
-                            {/* <Link to={routes.student.replace(":admissionNumber", item.admissionNumber)}> */}
-                              {item.name}
-                            {/* </Link> */}
+                            {item.name}
                           </h5>
-                          {/* <p>
+                          <p>
                             {typeof item.classId === 'object' && item.classId?.name
                               ? item.classId.name
                               : 'N/A'}
-                          </p> */}
+                          </p>
                         </div>
                       </div>
                     </div>
                     <div className="d-flex align-items-center justify-content-between gx-2">
-                      {/* <div>
-                        <p className="mb-0">Roll No</p>
-                        <p className="text-dark">{item.rollNumber || 'N/A'}</p>
-                      </div> */}
                       <div>
                         <p className="mb-0">Gender</p>
                         <p className="text-dark">{item.gender}</p>
@@ -242,48 +270,12 @@ const StudentGrid = () => {
                     </div>
                   </div>
                   <div className="card-footer d-flex align-items-center justify-content-between">
-                    {/* <div className="d-flex align-items-center">
-                      <Link
-                        to="#"
-                        className="btn btn-outline-light bg-white btn-icon d-flex align-items-center justify-content-center rounded-circle p-0 me-2"
-                      >
-                        <i className="ti ti-brand-hipchat" />
-                      </Link>
-                      <Link
-                        to="#"
-                        className="btn btn-outline-light bg-white btn-icon d-flex align-items-center justify-content-center rounded-circle p-0 me-2"
-                      >
-                        <i className="ti ti-phone" />
-                      </Link>
-                      <Link
-                        to="#"
-                        className="btn btn-outline-light bg-white btn-icon d-flex align-items-center justify-content-center rounded-circle p-0 me-3"
-                      >
-                        <i className="ti ti-mail" />
-                      </Link>
-                    </div> */}
-                    {/* <Link
-                      to="#"
-                      data-bs-toggle="modal"
-                      data-bs-target="#add_fees_collect"
-                      className="btn btn-light btn-sm fw-semibold"
-                    >
-                      Add Fees
-                    </Link> */}
                   </div>
                 </div>
               </div>
             ))
           ) : (
             <p>No Students Found</p>
-          )}
-          {!loading && students.length > 0 && (
-            <div className="col-md-12 text-center">
-              <Link to="#" className="btn btn-primary">
-                <i className="ti ti-loader-3 me-2" />
-                Load More
-              </Link>
-            </div>
           )}
         </div>
       </div>

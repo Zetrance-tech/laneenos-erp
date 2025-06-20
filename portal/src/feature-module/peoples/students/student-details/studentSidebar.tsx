@@ -138,6 +138,8 @@ const StudentSidebar = ({ admissionNumber }: StudentSidebarProps) => {
               <dd className="col-6 mb-3">{student.caste || "N/A"}</dd>
               <dt className="col-6 fw-medium text-dark mb-3">Category</dt>
               <dd className="col-6 mb-3">{student.category || "N/A"}</dd>
+              <dt className="col-6 fw-medium text-dark mb-3">Class</dt>
+              <dd className="col-6 mb-3">{student.class|| "N/A"}</dd>
               
             </dl>
             <Link

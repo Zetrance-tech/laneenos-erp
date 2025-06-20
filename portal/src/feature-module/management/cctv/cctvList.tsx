@@ -7,7 +7,9 @@ import TooltipOption from "../../../core/common/tooltipOption";
 import toast, { Toaster } from "react-hot-toast";
 import { Spin } from "antd";
 import { useAuth } from "../../../context/AuthContext";
+
 const API_URL = process.env.REACT_APP_URL || "";
+
 // Define interfaces for type safety
 interface Session {
   _id: string;
@@ -60,11 +62,13 @@ const ParentCCTVList: React.FC = () => {
     class: { id: "", name: "" },
     parents: [],
   });
+  const [filteredParents, setFilteredParents] = useState<Parent[]>([]);
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [showTimeModal, setShowTimeModal] = useState<boolean>(false);
   const [selectedStudentId, setSelectedStudentId] = useState<string>("");
-  const [selectedParentType, setSelectedParentType] = useState<string>(""); // Track parent type
+  const [selectedParentType, setSelectedParentType] = useState<string>("");
   const [tempStartTime, setTempStartTime] = useState<string>("");
   const [tempEndTime, setTempEndTime] = useState<string>("");
 
@@ -101,6 +105,7 @@ const ParentCCTVList: React.FC = () => {
       setClasses([]);
       setSelectedClassId("");
       setParentData({ session: { id: "", name: "", startDate: "", endDate: "" }, class: { id: "", name: "" }, parents: [] });
+      setFilteredParents([]);
       setError(null);
     }
   }, [selectedSessionId]);
@@ -121,6 +126,7 @@ const ParentCCTVList: React.FC = () => {
         setClasses([]);
         setSelectedClassId("");
         setParentData({ session: { id: "", name: "", startDate: "", endDate: "" }, class: { id: "", name: "" }, parents: [] });
+        setFilteredParents([]);
       } else {
         setClasses(response.data);
         setSelectedClassId("");
@@ -131,6 +137,7 @@ const ParentCCTVList: React.FC = () => {
       setClasses([]);
       setSelectedClassId("");
       setParentData({ session: { id: "", name: "", startDate: "", endDate: "" }, class: { id: "", name: "" }, parents: [] });
+      setFilteredParents([]);
     } finally {
       setLoading(false);
     }
@@ -141,6 +148,7 @@ const ParentCCTVList: React.FC = () => {
       fetchParents();
     } else {
       setParentData({ session: { id: "", name: "", startDate: "", endDate: "" }, class: { id: "", name: "" }, parents: [] });
+      setFilteredParents([]);
       if (selectedSessionId && !selectedClassId && !error) {
         setError("Please select a class");
       }
@@ -155,14 +163,28 @@ const ParentCCTVList: React.FC = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setParentData(response.data);
+      setFilteredParents(response.data.parents);
       setError(null);
     } catch (err: any) {
       setError(err.response?.data?.message || "Failed to fetch parent data");
       setParentData({ session: { id: "", name: "", startDate: "", endDate: "" }, class: { id: "", name: "" }, parents: [] });
+      setFilteredParents([]);
     } finally {
       setLoading(false);
     }
   };
+
+  // Filter parents based on search query
+  useEffect(() => {
+    if (searchQuery.trim() === "") {
+      setFilteredParents(parentData.parents);
+    } else {
+      const filtered = parentData.parents.filter((parent) =>
+        parent.studentName.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setFilteredParents(filtered);
+    }
+  }, [searchQuery, parentData.parents]);
 
   const toggleCCTVAccess = async (studentId: string, parentType: string, currentStatus: boolean) => {
     try {
@@ -179,6 +201,13 @@ const ParentCCTVList: React.FC = () => {
             : parent
         ),
       }));
+      setFilteredParents((prev) =>
+        prev.map((parent) =>
+          parent.studentId === studentId && parent.type === parentType
+            ? { ...parent, showCCTV: response.data.showCCTV }
+            : parent
+        )
+      );
       setError(null);
       toast.success(`CCTV access ${response.data.showCCTV ? "enabled" : "disabled"} for ${parentType}`);
     } catch (err: any) {
@@ -224,6 +253,17 @@ const ParentCCTVList: React.FC = () => {
               : parent
           ),
         }));
+        setFilteredParents((prev) =>
+          prev.map((parent) =>
+            parent.studentId === selectedStudentId && parent.type === selectedParentType
+              ? {
+                  ...parent,
+                  cctvStartTime: response.data.cctvStartTime,
+                  cctvEndTime: response.data.cctvEndTime,
+                }
+              : parent
+          )
+        );
         setError(null);
         toast.success("CCTV times cleared successfully");
         closeTimeModal();
@@ -232,7 +272,7 @@ const ParentCCTVList: React.FC = () => {
 
       if (!tempStartTime || !tempEndTime) {
         setError("Both start and end times are required");
-        toast.error("Both time and endTime are required");
+        toast.error("Both start and end times are required");
         return;
       }
 
@@ -280,6 +320,17 @@ const ParentCCTVList: React.FC = () => {
             : parent
         ),
       }));
+      setFilteredParents((prev) =>
+        prev.map((parent) =>
+          parent.studentId === selectedStudentId && parent.type === selectedParentType
+            ? {
+                ...parent,
+                cctvStartTime: response.data.cctvStartTime,
+                cctvEndTime: response.data.cctvEndTime,
+              }
+            : parent
+        )
+      );
       setError(null);
       toast.success("CCTV times updated successfully");
       closeTimeModal();
@@ -387,6 +438,7 @@ const ParentCCTVList: React.FC = () => {
                       onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                         setSelectedSessionId(e.target.value);
                         setSelectedClassId("");
+                        setSearchQuery("");
                         setError(null);
                       }}
                     >
@@ -421,6 +473,7 @@ const ParentCCTVList: React.FC = () => {
                       value={selectedClassId}
                       onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                         setSelectedClassId(e.target.value);
+                        setSearchQuery("");
                         setError(null);
                       }}
                       disabled={!selectedSessionId}
@@ -439,6 +492,16 @@ const ParentCCTVList: React.FC = () => {
                       )}
                     </select>
                   </div>
+                  <div className="me-3 mb-3">
+                    <label className="form-label">Search Student</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Search by student name"
+                      value={searchQuery}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+                    />
+                  </div>
                 </div>
               </div>
               <div className="card-body p-0 py-3">
@@ -454,15 +517,15 @@ const ParentCCTVList: React.FC = () => {
                       </div>
                     )}
                     {selectedSessionId && selectedClassId ? (
-                      parentData.parents.length > 0 ? (
+                      filteredParents.length > 0 ? (
                         <>
                           <h5 className="px-3 mb-3">
                             Session: {parentData.session.name} | Class: {parentData.class.name}
                           </h5>
-                          <Table dataSource={parentData.parents} columns={columns} Selection={false} />
+                          <Table dataSource={filteredParents} columns={columns} Selection={false} />
                         </>
                       ) : (
-                        <p className="px-3">No parents found for this class.</p>
+                        <p className="px-3">No parents found for this class{searchQuery ? " matching the search." : "."}</p>
                       )
                     ) : (
                       <p className="px-3">
