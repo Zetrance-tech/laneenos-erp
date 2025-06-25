@@ -127,14 +127,10 @@ export const assignFeesToStudents = async (req, res) => {
   const { templateId, sessionId, studentIds, classIds, customFees = null } = req.body;
 
   try {
-    console.log("assignFeesToStudents Request Body:", JSON.stringify(req.body, null, 2));
-
     // Validate input
     if (!templateId || !sessionId || (!studentIds && !classIds)) {
       return res.status(400).json({ message: "Missing required fields: templateId, sessionId, and either studentIds or classIds" });
     }
-
-    // Validate arrays
     if (studentIds && (!Array.isArray(studentIds) || studentIds.length === 0)) {
       return res.status(400).json({ message: "studentIds must be a non-empty array" });
     }
@@ -142,99 +138,82 @@ export const assignFeesToStudents = async (req, res) => {
       return res.status(400).json({ message: "classIds must be a non-empty array" });
     }
 
-    // Validate fee template
-    const feeTemplate = await FeesTemplate.findById(templateId).populate("classIds");
+    // Fetch data in parallel
+    const [feeTemplate, students, classes] = await Promise.all([
+      FeesTemplate.findById(templateId).populate("classIds fees.feesGroup").lean(),
+      Student.find({
+        $or: [
+          { _id: { $in: studentIds || [] }, sessionId, status: 'active' },
+          { classId: { $in: classIds || [] }, sessionId, status: 'active' },
+        ],
+      }).lean(),
+      Class.find({ _id: { $in: classIds || [] }, sessionId }).lean(),
+    ]);
+
     if (!feeTemplate) {
       return res.status(404).json({ message: "Fee Template not found" });
     }
-
-    // Validate session
     if (sessionId !== feeTemplate.sessionId.toString()) {
       return res.status(400).json({ message: "Session ID does not match the template's session" });
     }
-
-    // Determine students to process
-    let students = [];
-    let addedClassIds = [];
-    let removedClassIds = [];
-
-    // Fetch students from studentIds
-    if (studentIds) {
-      const studentRecords = await Student.find({
-        _id: { $in: studentIds },
-        sessionId,
-        status: "active",
-      });
-      students.push(...studentRecords);
+    if (classIds && classes.length !== classIds.length) {
+      return res.status(404).json({ message: "One or more classes not found or not associated with this session" });
     }
 
-    // Fetch students from classIds and update template's classIds
-    if (classIds) {
-      // Validate classIds
-      const classes = await Class.find({ _id: { $in: classIds }, sessionId });
-      if (classes.length !== classIds.length) {
-        return res.status(404).json({ message: "One or more classes not found or not associated with this session" });
-      }
+    // Ensure classIds is an array
+    feeTemplate.classIds = Array.isArray(feeTemplate.classIds) ? feeTemplate.classIds : [];
 
-      // Compare with existing classIds
-      const oldClassIds = feeTemplate.classIds.map(id => id.toString());
-      const newClassIds = classIds.map(id => id.toString());
-      addedClassIds = newClassIds.filter(id => !oldClassIds.includes(id));
-      removedClassIds = oldClassIds.filter(id => !newClassIds.includes(id));
-
-      // Update template's classIds
-      await FeesTemplate.findByIdAndUpdate(templateId, { classIds }, { new: true });
-
-      // Fetch students from all provided classIds
-      const classStudents = await Student.find({
-        classId: { $in: classIds },
-        sessionId,
-        status: "active",
-      });
-      students.push(...classStudents);
-    }
-
-    // Deduplicate students by _id
-    const uniqueStudents = Array.from(new Map(students.map(s => [s._id.toString(), s])).values());
+    // Deduplicate students
+    const studentIdSet = new Set(students.map(s => s._id.toString()));
+    const uniqueStudents = Array.from(studentIdSet).map(id => students.find(s => s._id.toString() === id));
 
     if (uniqueStudents.length === 0) {
       return res.status(404).json({ message: "No valid students found for assignment" });
     }
 
-    // Process fees to assign
+    // Update classIds in template
+    let addedClassIds = [];
+    let removedClassIds = [];
+    if (classIds) {
+      const oldClassIds = feeTemplate.classIds.map(id => id.toString());
+      const newClassIds = classIds.map(id => id.toString());
+      addedClassIds = newClassIds.filter(id => !oldClassIds.includes(id));
+      removedClassIds = oldClassIds.filter(id => !newClassIds.includes(id));
+      await FeesTemplate.findByIdAndUpdate(templateId, { classIds }, { new: true });
+    }
+
+    // Prepare fees to assign
     let feesToAssign = [];
+    const feesGroupIds = new Set(feeTemplate.fees.map(fee => fee.feesGroup._id.toString()));
+    const feesGroups = await FeesGroup.find({ _id: { $in: Array.from(feesGroupIds) } }).lean();
+    const feesGroupMap = new Map(feesGroups.map(fg => [fg._id.toString(), fg]));
+
     if (customFees && Array.isArray(customFees)) {
       feesToAssign = customFees
         .filter(fee => {
-          if (!fee.feesGroup) return false;
           const groupId = fee.feesGroup._id ? fee.feesGroup._id.toString() : fee.feesGroup.toString();
-          return mongoose.Types.ObjectId.isValid(groupId);
+          return mongoose.Types.ObjectId.isValid(groupId) && feesGroupMap.has(groupId);
         })
         .map(fee => {
           const groupId = fee.feesGroup._id ? fee.feesGroup._id.toString() : fee.feesGroup.toString();
-          const templateFee = feeTemplate.fees.find(tFee => tFee.feesGroup.toString() === groupId);
+          const templateFee = feeTemplate.fees.find(tFee => t.feesGroup._id.toString() === groupId);
           const amount = typeof fee.amount === 'number' && fee.amount >= 0 ? fee.amount : 
                         (templateFee ? templateFee.amount : 0);
-          
           return {
             feesGroup: groupId,
             amount,
             originalAmount: fee.originalAmount || amount,
             discount: fee.discount || 0,
-            status: 'pending',
-            isCustom: true,
           };
         });
     } else {
       feesToAssign = feeTemplate.fees
         .filter(fee => fee.feesGroup && typeof fee.amount === 'number' && fee.amount >= 0)
         .map(fee => ({
-          feesGroup: fee.feesGroup._id,
+          feesGroup: fee.feesGroup._id.toString(),
           amount: fee.amount,
           originalAmount: fee.amount,
           discount: 0,
-          status: 'pending',
-          isCustom: false,
         }));
     }
 
@@ -242,55 +221,68 @@ export const assignFeesToStudents = async (req, res) => {
       return res.status(400).json({ message: "No valid fees to assign" });
     }
 
-    const bulkOps = [];
-
-    for (const student of uniqueStudents) {
-      for (const fee of feesToAssign) {
-        const feesGroup = await FeesGroup.findById(fee.feesGroup);
-        if (!feesGroup) continue;
-
-        const applicableMonths = feesGroup.periodicity === 'Monthly' ? months :
-                               feesGroup.periodicity === 'Quarterly' ? quarterlyMonths :
-                               feesGroup.periodicity === 'Yearly' || feesGroup.periodicity === 'One Time' ? ['Apr'] : [];
-
-        for (const month of applicableMonths) {
-          bulkOps.push({
-            updateOne: {
-              filter: {
-                studentId: student._id,
-                sessionId,
-                feesGroup: fee.feesGroup,
-                month,
-              },
-              update: {
-                $set: {
-                  studentId: student._id,
-                  classId: student.classId,
-                  sessionId,
-                  feesGroup: fee.feesGroup,
-                  amount: fee.amount,
-                  originalAmount: fee.originalAmount,
-                  discount: fee.discount || 0,
-                  month,
-                  status: fee.status,
-                  isCustom: fee.isCustom,
-                  updatedAt: new Date(),
-                },
-                $setOnInsert: {
-                  createdAt: new Date(),
-                },
-              },
-              upsert: true,
-            },
-          });
-        }
+    // Precompute fees by month based on periodicity
+    const feesByMonth = {};
+    for (const fee of feesToAssign) {
+      const feesGroup = feesGroupMap.get(fee.feesGroup);
+      const applicableMonths = feesGroup.periodicity === 'Monthly' ? months :
+                              feesGroup.periodicity === 'Quarterly' ? quarterlyMonths :
+                              ['Apr'];
+      for (const month of applicableMonths) {
+        if (!feesByMonth[month]) feesByMonth[month] = [];
+        feesByMonth[month].push(fee);
       }
     }
 
-    if (bulkOps.length > 0) {
-      await StudentFee.bulkWrite(bulkOps);
+    // Prepare bulk operations
+    const bulkOps = [];
+    for (const student of uniqueStudents) {
+      for (const month of months) {
+        const validFees = feesByMonth[month] || [];
+        if (validFees.length === 0) continue;
+
+        const totalAmount = validFees.reduce((sum, fee) => sum + fee.amount, 0);
+        const totalOriginalAmount = validFees.reduce((sum, fee) => sum + fee.originalAmount, 0);
+        const totalDiscount = validFees.reduce((sum, fee) => sum + fee.discount, 0);
+
+        bulkOps.push({
+          updateOne: {
+            filter: {
+              studentId: student._id,
+              sessionId,
+              month,
+            },
+            update: {
+              $set: {
+                studentId: student._id,
+                classId: student.classId,
+                sessionId,
+                fees: validFees,
+                amount: totalAmount,
+                originalAmount: totalOriginalAmount,
+                discount: totalDiscount,
+                month,
+                status: 'pending',
+                isCustom: !!customFees,
+                updatedAt: new Date(),
+              },
+              $setOnInsert: {
+                createdAt: new Date(),
+              },
+            },
+            upsert: true,
+          },
+        });
+      }
     }
 
+    // Execute bulk write in chunks
+    const chunkSize = 1000;
+    for (let i = 0; i < bulkOps.length; i += chunkSize) {
+      await StudentFee.bulkWrite(bulkOps.slice(i, i + chunkSize));
+    }
+
+    // Remove fees for removed classes
     if (removedClassIds.length > 0) {
       await StudentFee.deleteMany({
         sessionId,
@@ -317,7 +309,6 @@ export const assignFeesToStudents = async (req, res) => {
     });
   }
 };
-
 // Update fees for students
 export const updateFeesForStudent = async (req, res) => {
   const { templateId, sessionId, studentIds, customFees, mergeTemplateFees = false } = req.body;
@@ -369,7 +360,6 @@ export const updateFeesForStudent = async (req, res) => {
           amount: fee.amount,
           originalAmount: fee.amount,
           discount: 0,
-          discountType: "fixed",
           month,
         });
       }
@@ -381,7 +371,7 @@ export const updateFeesForStudent = async (req, res) => {
         .map((fee) => {
           const groupId = typeof fee.feesGroup === "object" ? fee.feesGroup._id : fee.feesGroup;
           if (!groupId) {
-            console.warn(`Invalid fee group format:`, fee.feesGroup);
+            console.warn(`Invalid fee group format:`, fee.fesGroup);
             return null;
           }
           const templateFee = feeTemplate.fees.find(
@@ -400,7 +390,6 @@ export const updateFeesForStudent = async (req, res) => {
             amount: fee.amount || templateFee.amount,
             originalAmount: fee.originalAmount || fee.amount || templateFee.amount,
             discount: fee.discount || 0,
-            discountType: fee.discountType || "fixed",
             month,
           }));
         })
@@ -408,51 +397,62 @@ export const updateFeesForStudent = async (req, res) => {
         .filter((fee) => fee !== null);
     }
 
-    const feesToUpdate = mergeTemplateFees
-      ? [...inputFees, ...defaultFees.filter(
-          (defFee) => !inputFees.some((inFee) => inFee.feesGroup === defFee.feesGroup && inFee.month === defFee.month)
-        )]
-      : inputFees;
+    const feesByMonth = {};
+    const allFees = mergeTemplateFees ? [...inputFees, ...defaultFees] : inputFees;
 
-    console.log(`Fees to update:`, JSON.stringify(feesToUpdate, null, 2));
+    allFees.forEach(fee => {
+      if (!feesByMonth[fee.month]) feesByMonth[fee.month] = [];
+      feesByMonth[fee.month].push({
+        feesGroup: fee.feesGroup,
+        amount: fee.amount,
+        originalAmount: fee.originalAmount,
+        discount: fee.discount,
+      });
+    });
 
-    if (feesToUpdate.length === 0) {
+    console.log(`Fees to update by month:`, JSON.stringify(feesByMonth, null, 2));
+
+    if (Object.keys(feesByMonth).length === 0) {
       console.error("No valid fees to update");
       return res.status(400).json({ message: "No valid fees provided" });
     }
 
     const studentFeePromises = students.map(async (student) => {
       try {
-        const bulkOps = feesToUpdate.map(fee => ({
-          updateOne: {
-            filter: {
-              studentId: student._id,
-              sessionId,
-              feesGroup: fee.feesGroup,
-              month: fee.month,
-            },
-            update: {
-              $set: {
+        const bulkOps = Object.entries(feesByMonth).map(([month, fees]) => {
+          const totalAmount = fees.reduce((sum, f) => sum + f.amount, 0);
+          const totalOriginalAmount = fees.reduce((sum, f) => sum + f.originalAmount, 0);
+          const totalDiscount = fees.reduce((sum, f) => sum + f.discount, 0);
+
+          return {
+            updateOne: {
+              filter: {
                 studentId: student._id,
-                classId: student.classId,
                 sessionId,
-                feesGroup: fee.feesGroup,
-                amount: fee.amount,
-                originalAmount: fee.originalAmount,
-                discount: fee.discount,
-                discountType: fee.discountType,
-                status: 'pending',
-                isCustom: true,
-                updatedAt: new Date(),
-                month: fee.month,
+                month,
               },
-              $setOnInsert: {
-                createdAt: new Date(),
+              update: {
+                $set: {
+                  studentId: student._id,
+                  classId: student.classId,
+                  sessionId,
+                  fees,
+                  amount: totalAmount,
+                  originalAmount: totalOriginalAmount,
+                  discount: totalDiscount,
+                  status: 'pending',
+                  isCustom: true,
+                  updatedAt: new Date(),
+                  month,
+                },
+                $setOnInsert: {
+                  createdAt: new Date(),
+                },
               },
+              upsert: true,
             },
-            upsert: true,
-          },
-        }));
+          };
+        });
 
         await StudentFee.bulkWrite(bulkOps);
         console.log(`Updated StudentFee for ${student._id}`);
@@ -592,4 +592,3 @@ export const getAssignedStudents = async (req, res) => {
     });
   }
 };
-
