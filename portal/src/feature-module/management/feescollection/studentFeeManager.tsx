@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
 import toast from "react-hot-toast";
@@ -40,18 +40,23 @@ interface FeesGroup {
 interface FeeDetail {
   feesGroup: FeesGroup;
   amount: number;
-  discountPercent?: number;
-  netPayable?: number;
+  originalAmount: number;
+  discount: number;
   isCustom: boolean;
   status: string;
+  month?: string;
+  discountPercent?: number;
+  netPayable?: number;
 }
 
-interface AdvancedFeeDetail {
-  feesGroup: FeesGroup;
-  amounts: { [month: string]: number };
-  discounts: { [month: string]: number };
-  netPayables: { [month: string]: number };
-  total: number;
+interface MonthlyFee {
+  month: string;
+  fees: FeeDetail[];
+  amount: number;
+  originalAmount: number;
+  discount: number;
+  isCustom: boolean;
+  status: string;
 }
 
 interface StudentFee {
@@ -62,7 +67,24 @@ interface StudentFee {
     session: { _id: string; name: string; sessionId: string };
     class: { _id: string; name: string; id: string };
   };
-  fees: FeeDetail[];
+  fees: MonthlyFee[];
+}
+
+interface AdvancedFeeDetail {
+  feesGroup: FeesGroup;
+  amounts: { [month: string]: number };
+  discounts: { [month: string]: number };
+  netPayables: { [month: string]: number };
+  total: number;
+}
+
+interface EditFeeDetail {
+  feesGroup: FeesGroup;
+  originalAmount: number;
+  discountPercent: number;
+  netPayable: number;
+  isCustom: boolean;
+  month: string;
 }
 
 const API_URL = process.env.REACT_APP_URL || "http://localhost:5000";
@@ -80,44 +102,56 @@ const StudentFeeManager: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [showAdvancedModal, setShowAdvancedModal] = useState<boolean>(false);
-  const [editFees, setEditFees] = useState<FeeDetail[]>([]);
+  const [editFees, setEditFees] = useState<EditFeeDetail[]>([]);
   const [advancedFees, setAdvancedFees] = useState<AdvancedFeeDetail[]>([]);
-  const {token} = useAuth();
-  const config = {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  };
+  const [selectedEditMonth, setSelectedEditMonth] = useState<string>("");
+  const { token } = useAuth();
+
+  const config = useMemo(
+    () => ({
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }),
+    [token]
+  );
 
   const months = [
     "Apr", "May", "Jun", "Jul", "Aug", "Sep",
     "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"
   ];
 
-  const fetchSessions = async () => {
+  const fetchSessions = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const response = await axios.get<Session[]>(`${API_URL}/api/session/get`, config);
-      setSessions(
-        response.data.map((session) => ({
-          _id: session._id,
-          name: session.name || "Unknown Session",
-          sessionId: session.sessionId || "",
-          status: session.status || "inactive",
-        }))
-      );
+      const fetchedSessions = response.data.map((session) => ({
+        _id: session._id,
+        name: session.name || "Unknown Session",
+        sessionId: session.sessionId || "",
+        status: session.status || "inactive",
+      }));
+      setSessions(fetchedSessions);
+      const activeSession = fetchedSessions.find((s) => s.status === "active");
+      if (activeSession && !selectedSession) {
+        setSelectedSession(activeSession._id);
+      }
     } catch (err) {
       const errorMessage = axios.isAxiosError(err)
-        ? err.response?.data?.message || err.message
-        : "Failed to fetch sessions";
+        ? err.response?.status === 401
+          ? "Unauthorized access. Please check your credentials."
+          : err.response?.data?.message || "Failed to fetch sessions"
+        : "An unexpected error occurred while fetching sessions";
       setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
-  };
+  }, [config, selectedSession]);
 
-  const fetchClassesForSession = async () => {
+  const fetchClassesForSession = useCallback(async () => {
+    if (!selectedSession) return;
     setLoading(true);
     setError(null);
     try {
@@ -132,15 +166,19 @@ const StudentFeeManager: React.FC = () => {
       );
     } catch (err) {
       const errorMessage = axios.isAxiosError(err)
-        ? err.response?.data?.message || err.message
-        : "Failed to fetch classes";
+        ? err.response?.status === 404
+          ? "No classes found for the selected session."
+          : err.response?.data?.message || "Failed to fetch classes"
+        : "An unexpected error occurred while fetching classes";
       setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedSession, config]);
 
-  const fetchStudentsForClass = async () => {
+  const fetchStudentsForClass = useCallback(async () => {
+    if (!selectedClass || !selectedSession) return;
     setLoading(true);
     setError(null);
     try {
@@ -161,45 +199,110 @@ const StudentFeeManager: React.FC = () => {
       );
     } catch (err) {
       const errorMessage = axios.isAxiosError(err)
-        ? err.response?.data?.message || err.message
-        : "Failed to fetch students";
+        ? err.response?.status === 404
+          ? "No students found for the selected class and session."
+          : err.response?.data?.message || "Failed to fetch students"
+        : "An unexpected error occurred while fetching students";
       setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
-  };
-  const fetchStudentFees = async () => {
-  setLoading(true);
-  setError(null);
-  try {
-    const response = await axios.get<StudentFee>(`${API_URL}/api/studentFees/${selectedStudentId}/fees`, config);
-    
-    // Group fees by fee group ID
-    const feeGroupsMap = new Map<string, FeeDetail>();
-    response.data.fees.forEach(fee => {
-      const existing = feeGroupsMap.get(fee.feesGroup._id);
-      if (!existing || fee.isCustom) {
-        feeGroupsMap.set(fee.feesGroup._id, fee);
+  }, [selectedClass, selectedSession, config]);
+
+  const fetchStudentFees = useCallback(async () => {
+    if (!selectedStudentId) {
+      console.log("No student ID selected, skipping fetchStudentFees");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    console.log("Fetching student fees for ID:", selectedStudentId);
+    console.log("Request URL:", `${API_URL}/api/studentFees/${selectedStudentId}/fees`);
+    console.log("Request config:", config);
+
+    try {
+      const response = await axios.get<StudentFee>(
+        `${API_URL}/api/studentFees/${selectedStudentId}/fees`,
+        { ...config, timeout: 5000 }
+      );
+      console.log("Response received:", response.data);
+
+      if (!response.data || !Array.isArray(response.data.fees)) {
+        throw new Error("Invalid response format: fees array is missing or not an array");
       }
-    });
-    
-    setStudentFees({
-      ...response.data,
-      fees: Array.from(feeGroupsMap.values())
-    });
-  } catch (err) {
-    const errorMessage = axios.isAxiosError(err)
-      ? err.response?.data?.message || err.message
-      : "Failed to fetch student fees";
-    setError(errorMessage);
-  } finally {
-    setLoading(false);
-  }
-};
+
+      // Map fees to include month and ensure valid status
+      const updatedFees = response.data.fees.map((monthlyFee) => {
+        if (!monthlyFee.month || !Array.isArray(monthlyFee.fees)) {
+          console.warn("Invalid monthly fee structure:", monthlyFee);
+          return {
+            ...monthlyFee,
+            fees: [],
+            month: monthlyFee.month || "Unknown",
+            status: monthlyFee.status || "pending",
+          };
+        }
+        return {
+          ...monthlyFee,
+          fees: monthlyFee.fees.map((fee) => ({
+            ...fee,
+            month: monthlyFee.month,
+            status: fee.status || "pending",
+            originalAmount: fee.originalAmount || fee.amount,
+          })),
+        };
+      });
+
+      if (updatedFees.length === 0 || updatedFees.every((mf) => mf.fees.length === 0)) {
+        console.warn("No valid fees found after processing");
+        setError("No valid fee details found for the selected student.");
+        toast.error("No valid fee details found for the selected student.");
+        setStudentFees({ student: response.data.student, fees: [] });
+        return;
+      }
+
+      setStudentFees({
+        student: response.data.student,
+        fees: updatedFees,
+      });
+
+      // Set default edit month to the first month with fees
+      const firstMonthWithFees = updatedFees.find((mf) => mf.fees.length > 0)?.month;
+      if (firstMonthWithFees) {
+        setSelectedEditMonth(firstMonthWithFees);
+      }
+    } catch (err) {
+      let errorMessage = "An unexpected error occurred while fetching student fees";
+      if (axios.isAxiosError(err)) {
+        console.error("Axios error:", {
+          status: err.response?.status,
+          statusText: err.response?.statusText,
+          data: err.response?.data,
+          message: err.message,
+        });
+        if (err.response?.status === 404) {
+          errorMessage = "No fee details found for the selected student.";
+        } else if (err.response?.status === 401) {
+          errorMessage = "Unauthorized access. Please check your credentials.";
+        } else {
+          errorMessage = err.response?.data?.message || err.message || errorMessage;
+        }
+      } else {
+        console.error("Non-Axios error:", err);
+        errorMessage = (err as Error).message || errorMessage;
+      }
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+      console.log("Finished fetching student fees");
+    }
+  }, [selectedStudentId, config]);
 
   useEffect(() => {
     fetchSessions();
-  }, []);
+  }, [fetchSessions]);
 
   useEffect(() => {
     if (selectedSession) {
@@ -210,95 +313,113 @@ const StudentFeeManager: React.FC = () => {
       setStudents([]);
       setSelectedStudentId("");
       setStudentFees(null);
-      setError(null);
     }
-  }, [selectedSession]);
+  }, [selectedSession, fetchClassesForSession]);
 
   useEffect(() => {
-    if (selectedClass && selectedSession) {
+    if (selectedClass) {
       fetchStudentsForClass();
     } else {
       setStudents([]);
       setSelectedStudentId("");
       setStudentFees(null);
-      setError(null);
     }
-  }, [selectedClass, selectedSession]);
+  }, [selectedClass, fetchStudentsForClass]);
 
   useEffect(() => {
     if (selectedStudentId) {
       fetchStudentFees();
     } else {
       setStudentFees(null);
-      setError(null);
+      setSelectedEditMonth("");
     }
-  }, [selectedStudentId]);
+  }, [selectedStudentId, fetchStudentFees]);
 
   const handleSessionChange = (value: string) => {
     setSelectedSession(value);
+    setSelectedClass("");
+    setStudents([]);
+    setSelectedStudentId("");
+    setStudentFees(null);
+    setSelectedEditMonth("");
   };
 
   const handleClassChange = (value: string) => {
     setSelectedClass(value);
+    setStudents([]);
+    setSelectedStudentId("");
+    setStudentFees(null);
+    setSelectedEditMonth("");
   };
 
   const handleStudentSelect = (value: string) => {
     setSelectedStudentId(value);
+    setStudentFees(null);
+    setSelectedEditMonth("");
   };
 
   const handleEditFees = () => {
-    if (studentFees) {
-      setEditFees(studentFees.fees.map(fee => ({
-        ...fee,
-        discountPercent: fee.discountPercent || 0,
-        netPayable: fee.netPayable || fee.amount
-      })));
+    if (studentFees && selectedEditMonth) {
+      const selectedMonthFees = studentFees.fees.find((mf) => mf.month === selectedEditMonth)?.fees || [];
+      const editFeesData = selectedMonthFees.map((fee) => ({
+        feesGroup: fee.feesGroup,
+        originalAmount: fee.originalAmount,
+        discountPercent: (fee.discount / fee.originalAmount) * 100 || 0,
+        netPayable: fee.originalAmount - fee.discount,
+        isCustom: fee.isCustom,
+        month: fee.month || selectedEditMonth,
+      }));
+      setEditFees(editFeesData);
       setShowEditModal(true);
     }
   };
 
   const handleAdvancedFees = () => {
     if (studentFees) {
-      const advancedData = studentFees.fees.map(fee => {
-        const amounts: { [month: string]: number } = {};
-        const discounts: { [month: string]: number } = {};
-        const netPayables: { [month: string]: number } = {};
-        let total = 0;
+      const feeGroupsMap = new Map<string, AdvancedFeeDetail>();
 
-        const amount = fee.amount || 0;
-        const discountPercent = fee.discountPercent || 0;
-        const netPayable = fee.netPayable || amount * (1 - discountPercent / 100);
+      studentFees.fees.forEach((monthlyFee) => {
+        const month = monthlyFee.month;
+        if (!month || !Array.isArray(monthlyFee.fees)) return;
 
-        if (fee.feesGroup.periodicity === "Yearly" || fee.feesGroup.periodicity === "One Time") {
-          amounts["Apr"] = amount;
-          discounts["Apr"] = discountPercent;
-          netPayables["Apr"] = netPayable;
-          total = netPayable;
-        } else if (fee.feesGroup.periodicity === "Quarterly") {
-          ["Apr", "Jul", "Oct", "Jan"].forEach(month => {
-            amounts[month] = amount;
-            discounts[month] = discountPercent;
-            netPayables[month] = netPayable;
-            total += netPayable;
-          });
-        } else if (fee.feesGroup.periodicity === "Monthly") {
-          months.forEach(month => {
-            amounts[month] = amount;
-            discounts[month] = discountPercent;
-            netPayables[month] = netPayable;
-            total += netPayable;
-          });
-        }
+        monthlyFee.fees.forEach((fee) => {
+          if (!fee.feesGroup?._id) return;
 
-        return {
-          feesGroup: fee.feesGroup,
-          amounts,
-          discounts,
-          netPayables,
-          total
-        };
+          const amount = fee.originalAmount || 0;
+          const discount = fee.discount || 0;
+          const netPayable = amount - discount;
+
+          const existing = feeGroupsMap.get(fee.feesGroup._id);
+          if (existing) {
+            existing.amounts[month] = amount;
+            existing.discounts[month] = discount;
+            existing.netPayables[month] = netPayable;
+            existing.total += netPayable;
+          } else {
+            const newEntry: AdvancedFeeDetail = {
+              feesGroup: fee.feesGroup,
+              amounts: { [month]: amount },
+              discounts: { [month]: discount },
+              netPayables: { [month]: netPayable },
+              total: netPayable,
+            };
+            feeGroupsMap.set(fee.feesGroup._id, newEntry);
+          }
+        });
       });
-      console.log("Advanced Fees Data:", advancedData);
+
+      const advancedData = Array.from(feeGroupsMap.values());
+
+      advancedData.forEach((feeDetail) => {
+        months.forEach((month) => {
+          if (!(month in feeDetail.amounts)) {
+            feeDetail.amounts[month] = 0;
+            feeDetail.discounts[month] = 0;
+            feeDetail.netPayables[month] = 0;
+          }
+        });
+      });
+
       setAdvancedFees(advancedData);
       setShowAdvancedModal(true);
     }
@@ -308,62 +429,64 @@ const StudentFeeManager: React.FC = () => {
     const newFees = [...editFees];
     newFees[index] = { ...newFees[index], [field]: value };
 
-    if (field === "amount" || field === "discountPercent") {
-      const amount = newFees[index].amount;
+    if (field === "originalAmount" || field === "discountPercent") {
+      const originalAmount = newFees[index].originalAmount;
       const discountPercent = newFees[index].discountPercent || 0;
-      newFees[index].netPayable = amount * (1 - discountPercent / 100);
+      newFees[index].netPayable = originalAmount * (1 - discountPercent / 100);
       newFees[index].isCustom = true;
     }
 
     setEditFees(newFees);
   };
 
-  const handleAdvancedFeeChange = (feeIndex: number, month: string, field: string, value: number) => {
-    const newFees = [...advancedFees];
-    newFees[feeIndex] = { ...newFees[feeIndex] };
-
-    if (field === "amount") {
-      newFees[feeIndex].amounts[month] = value;
-      newFees[feeIndex].netPayables[month] = value * (1 - (newFees[feeIndex].discounts[month] || 0) / 100);
-    } else {
-      newFees[feeIndex].discounts[month] = value;
-      newFees[feeIndex].netPayables[month] = newFees[feeIndex].amounts[month] * (1 - value / 100);
+  const handleSaveFees = async () => {
+    if (!studentFees || !selectedEditMonth) return;
+    setLoading(true);
+    try {
+      const payload = {
+        fees: editFees.map((fee) => ({
+          feesGroup: fee.feesGroup._id,
+          amount: fee.netPayable,
+          originalAmount: fee.originalAmount,
+          discount: fee.originalAmount * (fee.discountPercent / 100),
+          isCustom: fee.isCustom,
+          month: selectedEditMonth,
+        })),
+      };
+      await axios.put(
+        `${API_URL}/api/studentFees/${studentFees.student._id}/fees`,
+        payload,
+        config
+      );
+      toast.success("Fees updated successfully");
+      setShowEditModal(false);
+      fetchStudentFees();
+    } catch (err) {
+      const errorMessage = axios.isAxiosError(err)
+        ? err.response?.data?.message || "Failed to update fees"
+        : "An unexpected error occurred";
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
     }
-
-    newFees[feeIndex].total = Object.values(newFees[feeIndex].netPayables).reduce((sum, val) => sum + (val || 0), 0);
-    setAdvancedFees(newFees);
   };
 
-  const handleSaveFees = async () => {
-  if (!studentFees) return;
-  setLoading(true);
-  try {
-    const payload = {
-      fees: editFees.map((fee) => ({
-        feesGroup: fee.feesGroup._id,
-        amount: fee.netPayable, // Sending netPayable to backend
+  const handleMonthChange = (value: string) => {
+    setSelectedEditMonth(value);
+    if (studentFees) {
+      const selectedMonthFees = studentFees.fees.find((mf) => mf.month === value)?.fees || [];
+      const editFeesData = selectedMonthFees.map((fee) => ({
+        feesGroup: fee.feesGroup,
+        originalAmount: fee.originalAmount,
+        discountPercent: (fee.discount / fee.originalAmount) * 100 || 0,
+        netPayable: fee.originalAmount - fee.discount,
         isCustom: fee.isCustom,
-        applyToAll: true // Add this flag to backend
-      })),
-    };
-    await axios.put(
-      `${API_URL}/api/studentFees/${studentFees.student._id}/fees`,
-      payload,
-      config
-    );
-    toast.success("Fees updated successfully");
-    setShowEditModal(false);
-    fetchStudentFees();
-  } catch (err) {
-    const errorMessage = axios.isAxiosError(err)
-      ? err.response?.data?.message || err.message
-      : "Failed to update fees";
-    setError(errorMessage);
-    toast.error(errorMessage);
-  } finally {
-    setLoading(false);
-  }
-};
+        month: fee.month || value,
+      }));
+      setEditFees(editFeesData);
+    }
+  };
 
   const studentColumns = [
     {
@@ -387,7 +510,7 @@ const StudentFeeManager: React.FC = () => {
         <Button
           type="primary"
           size="small"
-          onClick={() => setSelectedStudentId(record._id)}
+          onClick={() => handleStudentSelect(record._id)}
         >
           View Fees
         </Button>
@@ -395,7 +518,19 @@ const StudentFeeManager: React.FC = () => {
     },
   ];
 
+  // Filter fees to show only April
+  const aprilFees = studentFees
+    ? studentFees.fees
+        .filter((monthlyFee) => monthlyFee.month === "Apr")
+        .flatMap((monthlyFee) => monthlyFee.fees)
+    : [];
+
   const feeColumns = [
+    // {
+    //   title: "Month",
+    //   dataIndex: "month",
+    //   render: (month: string) => <span>{month || "N/A"}</span>,
+    // },
     {
       title: "Fee Group",
       dataIndex: "feesGroup",
@@ -408,23 +543,10 @@ const StudentFeeManager: React.FC = () => {
     },
     {
       title: "Amount",
-      dataIndex: "amount",
-      render: (amount: number, record: FeeDetail) => (
+      dataIndex: "originalAmount",
+      render: (originalAmount: number, record: FeeDetail) => (
         <span className={record.isCustom ? "text-blue-600 font-semibold" : ""}>
-          ₹{amount.toFixed(2)}
-        </span>
-      ),
-    },
-    {
-      title: "Status",
-      dataIndex: "status",
-      render: (status: string) => (
-        <span
-          className={`badge ${
-            status === "paid" ? "bg-success" : status === "pending" ? "bg-warning" : "bg-danger"
-          }`}
-        >
-          {status.charAt(0).toUpperCase() + status.slice(1)}
+          ₹{originalAmount.toFixed(2)}
         </span>
       ),
     },
@@ -443,12 +565,12 @@ const StudentFeeManager: React.FC = () => {
     },
     {
       title: "Original Amount",
-      dataIndex: "amount",
-      render: (_: number, record: FeeDetail, index: number) => (
+      dataIndex: "originalAmount",
+      render: (_: number, record: EditFeeDetail, index: number) => (
         <Input
           type="number"
-          value={editFees[index]?.amount || 0}
-          onChange={(e) => handleFeeChange(index, "amount", Number(e.target.value))}
+          value={editFees[index]?.originalAmount || 0}
+          onChange={(e) => handleFeeChange(index, "originalAmount", Number(e.target.value))}
           min={0}
           prefix="₹"
           style={{ width: "120px" }}
@@ -458,7 +580,7 @@ const StudentFeeManager: React.FC = () => {
     {
       title: "Discount %",
       dataIndex: "discountPercent",
-      render: (_: number, record: FeeDetail, index: number) => (
+      render: (_: number, record: EditFeeDetail, index: number) => (
         <Input
           type="number"
           value={editFees[index]?.discountPercent || 0}
@@ -473,12 +595,11 @@ const StudentFeeManager: React.FC = () => {
     {
       title: "Net Payable",
       dataIndex: "netPayable",
-      render: (_: number, record: FeeDetail, index: number) => (
+      render: (_: number, record: EditFeeDetail, index: number) => (
         <Input
           type="number"
           value={editFees[index]?.netPayable || 0}
-          onChange={(e) => handleFeeChange(index, "netPayable", Number(e.target.value))}
-          min={0}
+          disabled
           prefix="₹"
           style={{ width: "120px" }}
         />
@@ -487,76 +608,91 @@ const StudentFeeManager: React.FC = () => {
   ];
 
   const advancedFeeColumns = [
-  {
-    title: "Fee Group",
-    dataIndex: "feesGroup",
-    render: (feesGroup: FeesGroup, record: AdvancedFeeDetail) => (
-      <div>
-        <span>{feesGroup.name || "N/A"}</span>
-        <br />
-        <span style={{ fontSize: "12px", color: "#888" }}>{feesGroup.periodicity || "N/A"}</span>
-      </div>
-    ),
-    fixed: 'left' as const,
-    width: 150,
-  },
-  ...months.map(month => ({
-    title: month,
-    render: (_: any, record: AdvancedFeeDetail, index: number) => {
-      const showField = 
-        record.feesGroup.periodicity === "Yearly" || record.feesGroup.periodicity === "One Time"
-          ? month === "Apr"
-          : record.feesGroup.periodicity === "Quarterly"
-          ? ["Apr", "Jul", "Oct", "Jan"].includes(month)
-          : record.feesGroup.periodicity === "Monthly";
-      
-      return showField ? (
-        <div style={record.feesGroup._id === 'total' ? { fontWeight: 'bold', color: 'blue' } : {}}>
-          ₹{record.netPayables[month]?.toFixed(2) || "0.00"}
+    {
+      title: "Fee Group",
+      dataIndex: "feesGroup",
+      render: (feesGroup: FeesGroup, record: AdvancedFeeDetail) => (
+        <div>
+          <span>{feesGroup.name || "N/A"}</span>
+          <br />
+          <span style={{ fontSize: "12px", color: "#888" }}>{feesGroup.periodicity || "N/A"}</span>
         </div>
-      ) : (
-        <div>-</div>
-      );
+      ),
+      fixed: "left" as const,
+      width: 150,
     },
-    width: 100,
-  })),
-  {
-    title: "Total",
-    dataIndex: "total",
-    render: (total: number, record: AdvancedFeeDetail) => (
-      <span style={record.feesGroup._id === 'total' ? { fontWeight: 'bold', color: 'blue' } : {}}>
-        ₹{total.toFixed(2)}
-      </span>
-    ),
-    fixed: 'right' as const,
-    width: 100,
-  },
-];
+    ...months.map((month) => ({
+      title: month,
+      render: (_: any, record: AdvancedFeeDetail) => {
+        const hasData = record.amounts[month] !== undefined && record.amounts[month] > 0;
+        const showField =
+          hasData ||
+          (record.feesGroup.periodicity === "Yearly" || record.feesGroup.periodicity === "One Time"
+            ? month === "Apr"
+            : record.feesGroup.periodicity === "Quarterly"
+            ? ["Apr", "Jul", "Oct", "Jan"].includes(month)
+            : record.feesGroup.periodicity === "Monthly");
+        return showField ? (
+          <div style={record.feesGroup._id === "total" ? { fontWeight: "bold", color: "blue" } : {}}>
+            <div>₹{(record.amounts[month] || 0).toFixed(2)}</div>
+            {/* <div>Disc: ₹{(record.discounts[month] || 0).toFixed(2)}</div> */}
+            {/* <div>Net: ₹{(record.netPayables[month] || 0).toFixed(2)}</div> */}
+          </div>
+        ) : (
+          <div>-</div>
+        );
+      },
+      width: 100,
+    })),
+    {
+      title: "Total",
+      dataIndex: "total",
+      render: (total: number, record: AdvancedFeeDetail) => (
+        <span style={record.feesGroup._id === "total" ? { fontWeight: "bold", color: "blue" } : {}}>
+          ₹{total.toFixed(2)}
+        </span>
+      ),
+      fixed: "right" as const,
+      width: 100,
+    },
+  ];
 
-// Add this to calculate monthly totals
-const monthTotals = months.reduce((acc, month) => {
-  acc[month] = advancedFees.reduce((sum, fee) => {
-    const showField = 
-      fee.feesGroup.periodicity === "Yearly" || fee.feesGroup.periodicity === "One Time"
-        ? month === "Apr"
-        : fee.feesGroup.periodicity === "Quarterly"
-        ? ["Apr", "Jul", "Oct", "Jan"].includes(month)
-        : fee.feesGroup.periodicity === "Monthly";
-    return showField ? sum + (fee.netPayables[month] || 0) : sum;
-  }, 0);
-  return acc;
-}, {} as { [month: string]: number });
+  const monthTotals = months.reduce((acc, month) => {
+    acc[month] = advancedFees.reduce((sum, fee) => {
+      const hasData = fee.amounts[month] !== undefined && fee.amounts[month] > 0;
+      const showField =
+        hasData ||
+        (fee.feesGroup.periodicity === "Yearly" || fee.feesGroup.periodicity === "One Time"
+          ? month === "Apr"
+          : fee.feesGroup.periodicity === "Quarterly"
+          ? ["Apr", "Jul", "Oct", "Jan"].includes(month)
+          : fee.feesGroup.periodicity === "Monthly");
+      return showField ? sum + (fee.netPayables[month] || 0) : sum;
+    }, 0);
+    return acc;
+  }, {} as { [month: string]: number });
 
-const advancedFeesWithTotal = [
-  ...advancedFees,
-  {
-    feesGroup: { _id: 'total', name: 'Total', periodicity: 'Monthly' },
-    amounts: monthTotals,
-    discounts: {},
-    netPayables: monthTotals,
-    total: Object.values(monthTotals).reduce((sum, val) => sum + val, 0)
-  }
-];
+  const advancedFeesWithTotal: AdvancedFeeDetail[] = [
+    ...advancedFees,
+    {
+      feesGroup: {
+        _id: "total",
+        name: "Total",
+        periodicity: "Monthly" as "Monthly",
+      },
+      amounts: monthTotals,
+      discounts: {},
+      netPayables: monthTotals,
+      total: Object.values(monthTotals).reduce((sum, val) => sum + val, 0),
+    },
+  ];
+
+  // Get available months for edit modal
+  const availableMonths = studentFees
+    ? studentFees.fees
+        .filter((mf) => mf.fees.length > 0)
+        .map((mf) => mf.month)
+    : [];
 
   return (
     <div className="page-wrapper">
@@ -618,7 +754,7 @@ const advancedFeesWithTotal = [
                 <Select
                   showSearch
                   placeholder="Search student"
-                  value={selectedStudentId}
+                  value={selectedStudentId || undefined}
                   onChange={handleStudentSelect}
                   style={{ width: 200 }}
                   options={students.map((student) => ({
@@ -666,7 +802,7 @@ const advancedFeesWithTotal = [
                       {studentFees.student.admissionNumber})
                     </h5>
                     <div>
-                      <Button type="primary" onClick={handleEditFees} className="me-2">
+                      <Button type="primary" onClick={handleEditFees} className="me-2" disabled={!selectedEditMonth}>
                         Edit Fees
                       </Button>
                       <Button type="primary" onClick={handleAdvancedFees}>
@@ -674,12 +810,20 @@ const advancedFeesWithTotal = [
                       </Button>
                     </div>
                   </div>
-                  <Table
-                    dataSource={studentFees.fees}
-                    columns={feeColumns}
-                    rowKey={(record) => record.feesGroup._id}
-                    pagination={false}
-                  />
+                  {aprilFees.length > 0 ? (
+                    <Table
+                      dataSource={aprilFees}
+                      columns={feeColumns}
+                      rowKey={(record) => `${record.feesGroup?._id}-${record.month}` || Math.random().toString()}
+                      pagination={false}
+                    />
+                  ) : (
+                    <div className="text-center py-4">
+                      <p className="alert alert-info mx-3" role="alert">
+                        No fee details found for April.
+                      </p>
+                    </div>
+                  )}
                 </div>
               ) : students.length > 0 ? (
                 <Table
@@ -690,7 +834,7 @@ const advancedFeesWithTotal = [
                 />
               ) : (
                 <div className="text-center py-4">
-                  <p className="alert alert-danger mx-3" role="alert">
+                  <p className="alert alert-info mx-3" role="alert">
                     {selectedClass
                       ? "No students found for this class"
                       : "Please select a session and class"}
@@ -710,12 +854,7 @@ const advancedFeesWithTotal = [
           <Button key="cancel" onClick={() => setShowEditModal(false)}>
             Cancel
           </Button>,
-          <Button
-            key="submit"
-            type="primary"
-            onClick={handleSaveFees}
-            loading={loading}
-          >
+          <Button key="submit" type="primary" onClick={handleSaveFees} loading={loading}>
             Save
           </Button>,
         ]}
@@ -723,36 +862,50 @@ const advancedFeesWithTotal = [
         width={900}
         style={{ top: 50 }}
       >
+        {/* <Form.Item label="Select Month">
+          <Select
+            value={selectedEditMonth || undefined}
+            onChange={handleMonthChange}
+            style={{ width: 200 }}
+            options={availableMonths.map((month) => ({
+              value: month,
+              label: month,
+            }))}
+            disabled={loading}
+          />
+        </Form.Item> */}
         <Table
           dataSource={editFees}
           columns={editFeeColumns}
-          rowKey={(record) => record.feesGroup._id}
+          rowKey={(record) => `${record.feesGroup?._id}-${record.month}` || Math.random().toString()}
           pagination={false}
         />
       </Modal>
 
       <Modal
-  title="Advanced Fee Structure"
-  open={showAdvancedModal}
-  onCancel={() => setShowAdvancedModal(false)}
-  footer={[
-    <Button key="cancel" onClick={() => setShowAdvancedModal(false)}>
-      Cancel
-    </Button>
-  ]}
-  width={1200}
-  zIndex={10000}
-  style={{ top: 10 }}
->
-  <Table
-    dataSource={advancedFeesWithTotal as AdvancedFeeDetail[]}
-    columns={advancedFeeColumns}
-    rowKey={(record) => record.feesGroup._id}
-    pagination={false}
-    scroll={{ x: 1500 }}
-    rowClassName={(record: AdvancedFeeDetail) => (record.feesGroup._id === 'total' ? 'total-row' : '')}
-  />
-</Modal>
+        title="Advanced Fee Structure"
+        open={showAdvancedModal}
+        onCancel={() => setShowAdvancedModal(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setShowAdvancedModal(false)}>
+            Close
+          </Button>,
+        ]}
+        width={1200}
+        zIndex={10000}
+        style={{ top: 10 }}
+      >
+        <Table
+          dataSource={advancedFeesWithTotal}
+          columns={advancedFeeColumns}
+          rowKey={(record) => record.feesGroup._id || Math.random().toString()}
+          pagination={false}
+          scroll={{ x: 1500 }}
+          rowClassName={(record: AdvancedFeeDetail) =>
+            record.feesGroup._id === "total" ? "total-row" : ""
+          }
+        />
+      </Modal>
     </div>
   );
 };

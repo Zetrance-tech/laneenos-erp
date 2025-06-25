@@ -338,7 +338,9 @@ export const SidebarData = (userRole: string) => {
             { label: "Fees Structure", link: routes.feesStructure },
             // { label: "Fees Master", link: routes.feesMaster },
             { label: "Fees Manager", link: routes.feesAssign },
-            { label: "Fees Generation", link: routes.collectFees },
+            { label: "Fees Generation", link: routes.generateFees },
+            { label: "Fees Collection", link: routes.collectFees },
+            { label: "Fees Details", link: routes.feedetails },
           ],
         },
         {

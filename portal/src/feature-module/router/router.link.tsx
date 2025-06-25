@@ -119,6 +119,7 @@ import Staff from "../hrm/staff-list/staff";
 import Departments from "../hrm/departments";
 import Classes from "../academic/classes";
 import ClassHomeWork from "../academic/class-home-work";
+import CollectStudentFees from "../management/feescollection/collectFees";
 import ExamResult from "../academic/examinations/exam-results";
 import ExamAttendance from "../academic/examinations/exam-attendance";
 import StudentPromotion from "../peoples/students/student-promotion";
@@ -161,7 +162,8 @@ import FeesTypes from "../management/feescollection/feesConcession";
 import FeesMaster from "../management/feescollection/feesMaster";
 import FeeTemplateManager from "../management/feescollection/feesStructure"
 import UserList from "../peoples/changePassword";
-import CollectFees from "../management/feescollection/collectFees";
+// import CollectFees from "../management/feescollection/generateFees";
+import GenerateStudentFees from "../management/feescollection/generateFees";
 import StudentAttendance from "../hrm/attendance/student-attendance";
 import TeacherAttendance from "../hrm/attendance/teacher-attendance";
 import StaffAttendance from "../hrm/attendance/staff-attendance";
@@ -259,6 +261,7 @@ import ParentCCTVList from "../management/cctv/cctvList";
 import AddEnquiry from "../management/enquiry/addEnquiry";
 import EnquiryList from "../management/enquiry/enquiryList";
 import StudentFeeManager from "../management/feescollection/studentFeeManager";
+import StudentFeeData from "../management/feescollection/feesDetails";
 const routes = all_routes;
 interface StudentLeaves {
   admissionNumber: string; // Updated prop name to match API field
@@ -1229,8 +1232,16 @@ export const protectedPublicRoutes = [
     element: <FeeTemplateManager />,
   },
   {
+    path: routes.generateFees,
+    element: <GenerateStudentFees />,
+  },
+  {
     path: routes.collectFees,
-    element: <CollectFees />,
+    element: <CollectStudentFees />,
+  },
+  {
+    path: routes.feedetails,
+    element: <StudentFeeData/>,
   },
   {
     path: routes.cctvList,

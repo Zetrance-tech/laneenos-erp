@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
 import toast from "react-hot-toast";
-import { Spin, Select, Table, Button, Form, Modal, Radio, Tooltip } from "antd";
+import { Spin, Select, Table, Button, Form, Modal, Radio, Input, DatePicker, Row, Col, Checkbox } from "antd";
 import { all_routes } from "../../router/all_routes";
 import moment from "moment";
 import TooltipOption from "../../../core/common/tooltipOption";
@@ -29,6 +29,34 @@ interface Student {
   classId: string;
 }
 
+interface PaymentDetail {
+  _id?: string;
+  paymentId: string;
+  modeOfPayment: "Cash" | "BankTransfer" | "Cheque" | "CardPayment" | "Wallet" | "IMPS";
+  collectionDate: string;
+  amountPaid: number;
+  transactionNo?: string;
+  transactionDate?: string;
+  chequeNo?: string;
+  chequeDate?: string;
+  bankName?: string;
+  remarks?: string;
+  internalNotes?: string;
+  excessAmount?:number;
+}
+
+interface FeeDetail {
+  feesGroup: {
+    id: string;
+    _id: string;
+    name: string;
+    amount: number;
+    periodicity: string;
+    originalAmount: number;
+    discount: number;
+  };
+}
+
 interface GeneratedFee {
   _id: string;
   student: {
@@ -36,59 +64,17 @@ interface GeneratedFee {
     name: string;
     admissionNumber: string;
   };
-  feesGroup: {
-    _id: string;
-    name: string;
-    periodicity: string;
-  };
+  fees: FeeDetail[];
   amount: number;
-  discountPercent: number;
+  amountPaid: number;
   netPayable: number;
-  dueDate?: string;
-  status?: string;
-  generatedBy?: {
-    _id: string;
-    name: string;
-  };
-  generatedAt?: string;
-  month?: string;
+  balanceAmount: number;
   discount?: number;
-  generationGroupId?: string;
-}
-
-interface TallyData {
-  totalAmount: number;
-  totalNetPayable: number;
-  feesByMonth: {
-    [month: string]: GeneratedFee[];
-  };
-  generationGroupId?: string;
-  months: string[];
-}
-
-interface Tally {
-  student: {
-    _id: string;
-    name: string;
-    admissionNumber: string;
-  };
-  tally: TallyData;
-}
-
-interface MonthlyFeesSummary {
-  student: {
-    _id: string;
-    name: string;
-    admissionNumber: string;
-  };
-  month: string;
-  totalAmount: number;
-  totalNetPayable: number;
   dueDate?: string;
-  generatedAt?: string;
   status?: string;
-  feeDetails: GeneratedFee[];
-  generationGroupId?: string;
+  month?: string;
+  paymentDetails: PaymentDetail[];
+  excessAmount: number;
 }
 
 interface FeeTableRow {
@@ -101,52 +87,55 @@ interface FeeTableRow {
   month: string;
   totalAmount: number | null;
   totalNetPayable: number | null;
+  amountPaid: number;
+  balanceAmount: number;
   dueDate?: string;
-  generatedAt?: string;
   status?: string;
   feeDetails: GeneratedFee[];
-  generationGroupId?: string;
 }
 
-interface GenerationGroup {
-  generationGroupId: string;
-  months: string[];
-  generatedAt: string;
-  tally: Tally[];
+interface CollectFeesResponse {
+  success: boolean;
+  message: string;
+  fees: GeneratedFee[];
+  excessAmount: number;
+  paymentId?: string;
 }
 
 const API_URL = process.env.REACT_APP_URL;
 
-const GenerateStudentFees: React.FC = () => {
+const CollectStudentFees: React.FC = () => {
   const routes = all_routes;
-  const { token, user } = useAuth();
+  const { token } = useAuth();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedSession, setSelectedSession] = useState<string>("");
   const [classes, setClasses] = useState<Class[]>([]);
   const [selectedClass, setSelectedClass] = useState<string>("");
   const [students, setStudents] = useState<Student[]>([]);
-  const [selectedStudentId, setSelectedStudentId] = useState<string>("");
-  const [generatedMonths, setGeneratedMonths] = useState<string[]>([]);
-  const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
-  const [dueDate, setDueDate] = useState<moment.Moment | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<string>("");
+  const [selectedMonth, setSelectedMonth] = useState<string>("");
   const [monthlyFees, setMonthlyFees] = useState<FeeTableRow[]>([]);
-  const [allFees, setAllFees] = useState<FeeTableRow[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
-  const [selectedFeeDetails, setSelectedFeeDetails] = useState<GeneratedFee[]>([]);
-  const [isEditModalVisible, setIsEditModalVisible] = useState<boolean>(false);
-  const [editingFeeSummary, setEditingFeeSummary] = useState<FeeTableRow | null>(null);
-  const [newDueDate, setNewDueDate] = useState<string>("");
-  const [generationMode, setGenerationMode] = useState<"single" | "class">("single");
-  const [isTallyModalVisible, setIsTallyModalVisible] = useState<boolean>(false);
-  const [selectedTally, setSelectedTally] = useState<Tally[]>([]);
-  const [generationGroups, setGenerationGroups] = useState<GenerationGroup[]>([]);
-  const [selectedGroupId, setSelectedGroupId] = useState<string>("");
-  const months = [
-    "Apr", "May", "Jun", "Jul", "Aug", "Sep",
-    "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"
-  ];
+  const [isDetailsModalVisible, setIsDetailsModalVisible] = useState<boolean>(false);
+  const [selectedFeeDetails, setSelectedFeeDetails] = useState<GeneratedFee | null>(null);
+  const [isCollectModalVisible, setIsCollectModalVisible] = useState<boolean>(false);
+  const [selectedFeeRow, setSelectedFeeRow] = useState<FeeTableRow | null>(null);
+  const [paymentMode, setPaymentMode] = useState<"Cash" | "BankTransfer" | "Cheque" | "CardPayment" | "Wallet" | "IMPS">("Cash");
+  const [collectionDate, setCollectionDate] = useState<moment.Moment | null>(moment("2025-06-23"));
+  const [transactionNo, setTransactionNo] = useState<string>("");
+  const [transactionDate, setTransactionDate] = useState<moment.Moment | null>(null);
+  const [chequeNo, setChequeNo] = useState<string>("");
+  const [chequeDate, setChequeDate] = useState<moment.Moment | null>(null);
+  const [bankName, setBankName] = useState<string>("");
+  const [remarks, setRemarks] = useState<string>("");
+  const [internalNotes, setInternalNotes] = useState<string>("");
+  const [includeExcessFee, setIncludeExcessFee] = useState<boolean>(false);
+  const [excessAmount, setExcessAmount] = useState<number>(0);
+  const [amountPaid, setAmountPaid] = useState<number>(0);
+  const [isEditingPayment, setIsEditingPayment] = useState<boolean>(false);
+  const [editingPaymentId, setEditingPaymentId] = useState<string | undefined>(undefined);
+  const [nextPaymentId, setNextPaymentId] = useState("")
   const config = {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -158,15 +147,7 @@ const GenerateStudentFees: React.FC = () => {
     setError(null);
     try {
       const response = await axios.get<Session[]>(`${API_URL}/api/session/get`, config);
-      const sessionData = response.data || [];
-      setSessions(
-        sessionData.map((session) => ({
-          _id: session._id,
-          name: session.name || "Unknown Session",
-          sessionId: session.sessionId || "",
-          status: session.status || "inactive",
-        }))
-      );
+      setSessions(response.data || []);
     } catch (err) {
       const errorMessage = axios.isAxiosError(err)
         ? err.response?.data?.message || err.message
@@ -182,15 +163,7 @@ const GenerateStudentFees: React.FC = () => {
     setError(null);
     try {
       const response = await axios.get<Class[]>(`${API_URL}/api/class/session/${selectedSession}`, config);
-      const classData = response.data || [];
-      setClasses(
-        classData.map((cls) => ({
-          _id: cls._id,
-          id: cls.id || "",
-          name: cls.name || "Unknown Class",
-          sessionId: cls.sessionId || "",
-        }))
-      );
+      setClasses(response.data || []);
     } catch (err) {
       const errorMessage = axios.isAxiosError(err)
         ? err.response?.data?.message || err.message
@@ -209,15 +182,7 @@ const GenerateStudentFees: React.FC = () => {
         `${API_URL}/api/studentFees/students-by-class-session/${selectedClass}/${selectedSession}`,
         config
       );
-      const studentData = response.data?.data || [];
-      setStudents(
-        studentData.map((student) => ({
-          _id: student._id,
-          admissionNumber: student.admissionNumber || "",
-          name: student.name || "Unknown Student",
-          classId: student.classId || "",
-        }))
-      );
+      setStudents(response.data?.data || []);
     } catch (err) {
       const errorMessage = axios.isAxiosError(err)
         ? err.response?.data?.message || err.message
@@ -227,204 +192,170 @@ const GenerateStudentFees: React.FC = () => {
       setLoading(false);
     }
   };
-
-  const fetchGeneratedFeesForClass = async () => {
-    if (!selectedClass || !selectedSession) return;
+  const fetchPreviewPaymentId = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/studentFees/preview-next-id`, config);
+      setNextPaymentId(response.data.paymentId);
+    } catch (err) {
+      setNextPaymentId("Generating...");
+    }
+  };
+  const fetchFeesForMonth = async (studentId: string, month?: string) => {
+    if (!studentId || !selectedSession) return [];
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get<MonthlyFeesSummary[]>(
-        `${API_URL}/api/studentFees/class/${selectedClass}/session/${selectedSession}/generated-summary`,
-        config
-      );
-      const feesData = response.data || [];
-      const transformedFees: FeeTableRow[] = feesData.map(summary => {
-        const feeDetails = Array.isArray(summary.feeDetails) ? summary.feeDetails : [];
-        const totalAmount = feeDetails.reduce((sum, fee) => sum + (Number(fee.amount) || 0), 0);
-        const totalNetPayable = feeDetails.reduce((sum, fee) => {
-          const netPayable = Number(fee.netPayable) || (Number(fee.amount) - (Number(fee.discount) || 0));
-          return sum + netPayable;
-        }, 0);
-        return {
-          key: `${summary.student._id}-${summary.month}`,
-          student: summary.student || { _id: '', name: 'Unknown', admissionNumber: '' },
-          month: summary.month || '',
-          totalAmount,
-          totalNetPayable,
-          dueDate: summary.dueDate,
-          generatedAt: summary.generatedAt,
-          status: summary.status,
-          feeDetails,
-          generationGroupId: summary.generationGroupId,
-        };
+      const url = month
+        ? `${API_URL}/api/studentFees/${studentId}/fees-by-month/${month}`
+        : `${API_URL}/api/studentFees/${studentId}/fees-by-session/${selectedSession}`;
+      const response = await axios.get<GeneratedFee[]>(url, config);
+      return response.data || [];
+    } catch (err) {
+      const errorMessage = axios.isAxiosError(err)
+        ? err.response?.data?.message || err.message
+        : `Failed to fetch fees for ${month ? `month ${month}` : "session"}`;
+      setError(errorMessage);
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchAllStudentFees = async () => {
+    if (!selectedClass || !selectedSession || !selectedStudent) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const studentFees: FeeTableRow[] = [];
+      const student = students.find(s => s._id === selectedStudent);
+      if (student) {
+        const fees = await fetchFeesForMonth(student._id, selectedMonth);
+        fees.forEach((fee) => {
+          if (fee.month) {
+            const row: FeeTableRow = {
+              key: `${student._id}-${fee.month}`,
+              student: {
+                _id: student._id,
+                name: student.name,
+                admissionNumber: student.admissionNumber,
+              },
+              month: fee.month,
+              totalAmount: fee.amount || 0,
+              totalNetPayable: fee.netPayable || (fee.amount - (fee.discount || 0)),
+              amountPaid: fee.amountPaid || 0,
+              balanceAmount: fee.balanceAmount || 0,
+              dueDate: fee.dueDate,
+              status: fee.status || "pending",
+              feeDetails: [fee],
+            };
+            studentFees.push(row);
+          }
       });
-      setAllFees(transformedFees);
+        if (fees.length > 0) {
+          setExcessAmount(fees[0].excessAmount || 0);
+        }
+      }
+      setMonthlyFees(studentFees);
     } catch (err) {
       const errorMessage = axios.isAxiosError(err)
         ? err.response?.data?.message || err.message
-        : "Failed to fetch generated fees for class";
+        : "Failed to fetch fees for students";
       setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchGeneratedMonths = async () => {
-    if (!selectedStudentId || !selectedSession) return;
+  const handleCollectFees = async () => {
+    if (!selectedFeeRow || !collectionDate || !amountPaid) {
+      toast.error("Please fill in all required fields: collection date, amount paid");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get<string[]>(
-        `${API_URL}/api/studentFees/months/${selectedStudentId}?sessionId=${selectedSession}`,
-        config
+      const totalAmount = amountPaid + (includeExcessFee ? excessAmount : 0);
+      const paymentDetails: PaymentDetail = {
+        paymentId: editingPaymentId || "", // Will be generated by backend if new payment
+        modeOfPayment: paymentMode,
+        collectionDate: collectionDate.toISOString(),
+        amountPaid,
+        ...(paymentMode !== "Cash" && paymentMode !== "Cheque" && transactionNo && { transactionNo }),
+        ...(paymentMode !== "Cash" && paymentMode !== "Cheque" && transactionDate && { transactionDate: transactionDate.toISOString() }),
+        ...(paymentMode === "Cheque" && chequeNo && { chequeNo }),
+        ...(paymentMode === "Cheque" && chequeDate && { chequeDate: chequeDate.toISOString() }),
+        ...(["BankTransfer", "IMPS", "Cheque"].includes(paymentMode) && bankName && { bankName }),
+        ...(remarks && { remarks }),
+        ...(internalNotes && { internalNotes }),
+        ...(includeExcessFee && excessAmount > 0 && { excessAmount }), // Include excessAmount in paymentDetails
+      };
+
+      const payload = {
+        studentId: selectedFeeRow.student._id,
+        sessionId: selectedSession,
+        month: selectedFeeRow.month,
+        paymentDetails,
+        excessAmount: includeExcessFee ? excessAmount : 0,
+      };
+
+      let response: any;
+      if (isEditingPayment && editingPaymentId) {
+        payload.paymentDetails._id = editingPaymentId;
+        response = await axios.put<CollectFeesResponse>(`${API_URL}/api/studentFees/edit-payment`, payload, config);
+      } else {
+        response = await axios.post<CollectFeesResponse>(`${API_URL}/api/studentFees/collect`, payload, config);
+      }
+
+      toast.success(response.data.message || (isEditingPayment ? "Payment details updated successfully" : "Fees collected successfully"));
+      if (response.data.paymentId) {
+        setEditingPaymentId(response.data.paymentId);
+      }
+      setMonthlyFees(prevFees =>
+        prevFees.map(fee => {
+          if (fee.key === selectedFeeRow?.key) {
+            const updatedFee = response.data.fees[0];
+            return {
+              ...fee,
+              amountPaid: updatedFee.amountPaid,
+              balanceAmount: updatedFee.balanceAmount,
+              feeDetails: [updatedFee],
+              status: updatedFee.status,
+            };
+          }
+          return fee;
+        })
       );
-      setGeneratedMonths(response.data);
+
+      setIsCollectModalVisible(false);
+      fetchAllStudentFees();
     } catch (err) {
       const errorMessage = axios.isAxiosError(err)
         ? err.response?.data?.message || err.message
-        : "Failed to fetch generated months";
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchGenerationGroups = async () => {
-    if (!selectedSession || (!selectedStudentId && generationMode === "single") || (!selectedClass && generationMode === "class")) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const params: any = { sessionId: selectedSession };
-      if (generationMode === "single") {
-        params.studentId = selectedStudentId;
-      } else {
-        params.classId = selectedClass;
-      }
-      const response = await axios.get<GenerationGroup[]>(`${API_URL}/api/studentFees/generation-groups`, { ...config, params });
-      const groupData = response.data || [];
-      // Sort groups by generatedAt for consistent display
-      const sortedGroups = groupData.sort((a, b) => new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime());
-      setGenerationGroups(sortedGroups);
-      // Debugging: Log groups to verify distinct IDs
-      console.log("Fetched generation groups:", sortedGroups.map(g => ({
-        generationGroupId: g.generationGroupId,
-        months: g.months,
-        generatedAt: g.generatedAt,
-        tallyCount: g.tally.length
-      })));
-    } catch (err) {
-      const errorMessage = axios.isAxiosError(err)
-        ? err.response?.data?.message || err.message
-        : "Failed to fetch generation groups";
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGenerateFees = async () => {
-    if (!selectedMonths.length || !dueDate || !selectedClass || !selectedSession) {
-      toast.error("Please select a class, session, at least one month, and due date");
-      return;
-    }
-    if (generationMode === "single" && !selectedStudentId) {
-      toast.error("Please select a student for single student mode");
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      let response;
-      if (generationMode === "single") {
-        const payload = {
-          studentId: selectedStudentId,
-          sessionId: selectedSession,
-          months: selectedMonths,
-          dueDate: dueDate.toISOString(),
-          generatedAt: new Date().toISOString(),
-        };
-        response = await axios.post(`${API_URL}/api/studentFees/fees/generate`, payload, config);
-        toast.success("Fees generated successfully for the student");
-      } else {
-        const payload = {
-          classId: selectedClass,
-          sessionId: selectedSession,
-          months: selectedMonths,
-          dueDate: dueDate.toISOString(),
-          generatedAt: new Date().toISOString(),
-        };
-        response = await axios.post(`${API_URL}/api/studentFees/fees/generate-class`, payload, config);
-        toast.success("Fees generated successfully for the class");
-      }
-      fetchGeneratedFeesForClass();
-      if (generationMode === "single") fetchGeneratedMonths();
-      fetchGenerationGroups();
-    } catch (err) {
-      const errorMessage = axios.isAxiosError(err)
-        ? err.response?.data?.msg || err.message
-        : `Failed to generate fees for ${generationMode === "single" ? "student" : "month"}`;
+        : isEditingPayment
+        ? "Failed to update payment details"
+        : "Failed to collect fees";
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
   };
-
-  const handleUpdateDueDate = async () => {
-    if (!editingFeeSummary || !newDueDate) {
-      toast.error("Please select a month and new due date");
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const payload = {
-        studentId: editingFeeSummary.student._id,
-        sessionId: selectedSession,
-        month: editingFeeSummary.month,
-        dueDate: moment(newDueDate).format("YYYY-MM-DD"),
-      };
-      await axios.patch(`${API_URL}/api/studentFees/update-due-date`, payload, config);
-      toast.success("Fee due date updated successfully");
-      fetchGeneratedFeesForClass();
-      setIsEditModalVisible(false);
-      setEditingFeeSummary(null);
-      setNewDueDate("");
-    } catch (err) {
-      const errorMessage = axios.isAxiosError(err)
-        ? err.response?.data?.msg || err.message
-        : "Failed to update due date";
-      setError(errorMessage);
-      toast.error(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteGeneratedFees = async (record: FeeTableRow) => {
-    if (!record.student._id) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const payload = {
-        studentId: record.student._id,
-        sessionId: selectedSession,
-        month: record.month,
-      };
-      await axios.put(`${API_URL}/api/studentFees/delete-generated-fees`, payload, config);
-      toast.success("Generated fees deleted successfully");
-      fetchGeneratedFeesForClass();
-      if (generationMode === "single") fetchGeneratedMonths();
-      fetchGenerationGroups();
-    } catch (err) {
-      const errorMessage = axios.isAxiosError(err)
-        ? err.response?.data?.msg || err.message
-        : "Failed to delete generated fees";
-      setError(errorMessage);
-      toast.error(errorMessage);
-    } finally {
-      setLoading(false);
-    }
+  const resetCollectForm = () => {
+    setPaymentMode("Cash");
+    setCollectionDate(moment("2025-06-23"));
+    setTransactionNo("");
+    setTransactionDate(null);
+    setChequeNo("");
+    setChequeDate(null);
+    setBankName("");
+    setRemarks("");
+    setInternalNotes("");
+    setIncludeExcessFee(false);
+    setExcessAmount(0);
+    setAmountPaid(0);
+    setIsEditingPayment(false);
+    setNextPaymentId("")
+    setEditingPaymentId(undefined);
   };
 
   useEffect(() => {
@@ -438,13 +369,9 @@ const GenerateStudentFees: React.FC = () => {
       setClasses([]);
       setSelectedClass("");
       setStudents([]);
-      setSelectedStudentId("");
-      setGeneratedMonths([]);
-      setSelectedMonths([]);
+      setSelectedStudent("");
+      setSelectedMonth("");
       setMonthlyFees([]);
-      setAllFees([]);
-      setGenerationGroups([]);
-      setSelectedGroupId("");
       setError(null);
     }
   }, [selectedSession]);
@@ -452,162 +379,66 @@ const GenerateStudentFees: React.FC = () => {
   useEffect(() => {
     if (selectedClass && selectedSession) {
       fetchStudentsForClass();
-      fetchGeneratedFeesForClass();
-      fetchGenerationGroups();
     } else {
       setStudents([]);
-      setAllFees([]);
+      setSelectedStudent("");
+      setSelectedMonth("");
       setMonthlyFees([]);
-      setSelectedStudentId("");
-      setGeneratedMonths([]);
-      setSelectedMonths([]);
-      setGenerationGroups([]);
-      setSelectedGroupId("");
       setError(null);
     }
   }, [selectedClass, selectedSession]);
 
   useEffect(() => {
-    if (generationMode === "single" && selectedStudentId && selectedSession) {
-      fetchGeneratedMonths();
-      fetchGenerationGroups();
-      const selectedStudent = students.find(student => student._id === selectedStudentId);
-      if (selectedMonths.length > 0 && selectedStudent) {
-        const filteredRows: FeeTableRow[] = [];
-        selectedMonths.forEach(month => {
-          const existingFee = allFees.find(
-            fee => fee.student._id === selectedStudentId && fee.month === month
-          );
-          filteredRows.push(
-            existingFee || {
-              key: `${selectedStudentId}_${month}`,
-              student: {
-                _id: selectedStudentId,
-                name: selectedStudent.name,
-                admissionNumber: selectedStudent.admissionNumber,
-              },
-              month,
-              totalAmount: null,
-              totalNetPayable: null,
-              dueDate: undefined,
-              generatedAt: undefined,
-              status: undefined,
-              feeDetails: [],
-            }
-          );
-        });
-        setMonthlyFees(filteredRows);
-      } else {
-        setMonthlyFees(allFees.filter(fee => fee.student._id === selectedStudentId));
-      }
-    } else if (
-      generationMode === "class" &&
-      selectedClass &&
-      selectedSession &&
-      students.length > 0
-    ) {
-      fetchGenerationGroups();
-      if (selectedMonths.length > 0) {
-        const filteredRows: FeeTableRow[] = [];
-        students.forEach(student => {
-          selectedMonths.forEach(month => {
-            const existingFee = allFees.find(
-              fee => fee.student._id === student._id && fee.month === month
-            );
-            filteredRows.push(
-              existingFee || {
-                key: `${student._id}_${month}`,
-                student: {
-                  _id: student._id,
-                  name: student.name,
-                  admissionNumber: student.admissionNumber,
-                },
-                month,
-                totalAmount: null,
-                totalNetPayable: null,
-                dueDate: undefined,
-                generatedAt: undefined,
-                status: undefined,
-                feeDetails: [],
-              }
-            );
-          });
-        });
-        setMonthlyFees(filteredRows);
-      } else {
-        const allRows: FeeTableRow[] = [];
-        students.forEach(student => {
-          months.forEach(month => {
-            const existingFee = allFees.find(
-              fee => fee.student._id === student._id && fee.month === month
-            );
-            allRows.push(
-              existingFee || {
-                key: `${student._id}_${month}`,
-                student: {
-                  _id: student._id,
-                  name: student.name,
-                  admissionNumber: student.admissionNumber,
-                },
-                month,
-                totalAmount: null,
-                totalNetPayable: null,
-                dueDate: undefined,
-                generatedAt: undefined,
-                status: undefined,
-                feeDetails: [],
-              }
-            );
-          });
-        });
-        setMonthlyFees(allRows);
-      }
+    if (selectedStudent && selectedSession) {
+      fetchAllStudentFees();
     } else {
-      setMonthlyFees(allFees);
+      setMonthlyFees([]);
     }
-  }, [
-    generationMode,
-    selectedStudentId,
-    selectedMonths,
-    selectedSession,
-    selectedClass,
-    students,
-    allFees,
-  ]);
+  }, [selectedStudent, selectedSession, selectedMonth]);
 
-  const selectedStudent = students.find(student => student._id === selectedStudentId);
-
-  const handleViewDetails = (feeDetails: GeneratedFee[]) => {
-    setSelectedFeeDetails(feeDetails);
-    setIsModalVisible(true);
+  const handleViewDetails = (record: FeeTableRow) => {
+    if (!record.feeDetails || record.feeDetails.length === 0) {
+      toast.error("No fee details available for this month");
+      return;
+    }
+    setSelectedFeeDetails(record.feeDetails[0] || null);
+    setIsDetailsModalVisible(true);
   };
 
-  const handleEditDueDate = (record: FeeTableRow) => {
-    setEditingFeeSummary(record);
-    setNewDueDate(record.dueDate ? moment(record.dueDate).format("YYYY-MM-DD") : "");
-    setIsEditModalVisible(true);
+  const handleCollectClick = (record: FeeTableRow) => {
+    setSelectedFeeRow(record);
+    fetchPreviewPaymentId(); 
+    setCollectionDate(moment("2025-06-23"));
+    setExcessAmount(record.feeDetails[0]?.excessAmount || 0);
+    setAmountPaid(record.balanceAmount || 0); // Pre-fill with balance amount
+    setIsCollectModalVisible(true);
+    setIsEditingPayment(false);
   };
 
-  const handleViewTally = (tally: Tally[]) => {
-    setSelectedTally(tally || []);
-    setIsTallyModalVisible(true);
-  };
-
-  const handleModalClose = () => {
-    setIsModalVisible(false);
-    setSelectedFeeDetails([]);
-  };
-
-  const handleEditModalClose = () => {
-    setIsEditModalVisible(false);
-    setEditingFeeSummary(null);
-    setNewDueDate("");
-  };
-
-  const handleTallyModalClose = () => {
-    setIsTallyModalVisible(false);
-    setSelectedTally([]);
-    setSelectedGroupId("");
+  const handleEditPayment = (record: FeeTableRow) => {
+    const feeDetail = record.feeDetails[0];
+    if (!feeDetail.paymentDetails || feeDetail.paymentDetails.length === 0) {
+      toast.error("No payment details available to edit");
+      return;
+    }
+    const payment = feeDetail.paymentDetails[0]; // Assuming single payment per fee for simplicity
+    setSelectedFeeRow(record);
+    setPaymentMode(payment.modeOfPayment);
+    setCollectionDate(moment(payment.collectionDate));
+    setTransactionNo(payment.transactionNo || "");
+    setTransactionDate(payment.transactionDate ? moment(payment.transactionDate) : null);
+    setChequeNo(payment.chequeNo || "");
+    setChequeDate(payment.chequeDate ? moment(payment.chequeDate) : null);
+    setBankName(payment.bankName || "");
+    setRemarks(payment.remarks || "");
+    setInternalNotes(payment.internalNotes || "");
+    setExcessAmount(feeDetail.excessAmount || 0);
+    setIncludeExcessFee(feeDetail.excessAmount > 0);
+    setAmountPaid(payment.amountPaid || 0);
+    setIsEditingPayment(true);
+    setEditingPaymentId(payment._id);
+    setNextPaymentId(payment.paymentId)
+    setIsCollectModalVisible(true);
   };
 
   const summaryColumns = [
@@ -629,10 +460,22 @@ const GenerateStudentFees: React.FC = () => {
       sorter: (a: FeeTableRow, b: FeeTableRow) => a.month.localeCompare(b.month),
     },
     {
-      title: "Total Amount",
+      title: "Total Fees",
       dataIndex: "totalAmount",
       render: (totalAmount: number | null) => <span>{totalAmount !== null ? `₹${totalAmount.toFixed(2)}` : "-"}</span>,
       sorter: (a: FeeTableRow, b: FeeTableRow) => (a.totalAmount || 0) - (b.totalAmount || 0),
+    },
+    {
+      title: "Amount Paid",
+      dataIndex: "amountPaid",
+      render: (amountPaid: number) => <span>{amountPaid ? `₹${amountPaid.toFixed(2)}` : "-"}</span>,
+      sorter: (a: FeeTableRow, b: FeeTableRow) => (a.amountPaid || 0) - (b.amountPaid || 0),
+    },
+    {
+      title: "Balance",
+      dataIndex: "balanceAmount",
+      render: (balanceAmount: number) => <span>{balanceAmount ? `₹${balanceAmount.toFixed(2)}` : "-"}</span>,
+      sorter: (a: FeeTableRow, b: FeeTableRow) => (b.balanceAmount || 0) - (a.balanceAmount || 0),
     },
     {
       title: "Due Date",
@@ -647,22 +490,19 @@ const GenerateStudentFees: React.FC = () => {
       },
     },
     {
-      title: "Generated At",
-      dataIndex: "generatedAt",
-      render: (generatedAt?: string) => (
-        <span>{generatedAt ? moment(generatedAt).format("YYYY-MM-DD HH:mm:ss") : "-"}</span>
-      ),
-    },
-    {
       title: "Status",
       dataIndex: "status",
       render: (status?: string) => (
         <span
           className={`badge ${
-            status === "paid" ? "bg-success" : status === "pending" ? "bg-warning" : status ? "bg-danger" : "bg-secondary"
+            status === "paid" ? "bg-success" : 
+            status === "partially_paid" ? "bg-info" : 
+            status === "pending" ? "bg-warning" : 
+            status ? "bg-danger" : "bg-secondary"
           }`}
+          aria-label={`Status: ${status || "Not Generated"}`}
         >
-          {status ? status.charAt(0).toUpperCase() + status.slice(1) : "Not Generated"}
+          {status ? status.replace("_", " ").split(" ").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ") : "Not Generated"}
         </span>
       ),
     },
@@ -670,48 +510,36 @@ const GenerateStudentFees: React.FC = () => {
       title: "Action",
       key: "action",
       render: (_: any, record: FeeTableRow) => (
-        <div className="dropdown">
-          <button
-            className="btn btn-white btn-icon btn-sm d-flex align-items-center justify-content px-2"
-            data-bs-toggle="dropdown"
-            aria-expanded="false"
+        <div className="d-flex gap-2">
+          <Button
+            type="default"
+            size="small"
+            onClick={() => handleViewDetails(record)}
+            disabled={!record.feeDetails || record.feeDetails.length === 0}
+            icon={<i className="ti ti-eye me-1" />}
           >
-            <i className="ti ti-dots-vertical fs-14" />
-          </button>
-          <ul className="dropdown-menu dropdown-menu-right p-3">
-            <li>
-              <button
-                className="dropdown-item rounded-1"
-                onClick={() => handleViewDetails(record.feeDetails)}
-                disabled={!record.feeDetails || record.feeDetails.length === 0}
-              >
-                <i className="ti ti-eye me-2" />
-                View Details
-              </button>
-            </li>
-            {record.dueDate && (
-              <>
-                <li>
-                  <button
-                    className="dropdown-item rounded-1"
-                    onClick={() => handleEditDueDate(record)}
-                  >
-                    <i className="ti ti-edit-circle me-2" />
-                    Update Due Date
-                  </button>
-                </li>
-                <li>
-                  <button
-                    className="dropdown-item rounded-1"
-                    onClick={() => handleDeleteGeneratedFees(record)}
-                  >
-                    <i className="ti ti-trash-x me-2" />
-                    Delete
-                  </button>
-                </li>
-              </>
-            )}
-          </ul>
+            View Details
+          </Button>
+          {record.dueDate && record.status !== "paid" && (
+            <Button
+              type="primary"
+              size="small"
+              onClick={() => handleCollectClick(record)}
+              icon={<i className="ti ti-wallet me-1" />}
+            >
+              Collect Fees
+            </Button>
+          )}
+          {(record.status === "paid" || record.status === "partially_paid") && record.feeDetails[0]?.paymentDetails?.length > 0 && (
+            <Button
+              type="default"
+              size="small"
+              onClick={() => handleEditPayment(record)}
+              icon={<i className="ti ti-pencil me-1" />}
+            >
+              Edit Payment
+            </Button>
+           )} 
         </div>
       ),
     },
@@ -721,58 +549,93 @@ const GenerateStudentFees: React.FC = () => {
     {
       title: "Fee Group",
       dataIndex: "feesGroup",
-      render: (feesGroup: { name: string }) => (
-        <span>{feesGroup?.name || "N/A"}</span>
-      ),
+      render: (feesGroup: { name: string }) => <span>{feesGroup?.name || "N/A"}</span>,
     },
     {
       title: "Amount",
       dataIndex: "amount",
-      render: (amount: number) => <span>₹{amount?.toFixed(1) || 0.0}</span>,
-    },
-    {
-      title: "Status",
-      dataIndex: "status",
-      render: (status: string) => (
-        <span
-          className={`badge ${
-            status === "paid" ? "bg-success" : status === "pending" ? "bg-warning" : "bg-danger"
-          }`}
-        >
-          {status ? status.charAt(0).toUpperCase() + status.slice(1) : "N/A"}
-        </span>
-      ),
+      render: (amount: number) => <span>₹{amount?.toFixed(2) || "0.00"}</span>,
     },
   ];
 
-  const tallyColumns = [
-    {
-      title: "Student",
-      dataIndex: "student",
-      render: (student: { name: string; admissionNumber: string }) => (
-        <span>{`${student.name} (${student.admissionNumber})`}</span>
-      ),
-    },
-    {
-      title: "Total Amount",
-      dataIndex: "tally",
-      render: (tally: TallyData) => <span>₹{tally.totalAmount.toFixed(2)}</span>,
-    },
-  ];
+  const renderPaymentDetails = (paymentDetails: PaymentDetail[], excessAmount: number) => {
+  if (!paymentDetails || paymentDetails.length === 0) return null;
+
+  return paymentDetails.map((detail, index) => {
+    const relevantFields: { label: string; value: string | undefined }[] = [
+      { label: "Payment ID", value: detail.paymentId },
+      { label: "Mode of Payment", value: detail.modeOfPayment },
+      { label: "Collection Date", value: detail.collectionDate ? moment(detail.collectionDate).format("MMM DD, YYYY") : undefined },
+      { label: "Amount Paid", value: detail.amountPaid ? `₹${detail.amountPaid.toFixed(2)}` : undefined },
+    ];
+
+    // Only show the excessAmount (late fee) for the first payment if it exists
+    // if (excessAmount > 0 && index === 0) {
+    //   relevantFields.push({ label: "Late Fee", value: `₹${excessAmount.toFixed(2)}` });
+    // }
+
+    if (detail.modeOfPayment !== "Cash" && detail.modeOfPayment !== "Cheque") {
+      if (detail.transactionNo) relevantFields.push({ label: "Transaction No", value: detail.transactionNo });
+      if (detail.transactionDate) relevantFields.push({ label: "Transaction Date", value: moment(detail.transactionDate).format("MMM DD, YYYY") });
+    }
+    if (detail.modeOfPayment === "Cheque") {
+      if (detail.chequeNo) relevantFields.push({ label: "Cheque No", value: detail.chequeNo });
+      if (detail.chequeDate) relevantFields.push({ label: "Cheque Date", value: moment(detail.chequeDate).format("MMM DD, YYYY") });
+    }
+    if (["BankTransfer", "IMPS", "Cheque"].includes(detail.modeOfPayment)) {
+      if (detail.bankName) relevantFields.push({ label: "Bank Name", value: detail.bankName });
+    }
+    if (detail.remarks) relevantFields.push({ label: "Remarks", value: detail.remarks });
+    if (detail.internalNotes) relevantFields.push({ label: "Internal Notes", value: detail.internalNotes });
+
+    return (
+      <div
+        key={index}
+        style={{
+          background: '#f9f9f9',
+          borderRadius: '8px',
+          padding: '16px',
+          marginBottom: '16px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+        }}
+      >
+        <h6 style={{ marginBottom: '12px', color: '#333', fontSize: '16px' }}>
+          Payment {index + 1}
+        </h6>
+        {relevantFields.map((field, idx) => (
+          field.value && (
+            <div
+              key={idx}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginBottom: '8px',
+                fontSize: '14px',
+              }}
+            >
+              <span style={{ fontWeight: 500, color: '#555' }}>{field.label}:</span>
+              <span style={{ color: '#333' }}>{field.value}</span>
+            </div>
+          )
+        ))}
+      </div>
+    );
+  });
+};
 
   return (
     <div className="page-wrapper">
       <div className="content">
         <div className="d-md-flex d-block align-items-center justify-content-between mb-3">
           <div className="my-auto mb-2">
-            <h3 className="page-title mb-1">Generate Student Fees</h3>
+            <h3 className="page-title mb-1">Collect Student Fees</h3>
             <nav>
               <ol className="breadcrumb mb-0">
                 <li className="breadcrumb-item">
                   <Link to="#">Fees Collection</Link>
                 </li>
                 <li className="breadcrumb-item active" aria-current="page">
-                  Generate Fees
+                  Collect Fees
                 </li>
               </ol>
             </nav>
@@ -783,34 +646,7 @@ const GenerateStudentFees: React.FC = () => {
         </div>
         <div className="card">
           <div className="card-header pb-0">
-            <h4 className="mb-3">Generate Fees</h4>
-
-            <div className="mb-3">
-              <Form.Item label="Generate For">
-                <Tooltip title={generationMode === "single" ? "Generate fees for a single student" : "Generate fees for all students in the class"}>
-                  <Radio.Group
-                    value={generationMode}
-                    onChange={(e) => {
-                      setGenerationMode(e.target.value);
-                      setSelectedSession("");
-                      setSelectedClass("");
-                      setSelectedStudentId("");
-                      setSelectedMonths([]);
-                      setGeneratedMonths([]);
-                      setMonthlyFees([]);
-                      setAllFees([]);
-                      setGenerationGroups([]);
-                      setSelectedGroupId("");
-                    }}
-                    disabled={loading}
-                  >
-                    <Radio value="single">Single Student</Radio>
-                    <Radio value="class">Entire Class</Radio>
-                  </Radio.Group>
-                </Tooltip>
-              </Form.Item>
-            </div>
-
+            <h4 className="mb-3">Collect Fees</h4>
             <div className="d-flex flex-wrap gap-3">
               <Form.Item label="Session">
                 <Select
@@ -818,7 +654,7 @@ const GenerateStudentFees: React.FC = () => {
                   value={selectedSession || undefined}
                   onChange={(value: string) => setSelectedSession(value)}
                   style={{ width: 200 }}
-                  options={(sessions || []).map((session) => ({
+                  options={sessions.map((session) => ({
                     value: session._id,
                     label: `${session.name} (${session.sessionId})`,
                   }))}
@@ -826,14 +662,13 @@ const GenerateStudentFees: React.FC = () => {
                   allowClear
                 />
               </Form.Item>
-
               <Form.Item label="Class">
                 <Select
                   placeholder="Select a class"
                   value={selectedClass || undefined}
                   onChange={(value: string) => setSelectedClass(value)}
                   style={{ width: 200 }}
-                  options={(classes || []).map((cls) => ({
+                  options={classes.map((cls) => ({
                     value: cls._id,
                     label: cls.name,
                   }))}
@@ -841,140 +676,65 @@ const GenerateStudentFees: React.FC = () => {
                   allowClear
                 />
               </Form.Item>
-
-              {generationMode === "single" && (
-                <Form.Item label="Student">
-                  <Select
-                    showSearch
-                    placeholder="Search student"
-                    value={selectedStudentId || undefined}
-                    onChange={(value: string) => setSelectedStudentId(value)}
-                    style={{ width: 220 }}
-                    options={(students || []).map((student) => ({
-                      value: student._id,
-                      label: `${student.name} (${student.admissionNumber})`,
-                    }))}
-                    filterOption={(input, option) =>
-                      (option?.label ?? "").toLowerCase().includes(input.toLowerCase())
-                    }
-                    disabled={!selectedClass || loading}
-                    allowClear
-                  />
-                </Form.Item>
-              )}
-
-              <Form.Item label="Months">
+              <Form.Item label="Student">
                 <Select
-                  mode="multiple"
-                  placeholder="Select months"
-                  value={selectedMonths || []}
-                  onChange={(value: string[]) => setSelectedMonths(value || [])}
+                  placeholder="Select a student"
+                  value={selectedStudent || undefined}
+                  onChange={(value: string) => setSelectedStudent(value)}
                   style={{ width: 200 }}
-                  options={(months || []).map((month) => ({
+                  options={students.map((student) => ({
+                    value: student._id,
+                    label: `${student.name} (${student.admissionNumber})`,
+                  }))}
+                  disabled={!selectedClass || loading}
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  filterOption={(input, option) =>
+                    option?.label?.toLowerCase().includes(input.toLowerCase()) || false
+                  }
+                />
+              </Form.Item>
+              <Form.Item label="Month">
+                <Select
+                  placeholder="Filter by month"
+                  value={selectedMonth || undefined}
+                  onChange={(value: string) => setSelectedMonth(value)}
+                  style={{ width: 200 }}
+                  options={["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"].map((month) => ({
                     value: month,
                     label: month,
                   }))}
-                  disabled={(!selectedStudentId && generationMode === "single") || !selectedClass || loading}
+                  disabled={!selectedStudent || loading}
                   allowClear
-                  dropdownStyle={{ color: 'black' }} // Set dropdown options text color
-                  tagRender={(props) => (
-                    <span
-                      style={{
-                        color: 'black', // Set selected tags text color
-                        backgroundColor: '#f5f5f5',
-                        padding: '2px 8px',
-                        margin: '2px',
-                        borderRadius: '4px',
-                      }}
-                    >
-                      {props.label}
-                    </span>
-                  )}
                 />
-              </Form.Item>
-
-              <Form.Item label="Due Date">
-                <input
-                  type="date"
-                  value={dueDate ? moment(dueDate).format("YYYY-MM-DD") : ""}
-                  onChange={(e) => setDueDate(e.target.value ? moment(e.target.value) : null)}
-                  disabled={loading}
-                  style={{ width: 150, padding: "4px" }}
-                />
-              </Form.Item>
-
-              <Form.Item label=" ">
-                <Tooltip title={`Generate fees for ${generationMode === "single" ? "the selected student" : "all students in the class"} for the chosen months`}>
-                  <Button
-                    type="primary"
-                    onClick={handleGenerateFees}
-                    disabled={
-                      !selectedMonths.length ||
-                      !dueDate ||
-                      !selectedClass ||
-                      (generationMode === "single" && !selectedStudentId) ||
-                      loading
-                    }
-                  >
-                    Generate for {generationMode === "single" ? "Student" : "Class"}
-                  </Button>
-                </Tooltip>
               </Form.Item>
             </div>
-
-            {(generationGroups || []).length > 0 && (
-              <div className="mt-3">
-                <h5>View Tally for Generated Fees</h5>
-                <Form.Item label="Select Generation Month Group">
-                  <Select
-                    placeholder="Select a generation month group"
-                    value={selectedGroupId || undefined}
-                    onChange={(value: string) => {
-                      setSelectedGroupId(value);
-                      const group = generationGroups.find(g => g.generationGroupId === value);
-                      handleViewTally(group?.tally || []);
-                    }}
-                    style={{ width: 300 }}
-                    options={(generationGroups || []).map((group) => ({
-                      value: group.generationGroupId,
-                      label: `${group.months.join(", ")} (${moment(group.generatedAt).format("MMM DD, YYYY HH:mm")})`,
-                    }))}
-                    disabled={loading}
-                    allowClear
-                  />
-                </Form.Item>
-              </div>
-            )}
           </div>
-
           <div className="card-body p-0 py-3">
             <Spin spinning={loading} size="large">
               {error ? (
                 <div className="text-center py-4">
-                  <p className="alert alert-danger mx-3" role="alert">
-                    {error}
-                  </p>
-                  <div>
-                    <Button
-                      type="primary"
-                      size="small"
-                      onClick={() => {
-                        setError(null);
-                        if (selectedClass && selectedSession) {
-                          fetchStudentsForClass();
-                          fetchGeneratedFeesForClass();
-                          fetchGenerationGroups();
-                        } else if (selectedSession) {
-                          fetchClassesForSession();
-                        } else {
-                          fetchSessions();
-                        }
-                      }}
-                      className="mt-2"
-                    >
-                      Retry
-                    </Button>
-                  </div>
+                  <p className="alert alert-danger mx-3" role="alert">{error}</p>
+                  <Button
+                    type="primary"
+                    size="small"
+                    onClick={() => {
+                      setError(null);
+                      if (selectedClass && selectedSession && selectedStudent) {
+                        fetchAllStudentFees();
+                      } else if (selectedClass && selectedSession) {
+                        fetchStudentsForClass();
+                      } else if (selectedSession) {
+                        fetchClassesForSession();
+                      } else {
+                        fetchSessions();
+                      }
+                    }}
+                    className="mt-2"
+                  >
+                    Retry
+                  </Button>
                 </div>
               ) : loading ? (
                 <div className="text-center py-4">
@@ -983,91 +743,318 @@ const GenerateStudentFees: React.FC = () => {
               ) : monthlyFees.length > 0 ? (
                 <div className="p-3">
                   <h5>
-                    Generated Fees Summary
-                    {selectedStudentId && generationMode === "single" && ` - ${selectedStudent?.name || "Unknown"} (${selectedStudent?.admissionNumber || "N/A"})`}
-                    {selectedMonths.length > 0 && ` - ${selectedMonths.join(", ")}`}
+                    Fees for {selectedStudent ? students.find(s => s._id === selectedStudent)?.name : "Student"}
+                    {selectedMonth ? ` - ${selectedMonth}` : " - All Months"}
                   </h5>
                   <Table
-                    dataSource={monthlyFees || []}
+                    dataSource={monthlyFees}
                     columns={summaryColumns}
                     rowKey="key"
-                    pagination={{ pageSize: 10, showSizeChanger: false }}
+                    pagination={false}
                   />
-                  {generationMode === "single" && selectedStudentId && selectedMonths.length > 0 && !monthlyFees.some(fee => fee.totalAmount) && (
-                    <p className="alert alert-info mx-3 mt-3" role="alert">
-                      No fees data available for {selectedStudent?.name || "Unknown"} in {selectedMonths.join(", ")}. Set due date and click Generate Fees to generate fees or view available fee groups.
-                    </p>
-                  )}
                   <Modal
-                    title="Fee Details"
-                    open={isModalVisible}
-                    onCancel={handleModalClose}
+                    title={`Fee Collection Details - ${selectedFeeDetails?.student.name} (${selectedFeeDetails?.student.admissionNumber})`}
+                    open={isDetailsModalVisible}
+                    onCancel={() => {
+                      setIsDetailsModalVisible(false);
+                      setSelectedFeeDetails(null);
+                    }}
                     footer={null}
-                    width={800}
+                    width={selectedFeeDetails?.status === "paid" || selectedFeeDetails?.status === "partially_paid" && selectedFeeDetails?.paymentDetails?.length > 0 ? 1000 : 600}
                     style={{ top: 50 }}
                     zIndex={10000}
                   >
-                    <Table
-                      dataSource={selectedFeeDetails || []}
-                      columns={feeColumns}
-                      rowKey="_id"
-                      pagination={{ pageSize: 10, showSizeChanger: false }}
-                      footer={() => {
-                        const totalAmount = (selectedFeeDetails || []).reduce((sum: number, fee: GeneratedFee) => sum + (Number(fee?.netPayable) || 0), 0);
-                        return (
-                          <div className="text-right">
-                            <strong>Total Amount: ₹{totalAmount.toFixed(2)}</strong>
-                          </div>
-                        );
-                      }}
-                    />
+                    {selectedFeeDetails && (
+                      <Row gutter={24}>
+                        <Col span={(selectedFeeDetails.status === "paid" || selectedFeeDetails.status === "partially_paid") && selectedFeeDetails.paymentDetails?.length > 0 ? 12 : 24}>
+                          <Table
+                            dataSource={selectedFeeDetails.fees}
+                            columns={feeColumns}
+                            rowKey={(record, index) => `${selectedFeeDetails._id}-${index}`}
+                            pagination={false}
+                            footer={() => {
+                              const totalAmount = selectedFeeDetails.amount || 0;
+                              const excessAmount = selectedFeeDetails.excessAmount || 0;
+                              const amountPaid = selectedFeeDetails.amountPaid || 0;
+                              const balanceAmount = selectedFeeDetails.balanceAmount || 0;
+                              const month = selectedFeeDetails.month || "N/A";
+                              return (
+                                <div className="text-right">
+                                  <div>
+                  <strong>Month: {month}</strong> {/* Display month in footer */}
+                </div>
+                                  <div><strong>Total Fees: ₹{totalAmount.toFixed(2)}</strong></div>
+                                  {amountPaid > 0 && <div><strong>Amount Paid: ₹{amountPaid.toFixed(2)}</strong></div>}
+                                  {balanceAmount > 0 && <div><strong>Balance Amount: ₹{balanceAmount.toFixed(2)}</strong></div>}
+                                  {excessAmount > 0 && <div><strong>Late Fee: ₹{excessAmount.toFixed(2)}</strong></div>}
+                                  <div>
+                                    <strong>
+                                      Status:
+                                      <span
+                                        className={`badge ${
+                                          selectedFeeDetails.status === "paid" ? "bg-success" :
+                                          selectedFeeDetails.status === "partially_paid" ? "bg-info" :
+                                          selectedFeeDetails.status === "pending" ? "bg-warning" :
+                                          selectedFeeDetails.status ? "bg-danger" : "bg-secondary"
+                                        }`}
+                                        aria-label={`Status: ${selectedFeeDetails.status || "Not Generated"}`}
+                                      >
+                                        {selectedFeeDetails.status ? selectedFeeDetails.status.replace("_", " ").split(" ").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ") : "Not Generated"}
+                                      </span>
+                                    </strong>
+                                  </div>
+                                </div>
+                              );
+                            }}
+                          />
+                        </Col>
+                        {(selectedFeeDetails.status === "paid" || selectedFeeDetails.status === "partially_paid") && selectedFeeDetails.paymentDetails?.length > 0 && (
+                          <Col span={12}>
+                            <h5 style={{ marginBottom: '16px', color: '#333', fontSize: '18px' }}>
+                              Payment Details
+                            </h5>
+                            {renderPaymentDetails(selectedFeeDetails.paymentDetails, selectedFeeDetails.excessAmount)}
+                          </Col>
+                        )}
+                      </Row>
+                    )}
                   </Modal>
                   <Modal
-                    title={`Update Due Date - ${editingFeeSummary?.student.name || "All Students"} (${editingFeeSummary?.month || "N/A"})`}
-                    open={isEditModalVisible}
-                    onOk={handleUpdateDueDate}
-                    onCancel={handleEditModalClose}
-                    okText="Update"
+                    title={isEditingPayment 
+                      ? `Edit Payment - ${selectedFeeRow?.student.name || "Unknown"} (${selectedFeeRow?.month || "N/A"})`
+                      : `Collect Fees - ${selectedFeeRow?.student.name || "Unknown"} (${selectedFeeRow?.month || "N/A"})`}
+                    open={isCollectModalVisible}
+                    onOk={handleCollectFees}
+                    onCancel={() => {
+                      setIsCollectModalVisible(false);
+                      resetCollectForm();
+                    }}
+                    okText={isEditingPayment ? "Update Payment" : "Collect"}
                     cancelText="Cancel"
+                    okButtonProps={{ loading }}
+                    width={800}
                     zIndex={10000}
-                  >
-                    <Form.Item name="dueDate" label="New Due Date" rules={[{ required: true, message: 'Please select a due date' }]}>
-                      <input
-                        type="date"
-                        value={newDueDate}
-                        onChange={(e) => setNewDueDate(e.target.value)}
-                        style={{ width: "100%", padding: "8px" }}
-                        disabled={loading}
-                      />
-                    </Form.Item>
-                  </Modal>
-                  <Modal
-                    title={selectedTally.length > 0 && selectedTally[0]?.tally?.months ? `Tally for ${selectedTally[0].tally.months.join(", ")}` : "Tally"}
-                    open={isTallyModalVisible}
-                    onCancel={handleTallyModalClose}
-                    footer={null}
-                    width={600}
                     style={{ top: 50 }}
-                    zIndex={10000}
                   >
-                    <Table
-                      dataSource={selectedTally || []}
-                      columns={tallyColumns}
-                      rowKey={(row: Tally) => row?.student?._id || Math.random().toString()}
-                      pagination={false}
-                    />
+                    <Form layout="vertical">
+                      <Row gutter={16}>
+                        <Col span={12}>
+                          <Form.Item label="Collection Date" required>
+                            <DatePicker
+                              value={collectionDate}
+                              onChange={(date) => setCollectionDate(date)}
+                              format="YYYY-MM-DD"
+                              style={{ width: "100%", zIndex: 10001 }}
+                              getPopupContainer={(trigger) => trigger.parentElement || document.body}
+                            />
+                          </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                          <Form.Item label="Payment ID">
+                            <Input 
+                              value={nextPaymentId} 
+                              disabled 
+                              style={{ fontWeight: 'bold' }}
+                              placeholder="Loading payment ID..."
+                            />
+                          </Form.Item>
+                        </Col>
+                      </Row>
+                      <Row gutter={16}>
+                        {/* <Col span={12}> */}
+                          <Form.Item label="Mode of Payment" required>
+                            <Radio.Group
+                              value={paymentMode}
+                              onChange={(e) => setPaymentMode(e.target.value)}
+                            >
+                              <Radio value="Cash">Cash</Radio>
+                              <Radio value="BankTransfer">Bank Transfer</Radio>
+                              <Radio value="Cheque">Cheque</Radio>
+                              <Radio value="CardPayment">Card Payment</Radio>
+                              <Radio value="Wallet">Wallet</Radio>
+                              <Radio value="IMPS">IMPS</Radio>
+                            </Radio.Group>
+                          </Form.Item>
+                        {/* </Col> */}
+                      </Row>
+                      {paymentMode !== "Cash" && paymentMode !== "Cheque" && (
+                        <Row gutter={16}>
+                          <Col span={12}>
+                            <Form.Item label="Transaction No">
+                              <Input
+                                value={transactionNo}
+                                onChange={(e) => setTransactionNo(e.target.value)}
+                                placeholder="Enter transaction number"
+                              />
+                            </Form.Item>
+                          </Col>
+                          <Col span={12}>
+                            <Form.Item label="Transaction Date">
+                              <DatePicker
+                                value={transactionDate}
+                                onChange={(date) => setTransactionDate(date)}
+                                format="YYYY-MM-DD"
+                                style={{ width: "100%", zIndex: 10001 }}
+                                getPopupContainer={(trigger) => trigger.parentElement || document.body}
+                              />
+                            </Form.Item>
+                          </Col>
+                        </Row>
+                      )}
+                      {["BankTransfer", "IMPS", "Cheque"].includes(paymentMode) && (
+                        <Row gutter={16}>
+                          <Col span={12}>
+                            <Form.Item label="Bank Name">
+                              <Input
+                                value={bankName}
+                                onChange={(e) => setBankName(e.target.value)}
+                                placeholder="Enter bank name"
+                              />
+                            </Form.Item>
+                          </Col>
+                        </Row>
+                      )}
+                      {paymentMode === "Cheque" && (
+                        <Row gutter={16}>
+                          <Col span={12}>
+                            <Form.Item label="Cheque No">
+                              <Input
+                                value={chequeNo}
+                                onChange={(e) => setChequeNo(e.target.value)}
+                                placeholder="Enter cheque number"
+                              />
+                            </Form.Item>
+                          </Col>
+                          <Col span={12}>
+                            <Form.Item label="Cheque Date">
+                              <DatePicker
+                                value={chequeDate}
+                                onChange={(date) => setChequeDate(date)}
+                                format="YYYY-MM-DD"
+                                style={{ width: "100%", zIndex: 10001 }}
+                                getPopupContainer={(trigger) => trigger.parentElement || document.body}
+                              />
+                            </Form.Item>
+                          </Col>
+                        </Row>
+                      )}
+                      <Row gutter={16}>
+                        <Col span={12}>
+                          <Form.Item label="Original Fee Amount">
+                            <Input
+                              type="number"
+                              value={selectedFeeRow?.totalAmount || 0}
+                              disabled={true}
+                              style={{ backgroundColor: '#f5f5f5' }}
+                              addonBefore="₹"
+                            />
+                          </Form.Item>
+                        </Col>
+                        {(selectedFeeRow?.status === 'partially_paid') && (<Col span={12}>
+                          <Form.Item label="Amount Already Paid">
+                            <Input
+                              type="number"
+                              value={(selectedFeeRow?.totalAmount || 0) - (selectedFeeRow?.balanceAmount || 0)}
+                              disabled={true}
+                              style={{ backgroundColor: '#f5f5f5' }}
+                              addonBefore="₹"
+                            />
+                          </Form.Item>
+                        </Col>)}
+                        {/* </Row> */}
+                        {/* <Row gutter={16}> */}
+                        {(selectedFeeRow?.status === 'partially_paid') && (<Col span={12}>
+                          <Form.Item label="Balance Amount">
+                            <Input
+                              type="number"
+                              value={selectedFeeRow?.balanceAmount || 0}
+                              disabled={true}
+                              style={{ backgroundColor: '#f5f5f5' }}
+                              addonBefore="₹"
+                            />
+                          </Form.Item>
+                        </Col>)}
+                        <Col span={12}>
+                          <Form.Item label="Late Fee">
+                            <Checkbox
+                              checked={includeExcessFee}
+                              onChange={(e) => setIncludeExcessFee(e.target.checked)}
+                            >
+                              Include Late Fee
+                            </Checkbox>
+                            <Input
+                              type="number"
+                              value={excessAmount}
+                              onChange={(e) => setExcessAmount(Number(e.target.value))}
+                              placeholder="Enter excess amount"
+                              min={0}
+                              disabled={!includeExcessFee}
+                              style={{ backgroundColor: !includeExcessFee ? '#f5f5f5' : '#fff' }}
+                              addonBefore="₹"
+                            />
+                          </Form.Item>
+                          
+                        </Col>
+                      </Row>
+                      <Row gutter={16}>
+                        <Col span={12}>
+                          <Form.Item label="Amount Paid" required>
+                            <Input
+                              type="number"
+                              value={amountPaid}
+                              onChange={(e) => setAmountPaid(Number(e.target.value))}
+                              placeholder="Enter amount paid"
+                              min={0}
+                              addonBefore="₹"
+                            />
+                          </Form.Item>
+                          
+                        </Col>
+                        
+                        <Col span={12}>
+                            <Form.Item label="Total Amount">
+                            <Input
+                              type="number"
+                              value={amountPaid + (includeExcessFee ? excessAmount : 0)}
+                              disabled={true}
+                              style={{ backgroundColor: '#f5f5f5' }}
+                              addonBefore="₹"
+                            />
+                          </Form.Item>
+                        </Col>
+                      </Row>
+                      <Row gutter={16}>
+                        <Col span={12}>
+                          <Form.Item label="Remarks">
+                            <Input.TextArea
+                              value={remarks}
+                              onChange={(e) => setRemarks(e.target.value)}
+                              placeholder="This will be visible on fee receipt"
+                            />
+                          </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                          <Form.Item label="Internal Notes">
+                            <Input.TextArea
+                              value={internalNotes}
+                              onChange={(e) => setInternalNotes(e.target.value)}
+                              placeholder="Enter notes"
+                            />
+                          </Form.Item>
+                        </Col>
+                      </Row>
+                    </Form>
                   </Modal>
                 </div>
               ) : (
                 <div className="text-center py-4">
-                  <p className="alert alert-info mx-3" role="alert">
-                    {selectedStudentId && selectedMonths.length > 0 && generationMode === "single"
-                      ? `No fees data available for ${selectedStudent?.name || "Unknown"} in ${selectedMonths.join(", ")}. Set due date and click Generate Fees to generate fees or view available fee groups.`
-                      : selectedStudentId && generationMode === "single"
-                        ? "No generated fees found for this student"
-                        : selectedClass
-                          ? "No students found for this class."
-                          : "Please select a class and session to view fees data."}
+                  <p className="alert alert-info mx-3">
+                    {selectedClass && selectedStudent
+                      ? `No fees data available for the selected student${selectedMonth ? ` in ${selectedMonth}` : ""}.`
+                      : selectedClass
+                        ? "Please select a student to view fees."
+                        : "Please select a class and session to view fees."
+                    }
                   </p>
                 </div>
               )}
@@ -1079,4 +1066,4 @@ const GenerateStudentFees: React.FC = () => {
   );
 };
 
-export default GenerateStudentFees;
+export default CollectStudentFees;
