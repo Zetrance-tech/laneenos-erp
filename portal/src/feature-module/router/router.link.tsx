@@ -262,6 +262,7 @@ import AddEnquiry from "../management/enquiry/addEnquiry";
 import EnquiryList from "../management/enquiry/enquiryList";
 import StudentFeeManager from "../management/feescollection/studentFeeManager";
 import StudentFeeData from "../management/feescollection/feesDetails";
+import ExpenseManager from "../management/expense";
 const routes = all_routes;
 interface StudentLeaves {
   admissionNumber: string; // Updated prop name to match API field
@@ -1242,6 +1243,10 @@ export const protectedPublicRoutes = [
   {
     path: routes.feedetails,
     element: <StudentFeeData/>,
+  },
+  {
+    path: routes.expenses,
+    element: <ExpenseManager/>,
   },
   {
     path: routes.cctvList,

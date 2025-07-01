@@ -345,14 +345,14 @@ export const SidebarData = (userRole: string) => {
         },
         {
           label: "CCTV",
-          icon: "ti ti-report-money",
+          icon: "ti ti-camera",
           submenu: false,
           showSubRoute: false,
           link:routes.cctvList
         },
         {
           label: "Enquiries",
-          icon: "ti ti-report-money",
+          icon: "ti ti-message",
           submenu: true,
           showSubRoute: false,
           link:routes.enquiry,
@@ -381,13 +381,13 @@ export const SidebarData = (userRole: string) => {
         //     { label: "Return", link: routes.libraryReturn },
         //   ],
         // },
-        // {
-        //   label: "Sports",
-        //   link: routes.sportsList,
-        //   icon: "ti ti-run",
-        //   showSubRoute: false,
-        //   submenu: false,
-        // },
+        {
+          label: "Expenses",
+          link: routes.expenses,
+          icon: "ti ti-wallet",
+          showSubRoute: false,
+          submenu: false,
+        },
         // {
         //   label: "Players",
         //   link: routes.playerList,

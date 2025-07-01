@@ -22,10 +22,10 @@ const token = localStorage.getItem("token");
 
 if (token) {
   const decoded = jwtDecode<MyTokenPayload>(token);
-  console.log(decoded);
+  // console.log(decoded);
 }
 const user = JSON.parse(localStorage.getItem("user") ?? JSON.stringify({ role: "student" }));
-console.log(user)
+// console.log(user)
 const TeacherDashboard = () => {
   const routes = all_routes;
   const [date, setDate] = useState<Nullable<Date>>(null);

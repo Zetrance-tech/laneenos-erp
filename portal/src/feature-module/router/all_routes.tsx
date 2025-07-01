@@ -232,6 +232,7 @@ export const all_routes = {
   generateFees:"/management/generate-fees",
   collectFees:"/management/collect-fees",
   feedetails:"/management/fee-details",
+  expenses:"/management/expenses",
   libraryMembers:"/management/library-members",
   libraryIssueBook:"/management/library-issue-book",
   libraryBooks:"/management/library-books",
