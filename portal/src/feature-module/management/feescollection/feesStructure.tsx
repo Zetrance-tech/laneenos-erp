@@ -1570,7 +1570,7 @@ const AddFeeTemplateModal: React.FC<AddFeeTemplateModalProps> = ({
                   type="text"
                   className="form-control"
                   placeholder="Amount"
-                  value={fee.amount === 0 ? "" : fee.amount}
+                  value={fee.amount}
                   onChange={(e) => handleFeeChange(feeIndex, "amount", e.target.value)}
                   onKeyPress={(e) => {
                     if (!/[0-9]/.test(e.key)) {
