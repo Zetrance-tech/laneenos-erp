@@ -69,7 +69,7 @@ const TeachersRoutine = () => {
                     <li>
                       <Link to={routes.teacherLeaves.replace(":id", id || "")} className="nav-link">
                         <i className="ti ti-calendar-due me-2" />
-                        Leave & Attendance
+                        Attendance
                       </Link>
                     </li>
                     <li>

@@ -2,12 +2,23 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
 import toast from "react-hot-toast";
-import { Spin, Select, Table, Button, Form, Modal, Row, Col, Input } from "antd";
+import {
+  Spin,
+  Select,
+  Table,
+  Button,
+  Form,
+  Modal,
+  Row,
+  Col,
+  Input,
+} from "antd";
 import { all_routes } from "../../router/all_routes";
 import moment from "moment";
 import TooltipOption from "../../../core/common/tooltipOption";
 import { useAuth } from "../../../context/AuthContext";
 import dayjs from "dayjs";
+
 interface Session {
   _id: string;
   name: string;
@@ -28,12 +39,20 @@ interface Student {
   name: string;
   classId: string;
   className?: string;
+  fatherName?:string;
+  motherName?:string;
 }
 
 interface PaymentDetail {
   _id?: string;
   paymentId: string;
-  modeOfPayment: "Cash" | "BankTransfer" | "Cheque" | "CardPayment" | "Wallet" | "IMPS";
+  modeOfPayment:
+    | "Cash"
+    | "BankTransfer"
+    | "Cheque"
+    | "CardPayment"
+    | "Wallet"
+    | "IMPS";
   collectionDate: string;
   amountPaid: number;
   transactionNo?: string;
@@ -64,6 +83,8 @@ interface GeneratedFee {
     _id: string;
     name: string;
     admissionNumber: string;
+    fatherName?:string;
+    motherName?:string;
   };
   fees: FeeDetail[];
   amount: number;
@@ -102,14 +123,17 @@ const StudentFeeData: React.FC = () => {
   const routes = all_routes;
   const { token } = useAuth();
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [classes, setClasses] = useState<Class[]>([]); // Added state for classes
   const [selectedSession, setSelectedSession] = useState<string>("");
   const [students, setStudents] = useState<Student[]>([]);
   const [monthlyFees, setMonthlyFees] = useState<FeeTableRow[]>([]);
   const [filteredFees, setFilteredFees] = useState<FeeTableRow[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [isDetailsModalVisible, setIsDetailsModalVisible] = useState<boolean>(false);
-  const [selectedFeeDetails, setSelectedFeeDetails] = useState<GeneratedFee | null>(null);
+  const [isDetailsModalVisible, setIsDetailsModalVisible] =
+    useState<boolean>(false);
+  const [selectedFeeDetails, setSelectedFeeDetails] =
+    useState<GeneratedFee | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const config = {
     headers: {
@@ -117,11 +141,15 @@ const StudentFeeData: React.FC = () => {
     },
   };
 
+  // Fetch sessions
   const fetchSessions = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get<Session[]>(`${API_URL}/api/session/get`, config);
+      const response = await axios.get<Session[]>(
+        `${API_URL}/api/session/get`,
+        config
+      );
       setSessions(response.data || []);
     } catch (err) {
       const errorMessage = axios.isAxiosError(err)
@@ -133,6 +161,28 @@ const StudentFeeData: React.FC = () => {
     }
   };
 
+  // Fetch classes for the selected session
+  const fetchClasses = async () => {
+    if (!selectedSession) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await axios.get<Class[]>(
+        `${API_URL}/api/class/session/${selectedSession}`,
+        config
+      );
+      setClasses(response.data || []);
+    } catch (err) {
+      const errorMessage = axios.isAxiosError(err)
+        ? err.response?.data?.message || err.message
+        : "Failed to fetch classes";
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch students for the selected session
   const fetchStudentsForSession = async () => {
     if (!selectedSession) return;
     setLoading(true);
@@ -151,7 +201,10 @@ const StudentFeeData: React.FC = () => {
               `${API_URL}/api/class/${student.classId}`,
               config
             );
-            return { ...student, className: classResponse.data.name || "Unknown" };
+            return {
+              ...student,
+              className: classResponse.data.name || "Unknown",
+            };
           } catch {
             return { ...student, className: "Unknown" };
           }
@@ -175,7 +228,7 @@ const StudentFeeData: React.FC = () => {
     try {
       const url = `${API_URL}/api/studentFees/${studentId}/fees-by-session/${selectedSession}`;
       const response = await axios.get<GeneratedFee[]>(url, config);
-      console.log(response.data)
+      console.log(response.data);
       return response.data || [];
     } catch (err) {
       const errorMessage = axios.isAxiosError(err)
@@ -208,7 +261,8 @@ const StudentFeeData: React.FC = () => {
               className: student.className || "Unknown",
               month: fee.month,
               totalAmount: fee.amount || 0,
-              totalNetPayable: fee.netPayable || (fee.amount - (fee.discount || 0)),
+              totalNetPayable:
+                fee.netPayable || fee.amount - (fee.discount || 0),
               amountPaid: fee.amountPaid || 0,
               balanceAmount: fee.balanceAmount || 0,
               dueDate: fee.dueDate,
@@ -253,8 +307,10 @@ const StudentFeeData: React.FC = () => {
 
   useEffect(() => {
     if (selectedSession) {
+      fetchClasses(); // Fetch classes when session is selected
       fetchStudentsForSession();
     } else {
+      setClasses([]); // Reset classes when no session is selected
       setStudents([]);
       setMonthlyFees([]);
       setFilteredFees([]);
@@ -283,6 +339,7 @@ const StudentFeeData: React.FC = () => {
       return;
     }
     setSelectedFeeDetails(feeDetail);
+    console.log(setSelectedFeeDetails)
     setIsDetailsModalVisible(true);
   };
 
@@ -293,32 +350,40 @@ const StudentFeeData: React.FC = () => {
       render: (student: { name: string; admissionNumber: string }) => (
         <div>
           <div>{student?.name || "N/A"}</div>
-          <small className="text-muted">({student?.admissionNumber || "N/A"})</small>
+          <small className="text-muted">
+            ({student?.admissionNumber || "N/A"})
+          </small>
         </div>
       ),
-      sorter: (a: FeeTableRow, b: FeeTableRow) => a.student.name.localeCompare(b.student.name),
+      sorter: (a: FeeTableRow, b: FeeTableRow) =>
+        a.student.name.localeCompare(b.student.name),
     },
     {
       title: "Class",
       dataIndex: "className",
       render: (className: string) => <span>{className || "N/A"}</span>,
-      sorter: (a: FeeTableRow, b: FeeTableRow) => a.className.localeCompare(b.className),
+      sorter: (a: FeeTableRow, b: FeeTableRow) =>
+        a.className.localeCompare(b.className),
     },
     {
       title: "Month",
       dataIndex: "month",
-      render: (month: string) => <span style={{ color: "black" }}>{month || "N/A"}</span>,
-      sorter: (a: FeeTableRow, b: FeeTableRow) => a.month.localeCompare(b.month),
+      render: (month: string) => (
+        <span style={{ color: "black" }}>{month || "N/A"}</span>
+      ),
+      sorter: (a: FeeTableRow, b: FeeTableRow) =>
+        a.month.localeCompare(b.month),
     },
     {
       title: "Due Date",
       dataIndex: "dueDate",
-       render: (duedate: string) => (
-    <span style={{ color: "black" }}>
-      {duedate ? dayjs(duedate).format("DD MMM YYYY") : "N/A"}
-    </span>
-  ),
-      sorter: (a: FeeTableRow, b: FeeTableRow) => a.month.localeCompare(b.month),
+      render: (duedate: string) => (
+        <span style={{ color: "black" }}>
+          {duedate ? dayjs(duedate).format("DD MMM YYYY") : "N/A"}
+        </span>
+      ),
+      sorter: (a: FeeTableRow, b: FeeTableRow) =>
+        a.month.localeCompare(b.month),
     },
     {
       title: "Status",
@@ -371,7 +436,9 @@ const StudentFeeData: React.FC = () => {
     {
       title: "Fee Group",
       dataIndex: "feesGroup",
-      render: (feesGroup: { name: string }) => <span>{feesGroup?.name || "N/A"}</span>,
+      render: (feesGroup: { name: string }) => (
+        <span>{feesGroup?.name || "N/A"}</span>
+      ),
     },
     {
       title: "Amount",
@@ -394,15 +461,26 @@ const StudentFeeData: React.FC = () => {
         },
         {
           label: "Amount Paid",
-          value: detail.amountPaid ? `₹${detail.amountPaid.toFixed(2)}` : undefined,
+          value: detail.amountPaid
+            ? `₹${detail.amountPaid.toFixed(2)}`
+            : undefined,
         },
       ];
       if (detail.excessAmount && detail.excessAmount > 0) {
-        relevantFields.push({ label: "Late Fee", value: `₹${detail.excessAmount.toFixed(2)}` });
+        relevantFields.push({
+          label: "Late Fee",
+          value: `₹${detail.excessAmount.toFixed(2)}`,
+        });
       }
-      if (detail.modeOfPayment !== "Cash" && detail.modeOfPayment !== "Cheque") {
+      if (
+        detail.modeOfPayment !== "Cash" &&
+        detail.modeOfPayment !== "Cheque"
+      ) {
         if (detail.transactionNo)
-          relevantFields.push({ label: "Transaction No", value: detail.transactionNo });
+          relevantFields.push({
+            label: "Transaction No",
+            value: detail.transactionNo,
+          });
         if (detail.transactionDate)
           relevantFields.push({
             label: "Transaction Date",
@@ -410,7 +488,8 @@ const StudentFeeData: React.FC = () => {
           });
       }
       if (detail.modeOfPayment === "Cheque") {
-        if (detail.chequeNo) relevantFields.push({ label: "Cheque No", value: detail.chequeNo });
+        if (detail.chequeNo)
+          relevantFields.push({ label: "Cheque No", value: detail.chequeNo });
         if (detail.chequeDate)
           relevantFields.push({
             label: "Cheque Date",
@@ -418,11 +497,16 @@ const StudentFeeData: React.FC = () => {
           });
       }
       if (["BankTransfer", "IMPS", "Cheque"].includes(detail.modeOfPayment)) {
-        if (detail.bankName) relevantFields.push({ label: "Bank Name", value: detail.bankName });
+        if (detail.bankName)
+          relevantFields.push({ label: "Bank Name", value: detail.bankName });
       }
-      if (detail.remarks) relevantFields.push({ label: "Remarks", value: detail.remarks });
+      if (detail.remarks)
+        relevantFields.push({ label: "Remarks", value: detail.remarks });
       if (detail.internalNotes)
-        relevantFields.push({ label: "Internal Notes", value: detail.internalNotes });
+        relevantFields.push({
+          label: "Internal Notes",
+          value: detail.internalNotes,
+        });
 
       return (
         <div
@@ -450,7 +534,9 @@ const StudentFeeData: React.FC = () => {
                     fontSize: "14px",
                   }}
                 >
-                  <span style={{ fontWeight: 500, color: "#555" }}>{field.label}:</span>
+                  <span style={{ fontWeight: 500, color: "#555" }}>
+                    {field.label}:
+                  </span>
                   <span style={{ color: "#333" }}>{field.value}</span>
                 </div>
               )
@@ -513,13 +599,16 @@ const StudentFeeData: React.FC = () => {
             <Spin spinning={loading} size="large">
               {error ? (
                 <div className="text-center py-4">
-                  <p className="alert alert-danger mx-3" role="alert">{error}</p>
+                  <p className="alert alert-danger mx-3" role="alert">
+                    {error}
+                  </p>
                   <Button
                     type="primary"
                     size="small"
                     onClick={() => {
                       setError(null);
                       if (selectedSession) {
+                        fetchClasses(); // Retry fetching classes
                         fetchStudentsForSession();
                       } else {
                         fetchSessions();
@@ -536,19 +625,19 @@ const StudentFeeData: React.FC = () => {
                 </div>
               ) : filteredFees.length > 0 ? (
                 <div className="p-3">
-                  <h5>Fee Data for {selectedSession ? sessions.find(s => s._id === selectedSession)?.name : "Session"}</h5>
+                  <h5>
+                    Fee Data for{" "}
+                    {selectedSession
+                      ? sessions.find((s) => s._id === selectedSession)?.name
+                      : "Session"}
+                  </h5>
                   <Table
                     dataSource={filteredFees}
                     columns={summaryColumns}
                     rowKey="key"
-                    pagination={{ pageSize: 10 ,showSizeChanger: false}}
+                    pagination={{ pageSize: 10, showSizeChanger: false }}
                   />
                   <Modal
-                  title={
-    selectedFeeDetails
-      ? `Fee Collection Details - ${selectedFeeDetails.student.name} (${selectedFeeDetails.student.admissionNumber})`
-      : "Fee Collection Details"
-  }
                     open={isDetailsModalVisible}
                     onCancel={() => {
                       setIsDetailsModalVisible(false);
@@ -566,111 +655,218 @@ const StudentFeeData: React.FC = () => {
                     zIndex={10000}
                   >
                     {selectedFeeDetails && (
-                      <Row gutter={24}>
-                        <Col
-                          span={
-                            (selectedFeeDetails.status === "paid" ||
-                              selectedFeeDetails.status === "partially_paid") &&
-                            selectedFeeDetails.paymentDetails?.length > 0
-                              ? 12
-                              : 24
-                          }
+                      <>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "10px",
+                            marginBottom: "20px",
+                          }}
                         >
-                          <Table
-                            dataSource={selectedFeeDetails.fees}
-                            columns={feeColumns}
-                            rowKey={(record, index) => `${selectedFeeDetails._id}-${index}`}
-                            pagination={false}
-                            footer={() => {
-                              const totalAmount = selectedFeeDetails.amount || 0;
-                              const amountPaid = selectedFeeDetails.amountPaid || 0;
-                              const balanceAmount = selectedFeeDetails.balanceAmount || 0;
-                              const discount = selectedFeeDetails.discount || 0;
-                              const netPayable = selectedFeeDetails.netPayable || 0;
-                              const excessAmount = selectedFeeDetails.excessAmount || 0;
-                              const month = selectedFeeDetails.month || "N/A";
-                              return (
-                                <div className="text-right">
-                                  <div>
-                  <strong>Month: {month}</strong> {/* Display month in footer */}
-                </div>
-                                  <div>
-                                    <strong>Total Fees: ₹{totalAmount.toFixed(2)}</strong>
-                                  </div>
-
-                                  {discount > 0 && (
+                          <img
+                            src="/assets/img/favicon.png"
+                            alt="Logo"
+                            style={{ width: "80px", height: "80px" }}
+                          />
+                          <div>
+                            <h3
+                              style={{
+                                margin: "0",
+                                fontSize: "20px",
+                                fontWeight: "bold",
+                              }}
+                            >
+                              La Neeno's Kindergarten and Daycare
+                            </h3>
+                            <p
+                              style={{
+                                margin: "5px 0",
+                                fontSize: "14px",
+                                color: "#555",
+                              }}
+                            >
+                              SG 03, Sector 144, Near Gulshan Botnia, 201304
+                            </p>
+                          </div>
+                        </div>
+                        <Row gutter={16}>
+                          <Col span={12}>
+                            <div style={{ textAlign: "left", fontSize: "14px" }}>
+                              <p>
+                                <strong>Student Name:</strong>{" "}
+                                {selectedFeeDetails.student.name}
+                              </p>
+                              <p>
+                                <strong>Admission Number:</strong>{" "}
+                                {selectedFeeDetails.student.admissionNumber}
+                              </p>
+                              <p>
+                                <strong>Class:</strong>{" "}
+                                {classes.find((c: Class) =>
+                                  c._id ===
+                                  students.find(
+                                    (s) =>
+                                      s._id === selectedFeeDetails.student._id
+                                  )?.classId
+                                )?.name || "N/A"}
+                              </p>
+                            </div>
+                          </Col>
+                          <Col span={12}>
+                            <div style={{ textAlign: "left", fontSize: "14px" }}>
+                              <p>
+                                <strong>Father's Name:</strong>{" "}
+                                {selectedFeeDetails?.student?.fatherName || "N/A"}
+                              </p>
+                              <p>
+                                <strong>Mother's Name:</strong>{" "}
+                                {selectedFeeDetails?.student?.motherName || "N/A"}
+                              </p>
+                            </div>
+                          </Col>
+                        </Row>
+                        <Row gutter={24}>
+                          <Col
+                            span={
+                              (selectedFeeDetails.status === "paid" ||
+                                selectedFeeDetails.status === "partially_paid") &&
+                              selectedFeeDetails.paymentDetails?.length > 0
+                                ? 12
+                                : 24
+                            }
+                          >
+                            <Table
+                              dataSource={selectedFeeDetails.fees}
+                              columns={feeColumns}
+                              rowKey={(record, index) =>
+                                `${selectedFeeDetails._id}-${index}`
+                              }
+                              pagination={false}
+                              footer={() => {
+                                const totalAmount =
+                                  selectedFeeDetails.amount || 0;
+                                const amountPaid =
+                                  selectedFeeDetails.amountPaid || 0;
+                                const balanceAmount =
+                                  selectedFeeDetails.balanceAmount || 0;
+                                const discount = selectedFeeDetails.discount || 0;
+                                const netPayable =
+                                  selectedFeeDetails.netPayable || 0;
+                                const excessAmount =
+                                  selectedFeeDetails.excessAmount || 0;
+                                const month = selectedFeeDetails.month || "N/A";
+                                return (
+                                  <div className="text-right">
                                     <div>
-                                      <strong>Discount: ₹{discount.toFixed(2)}</strong>
+                                      <strong>Month: {month}</strong>{" "}
                                     </div>
-                                  )}
-                                  
-                                  {amountPaid > 0 && (
-                                    <div>
-                                      <strong>Amount Paid: ₹{amountPaid.toFixed(2)}</strong>
-                                    </div>
-                                  )}
-                                  {balanceAmount > 0 && (
-                                    <div>
-                                      <strong>Balance Amount: ₹{balanceAmount.toFixed(2)}</strong>
-                                    </div>
-                                  )}
-                                  {excessAmount > 0 && (
-                                    <div>
-                                      <strong>Late Fee: ₹{excessAmount.toFixed(2)}</strong>
-                                    </div>
-                                  )}
-                                  {selectedFeeDetails.dueDate && (
                                     <div>
                                       <strong>
-                                        Due Date:{" "}
-                                        {moment(selectedFeeDetails.dueDate).format("MMM DD, YYYY")}
+                                        Total Fees: ₹{totalAmount.toFixed(2)}
                                       </strong>
                                     </div>
-                                  )}
-                                  
-                                  <div>
-                                    <strong>
-                                      Status:
-                                      <span
-                                        className={`badge ${
-                                          selectedFeeDetails.status === "paid"
-                                            ? "bg-success"
-                                            : selectedFeeDetails.status === "partially_paid"
-                                            ? "bg-info"
-                                            : selectedFeeDetails.status === "pending"
-                                            ? "bg-warning"
-                                            : selectedFeeDetails.status
-                                            ? "bg-danger"
-                                            : "bg-secondary"
-                                        }`}
-                                        aria-label={`Status: ${selectedFeeDetails.status || "Not Generated"}`}
-                                      >
-                                        {selectedFeeDetails.status
-                                          ? selectedFeeDetails.status
-                                              .replace("_", " ")
-                                              .split(" ")
-                                              .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-                                              .join(" ")
-                                          : "Not Generated"}
-                                      </span>
-                                    </strong>
+                                    {discount > 0 && (
+                                      <div>
+                                        <strong>
+                                          Discount: ₹{discount.toFixed(2)}
+                                        </strong>
+                                      </div>
+                                    )}
+                                    {amountPaid > 0 && (
+                                      <div>
+                                        <strong>
+                                          Amount Paid: ₹{amountPaid.toFixed(2)}
+                                        </strong>
+                                      </div>
+                                    )}
+                                    {balanceAmount > 0 && (
+                                      <div>
+                                        <strong>
+                                          Balance Amount: ₹
+                                          {balanceAmount.toFixed(2)}
+                                        </strong>
+                                      </div>
+                                    )}
+                                    {excessAmount > 0 && (
+                                      <div>
+                                        <strong>
+                                          Late Fee: ₹{excessAmount.toFixed(2)}
+                                        </strong>
+                                      </div>
+                                    )}
+                                    {selectedFeeDetails.dueDate && (
+                                      <div>
+                                        <strong>
+                                          Due Date:{" "}
+                                          {moment(
+                                            selectedFeeDetails.dueDate
+                                          ).format("MMM DD, YYYY")}
+                                        </strong>
+                                      </div>
+                                    )}
+                                    <div>
+                                      <strong>
+                                        Status:
+                                        <span
+                                          className={`badge ${
+                                            selectedFeeDetails.status === "paid"
+                                              ? "bg-success"
+                                              : selectedFeeDetails.status ===
+                                                "partially_paid"
+                                              ? "bg-info"
+                                              : selectedFeeDetails.status ===
+                                                "pending"
+                                              ? "bg-warning"
+                                              : selectedFeeDetails.status
+                                              ? "bg-danger"
+                                              : "bg-secondary"
+                                          }`}
+                                          aria-label={`Status: ${
+                                            selectedFeeDetails.status ||
+                                            "Not Generated"
+                                          }`}
+                                        >
+                                          {selectedFeeDetails.status
+                                            ? selectedFeeDetails.status
+                                                .replace("_", " ")
+                                                .split(" ")
+                                                .map(
+                                                  (word) =>
+                                                    word.charAt(0).toUpperCase() +
+                                                    word.slice(1)
+                                                )
+                                                .join(" ")
+                                            : "Not Generated"}
+                                        </span>
+                                      </strong>
+                                    </div>
                                   </div>
-                                </div>
-                              );
-                            }}
-                          />
-                        </Col>
-                        {(selectedFeeDetails.status === "paid" ||
-                          selectedFeeDetails.status === "partially_paid") &&
-                          selectedFeeDetails.paymentDetails?.length > 0 && (
-                            <Col span={12}>
-                              <h5 style={{ marginBottom: "16px", color: "#333", fontSize: "18px" }}>
-                                Payment Details
-                              </h5>
-                              {renderPaymentDetails(selectedFeeDetails.paymentDetails)}
-                            </Col>
-                          )}
-                      </Row>
+                                );
+                              }}
+                            />
+                          </Col>
+                          {(selectedFeeDetails.status === "paid" ||
+                            selectedFeeDetails.status === "partially_paid") &&
+                            selectedFeeDetails.paymentDetails?.length > 0 && (
+                              <Col span={12}>
+                                <h5
+                                  style={{
+                                    marginBottom: "16px",
+                                    color: "#333",
+                                    fontSize: "18px",
+                                  }}
+                                >
+                                  Payment Details
+                                </h5>
+                                {renderPaymentDetails(
+                                  selectedFeeDetails.paymentDetails
+                                )}
+                              </Col>
+                            )}
+                        </Row>
+                      </>
                     )}
                   </Modal>
                 </div>

@@ -83,7 +83,7 @@ const TeacherDetails = () => {
                         className="nav-link"
                       >
                         <i className="ti ti-calendar-due me-2" />
-                        Leave & Attendance
+                        Attendance
                       </Link>
                     </li>
                     <li>

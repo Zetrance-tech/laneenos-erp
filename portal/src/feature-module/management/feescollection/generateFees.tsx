@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
 import toast from "react-hot-toast";
-import { Spin, Select, Table, Button, Form, Modal, Radio, Tooltip } from "antd";
+import { Spin, Select, Table, Button, Form, Modal, Radio, Tooltip, InputNumber } from "antd";
 import { all_routes } from "../../router/all_routes";
 import moment from "moment";
 import TooltipOption from "../../../core/common/tooltipOption";
@@ -42,6 +42,8 @@ interface GeneratedFee {
     periodicity: string;
   };
   amount: number;
+  originalAmount: number;
+  discount: number;
   discountPercent: number;
   netPayable: number;
   dueDate?: string;
@@ -52,7 +54,6 @@ interface GeneratedFee {
   };
   generatedAt?: string;
   month?: string;
-  discount?: number;
   generationGroupId?: string;
 }
 
@@ -139,6 +140,10 @@ const GenerateStudentFees: React.FC = () => {
   const [isEditModalVisible, setIsEditModalVisible] = useState<boolean>(false);
   const [editingFeeSummary, setEditingFeeSummary] = useState<FeeTableRow | null>(null);
   const [newDueDate, setNewDueDate] = useState<string>("");
+  const [isEditFeesModalVisible, setIsEditFeesModalVisible] = useState<boolean>(false);
+  const [editingFees, setEditingFees] = useState<GeneratedFee[]>([]);
+  const [editingFeeRecord, setEditingFeeRecord] = useState<FeeTableRow | null>(null);
+  const [form] = Form.useForm();
   const [generationMode, setGenerationMode] = useState<"single" | "class">("single");
   const [isTallyModalVisible, setIsTallyModalVisible] = useState<boolean>(false);
   const [selectedTally, setSelectedTally] = useState<Tally[]>([]);
@@ -305,12 +310,6 @@ const GenerateStudentFees: React.FC = () => {
       const groupData = response.data || [];
       const sortedGroups = groupData.sort((a, b) => new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime());
       setGenerationGroups(sortedGroups);
-      console.log("Fetched generation groups:", sortedGroups.map(g => ({
-        generationGroupId: g.generationGroupId,
-        months: g.months,
-        generatedAt: g.generatedAt,
-        tallyCount: g.tally.length
-      })));
     } catch (err) {
       const errorMessage = axios.isAxiosError(err)
         ? err.response?.data?.message || err.message
@@ -360,7 +359,7 @@ const GenerateStudentFees: React.FC = () => {
       fetchGenerationGroups();
     } catch (err) {
       const errorMessage = axios.isAxiosError(err)
-        ? err.response?.data?.msg || err.message
+        ? err.response?.data?.message || err.message
         : `Failed to generate fees for ${generationMode === "single" ? "student" : "month"}`;
       setError(errorMessage);
       toast.error(errorMessage);
@@ -391,8 +390,75 @@ const GenerateStudentFees: React.FC = () => {
       setNewDueDate('');
     } catch (err) {
       const errorMessage = axios.isAxiosError(err)
-        ? err.response?.data?.msg || err.message
+        ? err.response?.data?.message || err.message
         : "Failed to update due date";
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditFees = (record: FeeTableRow) => {
+    setEditingFeeRecord(record);
+    setEditingFees(record.feeDetails.map(fee => ({
+      ...fee,
+      amount: fee.amount || 0,
+      originalAmount: fee.originalAmount || fee.amount || 0,
+      discount: fee.discount || 0,
+    })));
+    setIsEditFeesModalVisible(true);
+    form.setFieldsValue({
+      fees: record.feeDetails.map(fee => ({
+        feesGroupId: fee.feesGroup._id,
+        amount: fee.amount || 0,
+        discount: fee.discount || 0,
+      })),
+    });
+  };
+
+  const handleEditFeesSubmit = async () => {
+    if (!editingFeeRecord || !editingFees.length) {
+      toast.error("No fee details to update");
+      return;
+    }
+    try {
+      const values = await form.validateFields();
+      console.log("11")
+      console.log(values)
+      const updatedFees = values.fees.map((fee: any) => ({
+        feesGroup: fee.feesGroupId,
+        amount: Number(fee.amount) || 0,
+        originalAmount: Number(fee.amount) || 0,
+        discount: Number(fee.discount) || 0,
+      }));
+      console.log(updatedFees);
+      console.log("22")
+
+      const payload = {
+        studentId: editingFeeRecord.student._id,
+        sessionId: selectedSession,
+        month: editingFeeRecord.month,
+        fees: updatedFees,
+      };
+      console.log(payload)
+      console.log(1)
+      setLoading(true);
+      setError(null);
+      const response = await axios.patch(`${API_URL}/api/studentFees/edit-fees-month`, payload, config);
+      console.log(2)
+
+      toast.success(response.data.message || "Fees updated successfully");
+      fetchGeneratedFeesForClass();
+      if (generationMode === "single") fetchGeneratedMonths();
+      setIsEditFeesModalVisible(false);
+      setEditingFeeRecord(null);
+      setEditingFees([]);
+      form.resetFields();
+    } catch (err) {
+      const errorMessage = axios.isAxiosError(err)
+        ? err.response?.data?.message || err.message
+        : "Failed to update fees";
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -417,7 +483,7 @@ const GenerateStudentFees: React.FC = () => {
       fetchGenerationGroups();
     } catch (err) {
       const errorMessage = axios.isAxiosError(err)
-        ? err.response?.data?.msg || err.message
+        ? err.response?.data?.message || err.message
         : "Failed to delete generated fees";
       setError(errorMessage);
       toast.error(errorMessage);
@@ -605,6 +671,13 @@ const GenerateStudentFees: React.FC = () => {
     setNewDueDate("");
   };
 
+  const handleEditFeesModalClose = () => {
+    setIsEditFeesModalVisible(false);
+    setEditingFeeRecord(null);
+    setEditingFees([]);
+    form.resetFields();
+  };
+
   const handleTallyModalClose = () => {
     setIsTallyModalVisible(false);
     setSelectedTally([]);
@@ -660,7 +733,9 @@ const GenerateStudentFees: React.FC = () => {
       render: (status?: string) => (
         <span
           className={`badge ${
-            status === "paid" ? "bg-success" : status === "pending" ? "bg-warning" : status ? "bg-danger" : "bg-secondary"
+            status === "paid" ? "bg-success" :
+            status === "pending" ? "bg-warning" :
+            status ? "bg-danger" : "bg-secondary"
           }`}
         >
           {status ? status.charAt(0).toUpperCase() + status.slice(1) : "Not Generated"}
@@ -699,6 +774,16 @@ const GenerateStudentFees: React.FC = () => {
                   >
                     <i className="ti ti-edit-circle me-2" />
                     Update Due Date
+                  </button>
+                </li>
+                <li>
+                  <button
+                    className="dropdown-item rounded-1"
+                    onClick={() => handleEditFees(record)}
+                    disabled={record.status === "paid" || record.status === "partially_paid"}
+                  >
+                    <i className="ti ti-edit me-2" />
+                    Edit Fees
                   </button>
                 </li>
                 <li>
@@ -1043,6 +1128,140 @@ const GenerateStudentFees: React.FC = () => {
                       />
                     </Form.Item>
                   </Modal>
+                 <Modal
+  title={`Edit Fees - ${editingFeeRecord?.student.name || "N/A"} (${editingFeeRecord?.month || "N/A"})`}
+  open={isEditFeesModalVisible}
+  onCancel={handleEditFeesModalClose}
+  footer={null}
+  width={800}
+  style={{ top: 50 }}
+  zIndex={10000}
+>
+  <Form form={form} layout="vertical">
+    <Table
+      dataSource={editingFees}
+      rowKey={(record) => record?.feesGroup?._id}
+      pagination={false}
+      columns={[
+        {
+          title: "Fee Group",
+          dataIndex: ["feesGroup", "name"],
+          key: "feesGroup",
+          render: (name, record, index) => (
+            <>
+              <Form.Item
+                name={["fees", index, "feesGroupId"]}
+                initialValue={record.feesGroup._id}
+                noStyle
+                rules={[{ required: true, message: "Fee group ID is required" }]}
+              >
+                <input type="hidden" />
+              </Form.Item>
+              <span>{name || "N/A"}</span>
+            </>
+          ),
+        },
+        {
+          title: "Amount",
+          dataIndex: "amount",
+          key: "amount",
+          render: (value, record, index) => (
+            <Form.Item
+              name={["fees", index, "amount"]}
+              rules={[{ required: true, message: "Please enter the amount" }]}
+              initialValue={value || 0}
+            >
+              <InputNumber
+                min={0}
+                style={{ width: "100%" }}
+                onChange={(val) => {
+                  const updated = [...editingFees];
+                  updated[index].amount = Number(val) || 0;
+                  updated[index].netPayable = updated[index].amount - (updated[index].discount || 0);
+                  setEditingFees(updated);
+                  form.setFieldsValue({
+                    fees: updated.map((fee, i) => ({
+                      feesGroupId: fee.feesGroup._id,
+                      amount: i === index ? Number(val) || 0 : fee.amount,
+                      discount: fee.discount || 0,
+                    })),
+                  });
+                }}
+              />
+            </Form.Item>
+          ),
+        },
+        // {
+        //   title: "Discount",
+        //   dataIndex: "discount",
+        //   key: "discount",
+        //   render: (value, record, index) => (
+        //     <Form.Item
+        //       name={["fees", index, "discount"]}
+        //       rules={[{ required: true, message: "Please enter the discount" }]}
+        //       initialValue={value || 0}
+        //     >
+        //       <InputNumber
+        //         min={0}
+        //         style={{ width: "100%" }}
+        //         onChange={(val) => {
+        //           const updated = [...editingFees];
+        //           updated[index].discount = Number(val) || 0;
+        //           updated[index].netPayable = (updated[index].amount || 0) - (Number(val) || 0);
+        //           setEditingFees(updated);
+        //           form.setFieldsValue({
+        //             fees: updated.map((fee, i) => ({
+        //               feesGroupId: fee.feesGroup._id,
+        //               amount: fee.amount || 0,
+        //               discount: i === index ? Number(val) || 0 : fee.discount,
+        //             })),
+        //           });
+        //         }}
+        //       />
+        //     </Form.Item>
+        //   ),
+        // },
+        // {
+        //   title: "Net Payable",
+        //   dataIndex: "netPayable",
+        //   key: "netPayable",
+        //   render: (value) => <span>₹{value?.toFixed(0) || 0}</span>,
+        // },
+      ]}
+      footer={() => {
+        const total = editingFees.reduce((sum, fee) => sum + (fee.netPayable || 0), 0);
+        return (
+          <div className="text-right">
+            <strong>
+              Total Net Payable: ₹{total.toFixed(2)}
+              {editingFeeRecord?.status && (
+                <span
+                  className={`badge ms-2 ${
+                    editingFeeRecord.status === "paid"
+                      ? "bg-success"
+                      : editingFeeRecord.status === "pending"
+                      ? "bg-warning"
+                      : "bg-danger"
+                  }`}
+                >
+                  {editingFeeRecord.status.charAt(0).toUpperCase() + editingFeeRecord.status.slice(1)}
+                </span>
+              )}
+            </strong>
+          </div>
+        );
+      }}
+    />
+    <div className="text-right mt-4">
+      <Button onClick={handleEditFeesModalClose} style={{ marginRight: 8 }}>
+        Cancel
+      </Button>
+      <Button type="primary" onClick={handleEditFeesSubmit}>
+        Save Changes
+      </Button>
+    </div>
+  </Form>
+</Modal>
                   <Modal
                     title={selectedTally.length > 0 && selectedTally[0]?.tally?.months ? `Tally for ${selectedTally[0].tally.months.join(", ")}` : "Tally"}
                     open={isTallyModalVisible}

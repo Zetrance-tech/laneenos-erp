@@ -138,15 +138,15 @@ const StudentDetails = () => {
                     <li>
                       <Link to={routes.studentLeaves.replace(':admissionNumber', admissionNumber!)} className="nav-link">
                         <i className="ti ti-calendar-due me-2" />
-                        Leave & Attendance
+                        Attendance
                       </Link>
                     </li>
-                    <li>
+                    {/* <li>
                       <Link to={routes.studentFees.replace(':admissionNumber', admissionNumber!)} className="nav-link">
                         <i className="ti ti-report-money me-2" />
                         Fees
                       </Link>
-                    </li>
+                    </li> */}
                     {/* <li>
                       <Link to={routes.studentResult.replace(':admissionNumber', admissionNumber!)} className="nav-link">
                         <i className="ti ti-report-money me-2" />

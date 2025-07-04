@@ -197,7 +197,7 @@ const StudentTimeTable: React.FC = () => {
                         Leave & Attendance
                       </Link>
                     </li>
-                    <li>
+                    {/* <li>
                       <Link
                         to={routes.studentFees.replace(
                           ":admissionNumber",
@@ -208,7 +208,7 @@ const StudentTimeTable: React.FC = () => {
                         <i className="ti ti-report-money me-2" />
                         Fees
                       </Link>
-                    </li>
+                    </li> */}
                   </ul>
                   <div className="card">
                     <div className="card-header d-flex align-items-center justify-content-between flex-wrap pb-0">

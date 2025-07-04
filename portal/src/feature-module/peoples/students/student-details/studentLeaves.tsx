@@ -9,6 +9,7 @@ import StudentSidebar from "./studentSidebar";
 import StudentBreadcrumb from "./studentBreadcrumb";
 import Table from "../../../../core/common/dataTable/index";
 import { useAuth } from "../../../../context/AuthContext";
+
 // Interfaces
 interface Leave {
   _id: string;
@@ -16,8 +17,8 @@ interface Leave {
   reason: { title: string; message: string };
   startDate: string;
   endDate: string;
-  status: "pending" | "approved" | "rejected" | string; // Allow string for unexpected values
-  appliedAt?: string; // Optional to handle missing values
+  status: "pending" | "approved" | "rejected" | string;
+  appliedAt?: string;
   approvedBy?: { name: string } | null;
 }
 
@@ -34,17 +35,19 @@ interface LeaveStats {
   used: number;
   available: number;
 }
+
 const API_URL = process.env.REACT_APP_URL;
 
 const StudentLeaves: React.FC = () => {
   const routes = all_routes;
   const { admissionNumber } = useParams<{ admissionNumber: string }>();
-  const {token} = useAuth();
+  const { token } = useAuth();
 
   const [leaves, setLeaves] = useState<Leave[]>([]);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
+  const [filteredAttendance, setFilteredAttendance] = useState<Attendance[]>([]);
   const [startDate, setStartDate] = useState<Date | null>(new Date(new Date().getFullYear(), 0, 1));
-  const [endDate, setEndDate] = useState<Date | null>(new Date(new Date().getFullYear(), 11, 31));
+  const [endDate, setEndDate] = useState<Date | null>(new Date());
   const [studentId, setStudentId] = useState<string | null>(null);
   const [leaveStats, setLeaveStats] = useState<LeaveStats>({
     total: 10,
@@ -52,6 +55,61 @@ const StudentLeaves: React.FC = () => {
     available: 10,
   });
   const [lastUpdated, setLastUpdated] = useState<string>(new Date().toLocaleDateString());
+  const [filter, setFilter] = useState<"all" | "present" | "absent">("all");
+
+  // Format date helper function
+  const formatDate = (date: string | Date | undefined): string => {
+    if (!date) return "-";
+    const d = new Date(date);
+    return isNaN(d.getTime()) 
+      ? "-" 
+      : d.toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "short",
+          day: "2-digit"
+        });
+  };
+
+  const formatTime = (time: string | undefined): string => {
+    if (!time || isNaN(new Date(time).getTime())) return "-";
+    return new Date(time).toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true
+    });
+  };
+
+  // Calculate attendance stats
+  const getAttendanceStats = () => {
+    const presentDays = attendance.filter(
+      (record) => record.inTime && !isNaN(new Date(record.inTime).getTime()) && 
+                 record.outTime && !isNaN(new Date(record.outTime).getTime())
+    ).length;
+    const absentDays = attendance.filter(
+      (record) => !record.inTime || isNaN(new Date(record.inTime).getTime())
+    ).length;
+    return { presentDays, absentDays };
+  };
+
+  // Filter attendance based on selection
+  useEffect(() => {
+    if (filter === "all") {
+      setFilteredAttendance(attendance);
+    } else if (filter === "present") {
+      setFilteredAttendance(
+        attendance.filter(
+          (record) => record.inTime && !isNaN(new Date(record.inTime).getTime()) && 
+                     record.outTime && !isNaN(new Date(record.outTime).getTime())
+        )
+      );
+    } else if (filter === "absent") {
+      setFilteredAttendance(
+        attendance.filter(
+          (record) => !record.inTime || isNaN(new Date(record.inTime).getTime())
+        )
+      );
+    }
+  }, [attendance, filter]);
 
   // Fetch student ID and data on mount
   useEffect(() => {
@@ -90,10 +148,8 @@ const StudentLeaves: React.FC = () => {
       const studentLeaves: Leave[] = response.data.filter(
         (leave: Leave) => leave.studentId?._id === studentId
       );
-      console.log("skjghekrgh",response.data)
-
       setLeaves(studentLeaves);
-      // Calculate leave stats
+
       const usedLeaves = studentLeaves.reduce((sum: number, leave: Leave) => {
         if (leave.status === "approved") {
           const days =
@@ -120,25 +176,18 @@ const StudentLeaves: React.FC = () => {
     try {
       const formattedStartDate = startDate.toISOString().split("T")[0];
       const formattedEndDate = endDate.toISOString().split("T")[0];
-      console.log(
-        `Fetching attendance for studentId: ${studentId}, startDate: ${formattedStartDate}, endDate: ${formattedEndDate}`
-      );
       const response = await axios.get(
         `${API_URL}/api/attendance/student/${studentId}/period?startDate=${formattedStartDate}&endDate=${formattedEndDate}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-      console.log("Attendance response:", response.data);
       setAttendance(response.data);
-      // Update lastUpdated
       if (response.data.length > 0) {
         const latestDate = new Date(
           Math.max(...response.data.map((a: Attendance) => new Date(a.date).getTime()))
         );
-        setLastUpdated(latestDate.toLocaleDateString());
-      } else {
-        setLastUpdated(new Date().toLocaleDateString());
+        setLastUpdated(formatDate(latestDate));
       }
     } catch (error) {
       console.error("Error fetching attendance:", error);
@@ -154,7 +203,6 @@ const StudentLeaves: React.FC = () => {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-      console.log("skjghekrgh",response.data)
       setLeaves(
         leaves.map((leave) =>
           leave._id === leaveId
@@ -162,7 +210,7 @@ const StudentLeaves: React.FC = () => {
             : leave
         )
       );
-      fetchLeaves(); // Refresh leave stats
+      fetchLeaves();
     } catch (error) {
       console.error("Error updating leave status:", error);
     }
@@ -181,7 +229,7 @@ const StudentLeaves: React.FC = () => {
       dataIndex: "startDate",
       render: (startDate: string, record: Leave) =>
         startDate && record.endDate
-          ? `${new Date(startDate).toLocaleDateString()} - ${new Date(record.endDate).toLocaleDateString()}`
+          ? `${formatDate(startDate)} - ${formatDate(record.endDate)}`
           : "-",
       sorter: (a: Leave, b: Leave) =>
         (new Date(a.startDate || 0).getTime() || 0) - (new Date(b.startDate || 0).getTime() || 0),
@@ -208,10 +256,7 @@ const StudentLeaves: React.FC = () => {
     {
       title: "Applied On",
       dataIndex: "appliedAt",
-      render: (appliedAt?: string) =>
-        appliedAt && !isNaN(new Date(appliedAt).getTime())
-          ? new Date(appliedAt).toLocaleDateString()
-          : "-",
+      render: (appliedAt?: string) => formatDate(appliedAt),
       sorter: (a: Leave, b: Leave) =>
         (new Date(a.appliedAt || 0).getTime() || 0) -
         (new Date(b.appliedAt || 0).getTime() || 0),
@@ -265,32 +310,23 @@ const StudentLeaves: React.FC = () => {
 
   const columns2 = [
     {
-      title: "Date | Month",
+      title: "Date",
       dataIndex: "date",
-      render: (date: string) =>
-        date && !isNaN(new Date(date).getTime())
-          ? new Date(date).toLocaleDateString()
-          : "-",
+      render: (date: string) => formatDate(date),
       sorter: (a: Attendance, b: Attendance) =>
         (new Date(a.date || 0).getTime() || 0) - (new Date(b.date || 0).getTime() || 0),
     },
     {
       title: "In Time",
       dataIndex: "inTime",
-      render: (inTime?: string) =>
-        inTime && !isNaN(new Date(inTime).getTime())
-          ? new Date(inTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-          : "-",
+      render: (inTime?: string) => formatTime(inTime),
       sorter: (a: Attendance, b: Attendance) =>
         (a.inTime ? new Date(a.inTime).getTime() : 0) - (b.inTime ? new Date(b.inTime).getTime() : 0),
     },
     {
       title: "Out Time",
       dataIndex: "outTime",
-      render: (outTime?: string) =>
-        outTime && !isNaN(new Date(outTime).getTime())
-          ? new Date(outTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-          : "-",
+      render: (outTime?: string) => formatTime(outTime),
       sorter: (a: Attendance, b: Attendance) =>
         (a.outTime ? new Date(a.outTime).getTime() : 0) -
         (b.outTime ? new Date(b.outTime).getTime() : 0),
@@ -299,18 +335,44 @@ const StudentLeaves: React.FC = () => {
       title: "Status",
       dataIndex: "inTime",
       render: (inTime?: string, record?: Attendance) => {
-        if (!inTime || isNaN(new Date(inTime).getTime()))
-          return <span className="attendance-range bg-danger"></span>; // Absent
-        if (new Date(inTime).getHours() > 9)
-          return <span className="attendance-range bg-pending"></span>; // Late
-        if (!record?.outTime || isNaN(new Date(record.outTime).getTime()))
-          return <span className="attendance-range bg-info"></span>; // Half-day
-        return <span className="attendance-range bg-success"></span>; // Present
+        if (!inTime || isNaN(new Date(inTime).getTime())) {
+          return (
+            <span className="badge badge-soft-danger d-inline-flex align-items-center">
+              <i className="ti ti-circle-filled fs-5 me-1"></i>Absent
+            </span>
+          );
+        }
+        if (new Date(inTime).getHours() > 9) {
+          return (
+            <span className="badge badge-soft-warning d-inline-flex align-items-center">
+              <i className="ti ti-circle-filled fs-5 me-1"></i>Late
+            </span>
+          );
+        }
+        if (!record?.outTime || isNaN(new Date(record.outTime).getTime())) {
+          return (
+            <span className="badge badge-soft-info d-inline-flex align-items-center">
+              <i className="ti ti-circle-filled fs-5 me-1"></i>Half-day
+            </span>
+          );
+        }
+        return (
+          <span className="badge badge-soft-success d-inline-flex align-items-center">
+            <i className="ti ti-circle-filled fs-5 me-1"></i>Present
+          </span>
+        );
       },
       sorter: (a: Attendance, b: Attendance) =>
         (a.inTime ? 1 : -1) - (b.inTime ? 1 : -1),
     },
+    {
+      title: "Notes",
+      dataIndex: "notes",
+      render: (notes?: string) => notes || "-",
+    },
   ];
+
+  const { presentDays, absentDays } = getAttendanceStats();
 
   return (
     <div className="page-wrapper">
@@ -325,32 +387,26 @@ const StudentLeaves: React.FC = () => {
               <div className="col-md-12">
                 <ul className="nav nav-tabs nav-tabs-bottom mb-4">
                   <li>
-                                        <Link
-                                          to={routes.studentDetail.replace(':admissionNumber', admissionNumber!)}
-                                          className="nav-link active"
-                                        >
-                                          <i className="ti ti-school me-2" />
-                                          Student Details
-                                        </Link>
-                                      </li>
-                                      <li>
-                                        <Link to={routes.studentTimeTable.replace(':admissionNumber', admissionNumber!)} className="nav-link">
-                                          <i className="ti ti-report-money me-2" />
-                                          Planner
-                                        </Link>
-                                      </li>
-                                      <li>
-                                        <Link to={routes.studentLeaves.replace(':admissionNumber', admissionNumber!)} className="nav-link">
-                                          <i className="ti ti-calendar-due me-2" />
-                                          Leave & Attendance
-                                        </Link>
-                                      </li>
-                                      <li>
-                                        <Link to={routes.studentFees.replace(':admissionNumber', admissionNumber!)} className="nav-link">
-                                          <i className="ti ti-report-money me-2" />
-                                          Fees
-                                        </Link>
-                                      </li>
+                    <Link
+                      to={routes.studentDetail.replace(':admissionNumber', admissionNumber!)}
+                      className="nav-link"
+                    >
+                      <i className="ti ti-school me-2" />
+                      Student Details
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to={routes.studentTimeTable.replace(':admissionNumber', admissionNumber!)} className="nav-link">
+                      <i className="ti ti-report-money me-2" />
+                      Planner
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to={routes.studentLeaves.replace(':admissionNumber', admissionNumber!)} className="nav-link active">
+                      <i className="ti ti-calendar-due me-2" />
+                      Leave & Attendance
+                    </Link>
+                  </li>
                 </ul>
                 <div className="card">
                   <div className="card-body pb-1">
@@ -382,7 +438,7 @@ const StudentLeaves: React.FC = () => {
                   <div className="tab-pane fade show active" id="leave">
                     <div className="row gx-3">
                       <div className="col-lg-6 col-xxl-3 d-flex">
-                        {/* <div className="card flex-fill">
+                        <div className="card flex-fill">
                           <div className="card-body">
                             <h5 className="mb-2">Medical Leave ({leaveStats.total})</h5>
                             <div className="d-flex align-items-center flex-wrap">
@@ -392,7 +448,7 @@ const StudentLeaves: React.FC = () => {
                               <p className="mb-0">Available: {leaveStats.available}</p>
                             </div>
                           </div>
-                        </div> */}
+                        </div>
                       </div>
                     </div>
                     <div className="card">
@@ -408,46 +464,70 @@ const StudentLeaves: React.FC = () => {
                     <div className="card">
                       <div className="card-header d-flex align-items-center justify-content-between flex-wrap pb-1">
                         <h4 className="mb-3">Attendance</h4>
-                        <div className="d-flex align-items-center flex-wrap">
-                          <div className="d-flex align-items-center flex-wrap me-3">
-                            {/* <p className="text-dark mb-3 me-2">
-                              Last Updated on: {lastUpdated}
-                            </p> */}
-                            {/* <Link
-                              to="#"
-                              className="btn btn-primary btn-icon btn-sm rounded-circle d-inline-flex align-items-center justify-content-center p-0 mb-3"
-                              onClick={fetchAttendance}
-                            >
-                              <i className="ti ti-refresh-dot" />
-                            </Link> */}
-                          </div>
+                        <div className="d-flex align-items-center flex-wrap">d
                           <div className="d-flex align-items-center flex-wrap mb-3">
+                            <div className="me-2">
+                              <label className="form-label me-2">Filter:</label>
+                              <select
+                                className="form-select"
+                                value={filter}
+                                onChange={(e) => setFilter(e.target.value as "all" | "present" | "absent")}
+                              >
+                                <option value="all">All</option>
+                                <option value="present">Present</option>
+                                <option value="absent">Absent</option>
+                              </select>
+                            </div>
                             <div className="me-2">
                               <label className="form-label me-2">Start Date:</label>
                               <DatePicker
                                 selected={startDate}
-                                onChange={(date: Date) => setStartDate(date)}
+                                onChange={(date: Date | null) => {
+                                  if (date) {
+                                    setStartDate(date);
+                                    if (endDate && date > endDate) {
+                                      setEndDate(date);
+                                    }
+                                  }
+                                }}
                                 dateFormat="yyyy-MM-dd"
                                 className="form-control"
                                 placeholderText="Select start date"
+                                showYearDropdown
+                                showMonthDropdown
+                                dropdownMode="select"
+                                maxDate={new Date()}
                               />
                             </div>
                             <div>
                               <label className="form-label me-2">End Date:</label>
                               <DatePicker
                                 selected={endDate}
-                                onChange={(date: Date) => setEndDate(date)}
+                                onChange={(date: Date | null) => date && setEndDate(date)}
                                 dateFormat="yyyy-MM-dd"
                                 className="form-control"
                                 placeholderText="Select end date"
                                 minDate={startDate}
+                                maxDate={new Date()}
+                                showYearDropdown
+                                showMonthDropdown
+                                dropdownMode="select"
                               />
                             </div>
                           </div>
                         </div>
                       </div>
-                      <div className="card-body p-0 py-3">
-                        <Table dataSource={attendance} columns={columns2} Selection={false} />
+                      <div className="card-body">
+                        <div className="mb-3">
+                          <p className="mb-2">Attendance Summary:</p>
+                          <div className="d-flex align-items-center flex-wrap">
+                            <p className="border-end pe-2 me-2 mb-0">
+                              Present: {presentDays} days
+                            </p>
+                            <p className="mb-0">Absent: {absentDays} days</p>
+                          </div>
+                        </div>
+                        <Table dataSource={filteredAttendance} columns={columns2} Selection={false} />
                       </div>
                     </div>
                   </div>
