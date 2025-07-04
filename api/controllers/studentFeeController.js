@@ -372,7 +372,7 @@ export const getStudentFeesByMonth = async (req, res) => {
       month,
     }).populate([
       { path: "fees.feesGroup", select: "name periodicity" },
-      { path: "studentId", select: "name admissionNumber" },
+      { path: "studentId", select: "name admissionNumber fatherInfo.name motherInfo.name" },
     ]);
 
     if (!studentFee) {
@@ -428,7 +428,7 @@ export const getStudentsWithFeesByClassSession = async (req, res) => {
       classId,
       sessionId,
       status: "active",
-    }).select("_id name admissionNumber classId sessionId");
+    }).select("_id name admissionNumber classId sessionId motherInfo.name fatherInfo.name");
 
     if (!students.length) {
       return res.status(404).json({ message: "No students found for the specified class and session" });
@@ -455,6 +455,8 @@ export const getStudentsWithFeesByClassSession = async (req, res) => {
       name: student.name || "Unknown Student",
       classId: student.classId,
       sessionId: student.sessionId,
+      fatherInfo: student.fatherInfo || { name: "" },
+      motherInfo: student.motherInfo || { name: "" },
     }));
 
     res.status(200).json({ data: formattedStudents });
@@ -1206,7 +1208,7 @@ export const getGenerationGroups = async (req, res) => {
 };
 
 export const collectStudentFees = async (req, res) => {
-  const { studentId, sessionId, month, paymentDetails, excessAmount } = req.body;
+  const { studentId, sessionId, month, paymentDetails, excessAmount, discount } = req.body;
 
   try {
     // Input validation
@@ -1251,7 +1253,9 @@ export const collectStudentFees = async (req, res) => {
     }
 
     // Calculate payment status
-    const totalAmountDue = studentFee.amount - (studentFee.discount || 0);
+    const currentDiscount = studentFee.discount || 0;
+    const newDiscount = currentDiscount + (discount || 0);
+    const totalAmountDue = studentFee.amount - newDiscount
     const currentAmountPaid = studentFee.amountPaid || 0;
     const newAmountPaid = currentAmountPaid + paymentDetails.amountPaid;
     let newExcessAmount = excessAmount || 0;
@@ -1297,6 +1301,7 @@ export const collectStudentFees = async (req, res) => {
           amountPaid: newAmountPaid,
           balanceAmount: newBalanceAmount,
           excessAmount: newExcessAmount,
+          discount: newDiscount || 0,
           status,
           updatedAt: new Date(),
         },
@@ -1322,7 +1327,7 @@ export const collectStudentFees = async (req, res) => {
 };
 
 export const editPaymentDetails = async (req, res) => {
-  const { studentId, sessionId, month, paymentId, paymentDetails, excessAmount } = req.body;
+  const { studentId, sessionId, month, paymentId, paymentDetails, excessAmount, discount} = req.body;
 
   try {
     // Input validation
@@ -1375,7 +1380,7 @@ export const editPaymentDetails = async (req, res) => {
       return res.status(404).json({ message: "Payment detail not found" });
     }
 
-    const totalAmountDue = studentFee.amount - (studentFee.discount || 0);
+    const totalAmountDue = studentFee.amount - (studentFee.discount || discount || 0);
     const currentAmountPaid = (studentFee.amountPaid || 0) - oldPayment.amountPaid + paymentDetails.amountPaid;
     const newBalanceAmount = Math.max(
 0, totalAmountDue - currentAmountPaid);
@@ -1415,6 +1420,7 @@ export const editPaymentDetails = async (req, res) => {
           amountPaid: currentAmountPaid,
           balanceAmount: newBalanceAmount,
           excessAmount: newExcessAmount,
+          discount: discount || studentFee.discount || 0,
           status,
           updatedAt: new Date(),
         },
@@ -1445,6 +1451,8 @@ function formatFeeForResponse(fee) {
       _id: fee.studentId._id || fee.studentId,
       name: fee.studentId?.name || fee.student?.name || "",
       admissionNumber: fee.studentId?.admissionNumber || fee.student?.admissionNumber || "",
+      fatherName: fee.studentId?.fatherInfo?.name,
+      motherName: fee.studentId?.motherInfo?.name,
     },
     fees: fee.fees.map(f => ({
       feesGroup: {
@@ -1458,6 +1466,7 @@ function formatFeeForResponse(fee) {
     })),
     amount: fee.amount || 0,
     discountPercent: fee.discount ? (fee.discount / fee.originalAmount * 100) : 0,
+    discount:fee.discount,
     netPayable: (fee.amount || 0) - (fee.discount || 0),
     dueDate: fee.dueDate,
     month: fee.month,
@@ -1510,7 +1519,7 @@ export const getFeesBySession = async (req, res) => {
       sessionId: new mongoose.Types.ObjectId(sessionId),
     }).populate([
       { path: 'fees.feesGroup', select: 'name periodicity' },
-      { path: 'studentId', select: 'name admissionNumber' }, // Add this to populate student data
+      { path: 'studentId', select: 'name admissionNumber fatherInfo.name motherInfo.name' }, // Add this to populate student data
     ]);
 
     if (!fees.length) {
@@ -1536,5 +1545,104 @@ export const previewNextPaymentId = async (req, res) => {
     res.status(200).json({ paymentId: nextId });
   } catch (error) {
     res.status(500).json({ message: "Failed to preview next ID" });
+  }
+};
+
+export const editFeesForMonth = async (req, res) => {
+  const { studentId, sessionId, month, fees } = req.body;
+  console.log(req.body);
+  try {
+    // Input validation
+    if (!studentId || !sessionId || !month || !Array.isArray(fees) || fees.length === 0) {
+      return res.status(400).json({ message: "Missing required fields: studentId, sessionId, month, or fees (non-empty array)" });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(studentId) || !mongoose.Types.ObjectId.isValid(sessionId)) {
+      return res.status(400).json({ message: "Invalid studentId or sessionId format" });
+    }
+
+    const validMonths = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
+    if (!validMonths.includes(month)) {
+      return res.status(400).json({ message: "Invalid month provided" });
+    }
+
+    for (const fee of fees) {
+      if (!mongoose.Types.ObjectId.isValid(fee.feesGroup)) {
+        return res.status(400).json({ message: "Invalid feesGroup ID" });
+      }
+      if (typeof fee.amount !== "number" || fee.amount < 0) {
+        return res.status(400).json({ message: "Invalid amount" });
+      }
+      if (typeof fee.originalAmount !== "number" || fee.originalAmount < 0) {
+        return res.status(400).json({ message: "Invalid original amount" });
+      }
+      if (typeof fee.discount !== "number" || fee.discount < 0) {
+        return res.status(400).json({ message: "Invalid discount" });
+      }
+    }
+
+    // Fetch student and fee records
+    const student = await Student.findOne({ _id: studentId, sessionId, status: "active" })
+      .select("_id name admissionNumber classId");
+    if (!student) {
+      return res.status(404).json({ message: "Student not found or not active" });
+    }
+
+    const studentFee = await StudentFee.findOne({
+      studentId,
+      sessionId,
+      month,
+    }).populate("fees.feesGroup", "name periodicity");
+
+    if (!studentFee) {
+      return res.status(404).json({ message: `No fee record found for ${month}` });
+    }
+
+    // Validate fee groups
+    for (const fee of fees) {
+      const feesGroup = await FeesGroup.findById(fee.feesGroup);
+      if (!feesGroup) {
+        return res.status(404).json({ message: `FeesGroup ${fee.feesGroup} not found` });
+      }
+    }
+
+    // Calculate totals
+    const totalAmount = fees.reduce((sum, f) => sum + f.amount, 0);
+    const totalOriginalAmount = fees.reduce((sum, f) => sum + f.originalAmount, 0);
+    const totalDiscount = fees.reduce((sum, f) => sum + f.discount, 0);
+    const totalAmountDue = totalAmount - totalDiscount;
+    const currentAmountPaid = studentFee.amountPaid || 0;
+
+    // Update fee record without modifying status
+    const updatedFee = await StudentFee.findOneAndUpdate(
+      { studentId, sessionId, month },
+      {
+        $set: {
+          fees,
+          amount: totalAmount,
+          // originalAmount: totalOriginalAmount,
+          // discount: totalDiscount,
+          // balanceAmount: newBalanceAmount,
+          isCustom: true,
+        },
+      },
+      { new: true }
+    ).populate([
+      { path: "fees.feesGroup", select: "name periodicity" },
+      { path: "studentId", select: "name admissionNumber" },
+    ]);
+
+    if (!updatedFee) {
+      return res.status(404).json({ message: `Failed to update fees for ${month}` });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Fees updated successfully for ${month}`,
+      fees: [formatFeeForResponse(updatedFee)],
+    });
+  } catch (error) {
+    console.error("Error in editFeesForMonth:", error);
+    res.status(500).json({ message: error.message || "Failed to edit fees" });
   }
 };

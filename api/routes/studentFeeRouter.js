@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 const router = express.Router();
 import authMiddleware from "../middleware/auth.js";
 
-import { getStudentFees, updateStudentFees ,getStudentsWithFeesBySession, editPaymentDetails,updateFeesForStudent, getStudentFeesByMonth,collectStudentFees ,getGenerationGroups, generateStudentFees, getAllStudentFeesByAdmission, getStudentsWithFeesByClassSession, getMonthsWithFeesByStudent, getGeneratedFeesSummaryByClass, updateStudentFeeDueDate, deleteGeneratedFees, generateFeesForClass, getFeesByMonth, getFeesBySession, previewNextPaymentId} from "../controllers/studentFeeController.js";
+import { getStudentFees, updateStudentFees ,getStudentsWithFeesBySession, editFeesForMonth ,editPaymentDetails,updateFeesForStudent, getStudentFeesByMonth,collectStudentFees ,getGenerationGroups, generateStudentFees, getAllStudentFeesByAdmission, getStudentsWithFeesByClassSession, getMonthsWithFeesByStudent, getGeneratedFeesSummaryByClass, updateStudentFeeDueDate, deleteGeneratedFees, generateFeesForClass, getFeesByMonth, getFeesBySession, previewNextPaymentId} from "../controllers/studentFeeController.js";
 
 router.get("/:studentId/fees", authMiddleware(["admin","parent", "teacher" ]), getStudentFees);
 router.put("/:studentId/fees", authMiddleware(["admin","parent", "teacher"]), updateStudentFees);
@@ -24,4 +24,5 @@ router.get('/:studentId/fees-by-session/:sessionId', authMiddleware(["admin"]), 
 router.post("/collect", authMiddleware(["admin"]), collectStudentFees);
 router.put("/edit-payment", authMiddleware(["admin"]), editPaymentDetails);
 router.get("/preview-next-id", authMiddleware(["admin"]), previewNextPaymentId);
+router.patch('/edit-fees-month',authMiddleware(["admin"]), editFeesForMonth);
 export default router;
