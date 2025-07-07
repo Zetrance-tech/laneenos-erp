@@ -13,21 +13,20 @@ import { useAuth } from "../../../../context/AuthContext";
 // Interfaces
 interface Leave {
   _id: string;
-  studentId: { _id: string; name: string };
-  reason: { title: string; message: string };
-  startDate: string;
-  endDate: string;
+  studentId: { _id: string; name: string } | null;
+  reason: { title: string; message: string } | null;
+  startDate: string | null;
+  endDate: string | null;
   status: "pending" | "approved" | "rejected" | string;
-  appliedAt?: string;
+  appliedAt?: string | null;
   approvedBy?: { name: string } | null;
 }
 
 interface Attendance {
   _id: string;
-  date: string;
-  inTime?: string;
-  outTime?: string;
-  notes?: string;
+  date: string | null;
+  status?: string | null; // Present, Absent, Holiday, Closed
+  notes?: string | null;
 }
 
 interface LeaveStats {
@@ -36,7 +35,9 @@ interface LeaveStats {
   available: number;
 }
 
-const API_URL = process.env.REACT_APP_URL;
+const API_URL = process.env.REACT_APP_URL || "";
+const STATUS_OPTIONS = ["Present", "Absent", "Holiday", "Closed"] as const;
+type StatusFilter = "all" | typeof STATUS_OPTIONS[number];
 
 const StudentLeaves: React.FC = () => {
   const routes = all_routes;
@@ -55,10 +56,10 @@ const StudentLeaves: React.FC = () => {
     available: 10,
   });
   const [lastUpdated, setLastUpdated] = useState<string>(new Date().toLocaleDateString());
-  const [filter, setFilter] = useState<"all" | "present" | "absent">("all");
+  const [filter, setFilter] = useState<StatusFilter>("all");
 
   // Format date helper function
-  const formatDate = (date: string | Date | undefined): string => {
+  const formatDate = (date: string | Date | null | undefined): string => {
     if (!date) return "-";
     const d = new Date(date);
     return isNaN(d.getTime()) 
@@ -70,43 +71,30 @@ const StudentLeaves: React.FC = () => {
         });
   };
 
-  const formatTime = (time: string | undefined): string => {
-    if (!time || isNaN(new Date(time).getTime())) return "-";
-    return new Date(time).toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true
-    });
-  };
-
   // Calculate attendance stats
   const getAttendanceStats = () => {
     const presentDays = attendance.filter(
-      (record) => record.inTime && !isNaN(new Date(record.inTime).getTime()) && 
-                 record.outTime && !isNaN(new Date(record.outTime).getTime())
+      (record) => record.status === "Present"
     ).length;
     const absentDays = attendance.filter(
-      (record) => !record.inTime || isNaN(new Date(record.inTime).getTime())
+      (record) => record.status === "Absent"
     ).length;
-    return { presentDays, absentDays };
+    const holidayDays = attendance.filter(
+      (record) => record.status === "Holiday"
+    ).length;
+    const closedDays = attendance.filter(
+      (record) => record.status === "Closed"
+    ).length;
+    return { presentDays, absentDays, holidayDays, closedDays };
   };
 
   // Filter attendance based on selection
   useEffect(() => {
     if (filter === "all") {
       setFilteredAttendance(attendance);
-    } else if (filter === "present") {
+    } else {
       setFilteredAttendance(
-        attendance.filter(
-          (record) => record.inTime && !isNaN(new Date(record.inTime).getTime()) && 
-                     record.outTime && !isNaN(new Date(record.outTime).getTime())
-        )
-      );
-    } else if (filter === "absent") {
-      setFilteredAttendance(
-        attendance.filter(
-          (record) => !record.inTime || isNaN(new Date(record.inTime).getTime())
-        )
+        attendance.filter((record) => record.status === filter)
       );
     }
   }, [attendance, filter]);
@@ -134,7 +122,7 @@ const StudentLeaves: React.FC = () => {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-      setStudentId(response.data._id);
+      setStudentId(response.data?._id ?? null);
     } catch (error) {
       console.error("Error fetching student ID:", error);
     }
@@ -145,19 +133,19 @@ const StudentLeaves: React.FC = () => {
       const response = await axios.get(`${API_URL}/api/leaves`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const studentLeaves: Leave[] = response.data.filter(
+      const studentLeaves: Leave[] = (response.data ?? []).filter(
         (leave: Leave) => leave.studentId?._id === studentId
       );
       setLeaves(studentLeaves);
 
       const usedLeaves = studentLeaves.reduce((sum: number, leave: Leave) => {
-        if (leave.status === "approved") {
+        if (leave.status === "approved" && leave.startDate && leave.endDate) {
           const days =
             (new Date(leave.endDate).getTime() -
               new Date(leave.startDate).getTime()) /
               (1000 * 60 * 60 * 24) +
             1;
-          return sum + days;
+          return sum + Math.ceil(days);
         }
         return sum;
       }, 0);
@@ -172,7 +160,7 @@ const StudentLeaves: React.FC = () => {
   };
 
   const fetchAttendance = async () => {
-    if (!startDate || !endDate) return;
+    if (!startDate || !endDate || !studentId) return;
     try {
       const formattedStartDate = startDate.toISOString().split("T")[0];
       const formattedEndDate = endDate.toISOString().split("T")[0];
@@ -182,12 +170,15 @@ const StudentLeaves: React.FC = () => {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-      setAttendance(response.data);
-      if (response.data.length > 0) {
-        const latestDate = new Date(
-          Math.max(...response.data.map((a: Attendance) => new Date(a.date).getTime()))
-        );
-        setLastUpdated(formatDate(latestDate));
+      setAttendance(response.data ?? []);
+      if (response.data?.length > 0) {
+        const validDates = response.data
+          .filter((a: Attendance) => a.date && !isNaN(new Date(a.date).getTime()))
+          .map((a: Attendance) => new Date(a.date!).getTime());
+        if (validDates.length > 0) {
+          const latestDate = new Date(Math.max(...validDates));
+          setLastUpdated(formatDate(latestDate));
+        }
       }
     } catch (error) {
       console.error("Error fetching attendance:", error);
@@ -206,7 +197,7 @@ const StudentLeaves: React.FC = () => {
       setLeaves(
         leaves.map((leave) =>
           leave._id === leaveId
-            ? { ...leave, status, approvedBy: response.data.leave.approvedBy }
+            ? { ...leave, status, approvedBy: response.data?.leave?.approvedBy ?? null }
             : leave
         )
       );
@@ -227,7 +218,7 @@ const StudentLeaves: React.FC = () => {
     {
       title: "Leave Date",
       dataIndex: "startDate",
-      render: (startDate: string, record: Leave) =>
+      render: (startDate: string | null, record: Leave) =>
         startDate && record.endDate
           ? `${formatDate(startDate)} - ${formatDate(record.endDate)}`
           : "-",
@@ -237,7 +228,7 @@ const StudentLeaves: React.FC = () => {
     {
       title: "No of Days",
       dataIndex: "startDate",
-      render: (startDate: string, record: Leave) =>
+      render: (startDate: string | null, record: Leave) =>
         startDate && record.endDate
           ? Math.ceil(
               (new Date(record.endDate).getTime() - new Date(startDate).getTime()) /
@@ -256,7 +247,7 @@ const StudentLeaves: React.FC = () => {
     {
       title: "Applied On",
       dataIndex: "appliedAt",
-      render: (appliedAt?: string) => formatDate(appliedAt),
+      render: (appliedAt?: string | null) => formatDate(appliedAt),
       sorter: (a: Leave, b: Leave) =>
         (new Date(a.appliedAt || 0).getTime() || 0) -
         (new Date(b.appliedAt || 0).getTime() || 0),
@@ -275,24 +266,27 @@ const StudentLeaves: React.FC = () => {
             ? "warning"
             : "secondary";
         return (
-          <div className="d-flex align-items-center">
+          <div className="d-flex align-items-center" style={{ minWidth: "200px" }}>
             <span
-              className={`badge badge-soft-${badgeClass} d-inline-flex align-items-center`}
+              className={`badge badge-soft-${badgeClass} d-inline-flex align-items-center me-2`}
+              style={{ minWidth: "100px" }}
             >
               <i className="ti ti-circle-filled fs-5 me-1"></i>
               {displayStatus.charAt(0).toUpperCase() + displayStatus.slice(1)}
             </span>
             {displayStatus === "pending" && (
-              <div className="ms-2">
+              <div className="d-flex">
                 <button
                   className="btn btn-sm btn-success me-1"
                   onClick={() => handleUpdateLeaveStatus(record._id, "approved")}
+                  style={{ minWidth: "70px" }}
                 >
                   Approve
                 </button>
                 <button
                   className="btn btn-sm btn-danger"
                   onClick={() => handleUpdateLeaveStatus(record._id, "rejected")}
+                  style={{ minWidth: "70px" }}
                 >
                   Reject
                 </button>
@@ -312,67 +306,45 @@ const StudentLeaves: React.FC = () => {
     {
       title: "Date",
       dataIndex: "date",
-      render: (date: string) => formatDate(date),
+      render: (date: string | null) => formatDate(date),
       sorter: (a: Attendance, b: Attendance) =>
         (new Date(a.date || 0).getTime() || 0) - (new Date(b.date || 0).getTime() || 0),
     },
     {
-      title: "In Time",
-      dataIndex: "inTime",
-      render: (inTime?: string) => formatTime(inTime),
-      sorter: (a: Attendance, b: Attendance) =>
-        (a.inTime ? new Date(a.inTime).getTime() : 0) - (b.inTime ? new Date(b.inTime).getTime() : 0),
-    },
-    {
-      title: "Out Time",
-      dataIndex: "outTime",
-      render: (outTime?: string) => formatTime(outTime),
-      sorter: (a: Attendance, b: Attendance) =>
-        (a.outTime ? new Date(a.outTime).getTime() : 0) -
-        (b.outTime ? new Date(b.outTime).getTime() : 0),
-    },
-    {
       title: "Status",
-      dataIndex: "inTime",
-      render: (inTime?: string, record?: Attendance) => {
-        if (!inTime || isNaN(new Date(inTime).getTime())) {
-          return (
-            <span className="badge badge-soft-danger d-inline-flex align-items-center">
-              <i className="ti ti-circle-filled fs-5 me-1"></i>Absent
-            </span>
-          );
-        }
-        if (new Date(inTime).getHours() > 9) {
-          return (
-            <span className="badge badge-soft-warning d-inline-flex align-items-center">
-              <i className="ti ti-circle-filled fs-5 me-1"></i>Late
-            </span>
-          );
-        }
-        if (!record?.outTime || isNaN(new Date(record.outTime).getTime())) {
-          return (
-            <span className="badge badge-soft-info d-inline-flex align-items-center">
-              <i className="ti ti-circle-filled fs-5 me-1"></i>Half-day
-            </span>
-          );
-        }
+      dataIndex: "status",
+      render: (status?: string | null) => {
+        const displayStatus = status || "Not Marked";
+        const badgeClass =
+          displayStatus === "Present"
+            ? "success"
+            : displayStatus === "Absent"
+            ? "danger"
+            : displayStatus === "Holiday"
+            ? "info"
+            : displayStatus === "Closed"
+            ? "warning"
+            : "secondary";
         return (
-          <span className="badge badge-soft-success d-inline-flex align-items-center">
-            <i className="ti ti-circle-filled fs-5 me-1"></i>Present
+          <span
+            className={`badge badge-soft-${badgeClass} d-inline-flex align-items-center`}
+          >
+            <i className="ti ti-circle-filled fs-5 me-1"></i>
+            {displayStatus.charAt(0).toUpperCase() + displayStatus.slice(1)}
           </span>
         );
       },
       sorter: (a: Attendance, b: Attendance) =>
-        (a.inTime ? 1 : -1) - (b.inTime ? 1 : -1),
+        (a.status || "").localeCompare(b.status || ""),
     },
     {
       title: "Notes",
       dataIndex: "notes",
-      render: (notes?: string) => notes || "-",
+      render: (notes?: string | null) => notes || "-",
     },
   ];
 
-  const { presentDays, absentDays } = getAttendanceStats();
+  const { presentDays, absentDays, holidayDays, closedDays } = getAttendanceStats();
 
   return (
     <div className="page-wrapper">
@@ -388,7 +360,7 @@ const StudentLeaves: React.FC = () => {
                 <ul className="nav nav-tabs nav-tabs-bottom mb-4">
                   <li>
                     <Link
-                      to={routes.studentDetail.replace(':admissionNumber', admissionNumber!)}
+                      to={admissionNumber ? routes.studentDetail.replace(':admissionNumber', admissionNumber) : '#'}
                       className="nav-link"
                     >
                       <i className="ti ti-school me-2" />
@@ -396,13 +368,19 @@ const StudentLeaves: React.FC = () => {
                     </Link>
                   </li>
                   <li>
-                    <Link to={routes.studentTimeTable.replace(':admissionNumber', admissionNumber!)} className="nav-link">
+                    <Link
+                      to={admissionNumber ? routes.studentTimeTable.replace(':admissionNumber', admissionNumber) : '#'}
+                      className="nav-link"
+                    >
                       <i className="ti ti-report-money me-2" />
                       Planner
                     </Link>
                   </li>
                   <li>
-                    <Link to={routes.studentLeaves.replace(':admissionNumber', admissionNumber!)} className="nav-link active">
+                    <Link
+                      to={admissionNumber ? routes.studentLeaves.replace(':admissionNumber', admissionNumber) : '#'}
+                      className="nav-link active"
+                    >
                       <i className="ti ti-calendar-due me-2" />
                       Leave & Attendance
                     </Link>
@@ -464,56 +442,58 @@ const StudentLeaves: React.FC = () => {
                     <div className="card">
                       <div className="card-header d-flex align-items-center justify-content-between flex-wrap pb-1">
                         <h4 className="mb-3">Attendance</h4>
-                        <div className="d-flex align-items-center flex-wrap">d
-                          <div className="d-flex align-items-center flex-wrap mb-3">
-                            <div className="me-2">
-                              <label className="form-label me-2">Filter:</label>
-                              <select
-                                className="form-select"
-                                value={filter}
-                                onChange={(e) => setFilter(e.target.value as "all" | "present" | "absent")}
-                              >
-                                <option value="all">All</option>
-                                <option value="present">Present</option>
-                                <option value="absent">Absent</option>
-                              </select>
-                            </div>
-                            <div className="me-2">
-                              <label className="form-label me-2">Start Date:</label>
-                              <DatePicker
-                                selected={startDate}
-                                onChange={(date: Date | null) => {
-                                  if (date) {
-                                    setStartDate(date);
-                                    if (endDate && date > endDate) {
-                                      setEndDate(date);
-                                    }
+                        <div className="d-flex align-items-center flex-wrap">
+                          <div className="me-2">
+                            <label className="form-label me-2">Filter:</label>
+                            <select
+                              className="form-select"
+                              value={filter}
+                              onChange={(e) => setFilter(e.target.value as StatusFilter)}
+                              style={{ minWidth: "120px" }}
+                            >
+                              <option value="all">All</option>
+                              {STATUS_OPTIONS.map((opt) => (
+                                <option key={opt} value={opt.toLowerCase()}>
+                                  {opt}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="me-2">
+                            <label className="form-label me-2">Start Date:</label>
+                            <DatePicker
+                              selected={startDate}
+                              onChange={(date: Date | null) => {
+                                if (date) {
+                                  setStartDate(date);
+                                  if (endDate && date > endDate) {
+                                    setEndDate(date);
                                   }
-                                }}
-                                dateFormat="yyyy-MM-dd"
-                                className="form-control"
-                                placeholderText="Select start date"
-                                showYearDropdown
-                                showMonthDropdown
-                                dropdownMode="select"
-                                maxDate={new Date()}
-                              />
-                            </div>
-                            <div>
-                              <label className="form-label me-2">End Date:</label>
-                              <DatePicker
-                                selected={endDate}
-                                onChange={(date: Date | null) => date && setEndDate(date)}
-                                dateFormat="yyyy-MM-dd"
-                                className="form-control"
-                                placeholderText="Select end date"
-                                minDate={startDate}
-                                maxDate={new Date()}
-                                showYearDropdown
-                                showMonthDropdown
-                                dropdownMode="select"
-                              />
-                            </div>
+                                }
+                              }}
+                              dateFormat="yyyy-MM-dd"
+                              className="form-control"
+                              placeholderText="Select start date"
+                              showYearDropdown
+                              showMonthDropdown
+                              dropdownMode="select"
+                              maxDate={new Date()}
+                            />
+                          </div>
+                          <div>
+                            <label className="form-label me-2">End Date:</label>
+                            <DatePicker
+                              selected={endDate}
+                              onChange={(date: Date | null) => date && setEndDate(date)}
+                              dateFormat="yyyy-MM-dd"
+                              className="form-control"
+                              placeholderText="Select end date"
+                              minDate={startDate}
+                              maxDate={new Date()}
+                              showYearDropdown
+                              showMonthDropdown
+                              dropdownMode="select"
+                            />
                           </div>
                         </div>
                       </div>
@@ -524,7 +504,13 @@ const StudentLeaves: React.FC = () => {
                             <p className="border-end pe-2 me-2 mb-0">
                               Present: {presentDays} days
                             </p>
-                            <p className="mb-0">Absent: {absentDays} days</p>
+                            <p className="border-end pe-2 me-2 mb-0">
+                              Absent: {absentDays} days
+                            </p>
+                            <p className="border-end pe-2 me-2 mb-0">
+                              Holiday: {holidayDays} days
+                            </p>
+                            <p className="mb-0">Closed: {closedDays} days</p>
                           </div>
                         </div>
                         <Table dataSource={filteredAttendance} columns={columns2} Selection={false} />

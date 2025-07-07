@@ -1,49 +1,47 @@
 import React, { useRef, useState, useEffect } from "react";
 import axios from "axios";
-import Table from "../../../core/common/dataTable/index";
+import { Spin } from "antd";
 import { Link } from "react-router-dom";
+import { useAuth } from "../../../context/AuthContext";
+import Table from "../../../core/common/dataTable/index";
+import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import { all_routes } from "../../router/all_routes";
 import TooltipOption from "../../../core/common/tooltipOption";
-import { Spin } from "antd";
-import { useAuth } from "../../../context/AuthContext";
+import { Toaster, toast } from "react-hot-toast";
+
+// Attendance options array
+const ATTENDANCE_OPTIONS = ["Present", "Absent", "Holiday", "Closed"];
+
 // Interfaces
 interface Staff {
-  _id: string;
-  id: string;
-  name: string;
-  role: string;
-  inTime?: string | null;
-  outTime?: string | null;
+  _id?: string | null;
+  id?: string | null;
+  name?: string | null;
+  role?: string | null;
+  status?: string | null;
 }
 
-interface AttendanceRecord {
-  inTime: string | null;
-  outTime: string | null;
-}
-
-const API_URL = process.env.REACT_APP_URL;
+const API_URL = process.env.REACT_APP_URL || "";
 
 const StaffAttendance = () => {
+  const { token, user } = useAuth() || {};
   const routes = all_routes;
-  const { token, user } = useAuth();
+  const [loading, setLoading] = useState<boolean>(false);
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split("T")[0]
   );
-  const [isLoading, setIsLoading] = useState(false);
   const [roles, setRoles] = useState<string[]>([]);
   const [selectedRole, setSelectedRole] = useState<string>("all");
   const [staff, setStaff] = useState<Staff[]>([]);
-  const [attendanceData, setAttendanceData] = useState<
-    Record<string, AttendanceRecord>
-  >({});
-  const [timeInputs, setTimeInputs] = useState<
-    Record<string, { inTime: string; outTime: string }>
-  >({});
+  const [selectedStaff, setSelectedStaff] = useState<string[]>([]);
+  const [status, setStatus] = useState<string>("Present");
+  const [isEditing, setIsEditing] = useState<string | null>(null);
+  const [editStatus, setEditStatus] = useState<string>("");
   const dropdownMenuRef = useRef<HTMLDivElement | null>(null);
   const decodedToken = token ? JSON.parse(atob(token.split(".")[1])) : null;
-  const role = decodedToken?.role;
+  const role = decodedToken?.role || "";
+  const userId = decodedToken?.userId || "";
 
-  // Fetch roles and staff
   useEffect(() => {
     if (token) {
       fetchRoles();
@@ -51,28 +49,33 @@ const StaffAttendance = () => {
   }, [token]);
 
   useEffect(() => {
-    if (selectedDate && selectedRole) {
-      fetchStaff(selectedDate, selectedRole);
+    if (selectedRole && selectedDate) {
+      fetchStaff(selectedRole, selectedDate);
     }
-  }, [selectedDate, selectedRole]);
+  }, [selectedRole, selectedDate]);
 
   const fetchRoles = async () => {
-    try {
-      setIsLoading(true);
-      const response = await axios.get(`${API_URL}/api/attendance/staff/roles`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setRoles(["all", ...response.data]);
-    } catch (error) {
-      console.error("Error fetching roles:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  setLoading(true);
+  try {
+    const response = await axios.get(`${API_URL}/api/attendance/staff/roles`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
 
-  const fetchStaff = async (date: string, role: string) => {
+    const filteredRoles = (response.data || []).filter(
+      (role: string) => role !== "admin" && role !== "parent"
+    );
+
+    setRoles(["all", ...filteredRoles]);
+  } catch (error) {
+    console.error("Error fetching roles:", error);
+  } finally {
+    setLoading(false);
+  }
+};
+
+  const fetchStaff = async (role: string, date: string) => {
+    setLoading(true);
     try {
-      setIsLoading(true);
       const url =
         role === "all"
           ? `${API_URL}/api/attendance/staff-attendance/${date}`
@@ -80,115 +83,131 @@ const StaffAttendance = () => {
       const response = await axios.get(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const fetchedStaff: Staff[] = response.data.map((staff: any) => ({
-        _id: staff._id,
-        id: staff.id,
-        name: staff.name,
-        role: staff.role,
-        inTime: staff.inTime,
-        outTime: staff.outTime,
+      const fetchedStaff: Staff[] = (response.data || []).map((staff: any) => ({
+        _id: staff?._id || null,
+        id: staff?.id || null,
+        name: staff?.name || null,
+        role: staff?.role || null,
+        status: staff?.status || null,
       }));
       setStaff(fetchedStaff);
-
-      const initialAttendance = fetchedStaff.reduce(
-        (acc: Record<string, AttendanceRecord>, staff) => {
-          acc[staff._id] = {
-            inTime: staff.inTime || null,
-            outTime: staff.outTime || null,
-          };
-          return acc;
-        },
-        {}
-      );
-      setAttendanceData(initialAttendance);
-
-      const initialTimeInputs = fetchedStaff.reduce(
-        (acc: Record<string, { inTime: string; outTime: string }>, staff) => {
-          acc[staff._id] = {
-            inTime: staff.inTime
-              ? new Date(staff.inTime).toISOString().slice(11, 16)
-              : "",
-            outTime: staff.outTime
-              ? new Date(staff.outTime).toISOString().slice(11, 16)
-              : "",
-          };
-          return acc;
-        },
-        {}
-      );
-      setTimeInputs(initialTimeInputs);
     } catch (error) {
-      console.error("Error fetching staff and attendance:", error);
+      console.error("Error fetching staff:", error);
+      // toast.error("Failed to fetch staff.");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedDate(e.target.value);
+    setSelectedStaff([]);
   };
 
   const handleRoleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedRole(e.target.value);
+    setSelectedStaff([]);
   };
 
-  const handleTimeInputChange = (
-    staffId: string,
-    field: "inTime" | "outTime",
-    value: string
-  ) => {
-    setTimeInputs((prev) => ({
-      ...prev,
-      [staffId]: {
-        ...prev[staffId],
-        [field]: value,
-      },
-    }));
+  const handleSelectStaff = (staffId: string) => {
+    setSelectedStaff((prev) =>
+      prev.includes(staffId)
+        ? prev.filter((id) => id !== staffId)
+        : [...prev, staffId]
+    );
   };
 
-  const handleSaveAttendance = async (staffId: string) => {
-    const inputs = timeInputs[staffId];
-    if (!inputs) return;
+  const handleSelectAll = () => {
+    if (selectedStaff.length === staff.length) {
+      setSelectedStaff([]);
+    } else {
+      setSelectedStaff(staff.map((s) => s._id || "").filter(Boolean));
+    }
+  };
 
-    const inTime = inputs.inTime
-      ? new Date(`${selectedDate}T${inputs.inTime}:00.000Z`).toISOString()
-      : null;
-    const outTime = inputs.outTime
-      ? new Date(`${selectedDate}T${inputs.outTime}:00.000Z`).toISOString()
-      : null;
+  const handleMarkAttendance = async () => {
+  if (!selectedStaff.length) {
+    toast.error("Please select at least one staff member.");
+    return;
+  }
 
-    const updatedRecord = {
-      inTime,
-      outTime,
-    };
+  setLoading(true);
+  try {
+    const results = await Promise.allSettled(
+      selectedStaff.map(async (staffId) => {
+        const staffMember = staff.find((s) => s._id === staffId);
+        return axios.post(
+          `${API_URL}/api/attendance/staff-attendance`,
+          {
+            staffId,
+            date: selectedDate,
+            name: staffMember?.name || "Unknown",
+            role: staffMember?.role || "Unknown",
+            status,
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+      })
+    );
 
+    const failed = results.filter((res) => res.status === "rejected");
+    if (failed.length > 0) {
+      toast.error(`Failed to mark attendance for ${failed.length} staff.`);
+    } else {
+      toast.success("Attendance marked successfully.");
+    }
+
+    setStaff((prev) =>
+      prev.map((s) =>
+        selectedStaff.includes(s._id || "") ? { ...s, status } : s
+      )
+    );
+    setSelectedStaff([]);
+  } catch (err) {
+    console.error("Unexpected error:", err);
+    toast.error("Something went wrong.");
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+  const handleEditClick = (staffId: string, currentStatus: string | null) => {
+    setIsEditing(staffId);
+    setEditStatus(currentStatus || "Present");
+  };
+
+  const handleSaveEdit = async (staffId: string) => {
+    setLoading(true);
     try {
+      const staffMember = staff.find((s) => s._id === staffId);
       await axios.post(
         `${API_URL}/api/attendance/staff-attendance`,
         {
           staffId,
           date: selectedDate,
-          name: staff.find((s) => s._id === staffId)?.name,
-          role: staff.find((s) => s._id === staffId)?.role,
-          inTime: updatedRecord.inTime,
-          outTime: updatedRecord.outTime,
+          name: staffMember?.name || "Unknown",
+          role: staffMember?.role || "Unknown",
+          status: editStatus,
         },
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-      setAttendanceData((prev) => ({
-        ...prev,
-        [staffId]: updatedRecord,
-      }));
       setStaff((prev) =>
         prev.map((s) =>
-          s._id === staffId ? { ...s, ...updatedRecord } : s
+          s._id === staffId ? { ...s, status: editStatus } : s
         )
       );
-      console.log(`Saved attendance for staffId ${staffId}:`, updatedRecord);
+      setIsEditing(null);
+      toast.success("Attendance updated successfully.");
     } catch (error) {
-      console.error("Error saving attendance:", error);
+      console.error("Error editing attendance:", error);
+      toast.error("Failed to edit attendance.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -198,92 +217,106 @@ const StaffAttendance = () => {
     }
   };
 
-  const formatTime = (isoString: string | null) => {
-    if (!isoString) return "";
-    const date = new Date(isoString);
-    return date.toISOString().slice(11, 16); // Returns HH:mm
-  };
-
   const columns = [
+    {
+      title: (
+        <input
+          type="checkbox"
+          checked={selectedStaff.length === staff.length && staff.length > 0}
+          onChange={handleSelectAll}
+        />
+      ),
+      dataIndex: "_id",
+      render: (_id: string | null) => (
+        <input
+          type="checkbox"
+          checked={selectedStaff.includes(_id || "")}
+          onChange={() => handleSelectStaff(_id || "")}
+        />
+      ),
+    },
     {
       title: "Staff ID",
       dataIndex: "id",
-      render: (text: string) => (
+      render: (text: string | null) => (
         <Link to="#" className="link-primary">
-          {text}
+          {text || "N/A"}
         </Link>
       ),
-      sorter: (a: Staff, b: Staff) => a.id.localeCompare(b.id),
+      sorter: (a: Staff, b: Staff) => (a.id || "").localeCompare(b.id || ""),
     },
     {
       title: "Name",
       dataIndex: "name",
-      render: (text: string) => (
+      render: (text: string | null) => (
         <div className="d-flex align-items-center">
           <div className="ms-2">
             <p className="text-dark mb-0">
-              <Link to="#">{text}</Link>
+              <Link to="#">{text || "N/A"}</Link>
             </p>
           </div>
         </div>
       ),
-      sorter: (a: Staff, b: Staff) => a.name.localeCompare(b.name),
+      sorter: (a: Staff, b: Staff) => (a.name || "").localeCompare(b.name || ""),
     },
     {
       title: "Role",
       dataIndex: "role",
-      sorter: (a: Staff, b: Staff) => a.role.localeCompare(b.role),
+      render: (text: string | null) => text || "N/A",
+      sorter: (a: Staff, b: Staff) => (a.role || "").localeCompare(b.role || ""),
     },
     {
-      title: "Attendance",
-      dataIndex: "attendance",
-      render: (text: string, record: Staff) => (
-        <div className="d-flex align-items-center">
-          <div className="me-2">
-            <label className="form-label">In Time</label>
-            <input
-              type="time"
-              className="form-control form-control-sm"
-              value={timeInputs[record._id]?.inTime || ""}
-              onChange={(e) =>
-                handleTimeInputChange(record._id, "inTime", e.target.value)
-              }
-              placeholder="HH:mm"
-            />
-          </div>
-          <div className="me-2">
-            <label className="form-label">Out Time</label>
-            <input
-              type="time"
-              className="form-control form-control-sm"
-              value={timeInputs[record._id]?.outTime || ""}
-              onChange={(e) =>
-                handleTimeInputChange(record._id, "outTime", e.target.value)
-              }
-              placeholder="HH:mm"
-            />
-          </div>
-          <button
-            className="btn btn-sm btn-primary mt-4"
-            onClick={() => handleSaveAttendance(record._id)}
-            disabled={
-              !timeInputs[record._id]?.inTime &&
-              !timeInputs[record._id]?.outTime
-            }
-          >
-            Save
-          </button>
-          <span className="ms-2 mt-4">
-            {record.inTime ? `In: ${formatTime(record.inTime)}` : "Not In"}
-            {record.outTime ? ` | Out: ${formatTime(record.outTime)}` : ""}
-          </span>
+      title: "Status",
+      dataIndex: "status",
+      render: (text: string | null, record: Staff) => (
+        <div className="d-flex align-items-center" style={{ minWidth: "200px" }}>
+          {isEditing === record._id ? (
+            <>
+              <select
+                value={editStatus}
+                onChange={(e) => setEditStatus(e.target.value)}
+                className="form-control me-2"
+                style={{ width: "120px" }}
+              >
+                {ATTENDANCE_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="btn btn-sm btn-success me-2"
+                onClick={() => handleSaveEdit(record._id || "")}
+              >
+                Save
+              </button>
+              <button
+                className="btn btn-sm btn-secondary"
+                onClick={() => setIsEditing(null)}
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <span style={{ minWidth: "80px" }}>{text || "Not Marked"}</span>
+              <button
+                className="btn btn-sm btn-outline-primary ms-2"
+                onClick={() => handleEditClick(record._id || "", text)}
+              >
+                Edit
+              </button>
+            </>
+          )}
         </div>
       ),
+      sorter: (a: Staff, b: Staff) => (a.status || "").localeCompare(b.status || ""),
     },
   ];
 
   return (
     <div>
+      {/* <Toaster /> */}
       <div className="page-wrapper">
         <div className="content">
           <div className="d-md-flex d-block align-items-center justify-content-between mb-3">
@@ -319,37 +352,57 @@ const StaffAttendance = () => {
                     onChange={handleDateChange}
                   />
                 </div>
-                <div className="mb-3 me-2">
+                <div className="mb-3 me-2 w-40">
                   <select
                     className="form-control"
                     value={selectedRole}
                     onChange={handleRoleChange}
+                    disabled={roles.length === 1 && role === "teacher"}
                   >
-                    {roles.map((role) => (
-                      <option key={role} value={role}>
-                        {role === "all" ? "All Roles" : role}
+                    <option value="all">All Roles</option>
+                    {roles.filter((r) => r !== "all").map((r) => (
+                      <option key={r} value={r}>
+                        {r}
                       </option>
                     ))}
                   </select>
                 </div>
+                <div className="mb-3 me-2 w-50">
+                  <select
+                    className="form-control"
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
+                  >
+                    {ATTENDANCE_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mb-3">
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleMarkAttendance}
+                    disabled={loading || !selectedStaff.length}
+                  >
+                    Mark Attendance
+                  </button>
+                </div>
               </div>
             </div>
             <div className="card-body p-0 py-3">
-              {staff.length > 0 ? (
-                isLoading ? (
-                  <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "200px" }}>
-                    <Spin size="large" />
-                  </div>
+              <Spin spinning={loading} size="large">
+                {selectedRole && staff.length > 0 ? (
+                  <Table dataSource={staff} columns={columns} />
                 ) : (
-                  <Table dataSource={staff} columns={columns} Selection={true} />
-                )
-              ) : (
-                <p className="alert alert-danger mx-3" role="alert">
-                  {selectedRole
-                    ? "No staff found for this role."
-                    : "Please select a role."}
-                </p>
-              )}
+                  <p className="px-3">
+                    {selectedRole
+                      ? "No staff found for this role."
+                      : "Please select a role."}
+                  </p>
+                )}
+              </Spin>
             </div>
           </div>
         </div>

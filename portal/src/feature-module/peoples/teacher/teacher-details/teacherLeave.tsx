@@ -6,10 +6,10 @@ import Table from "../../../../core/common/dataTable/index";
 import TeacherSidebar from "./teacherSidebar";
 import TeacherBreadcrumb from "./teacherBreadcrumb";
 import TeacherModal from "../teacherModal";
-import { TableData } from "../../../../core/data/interface";
 import { useAuth } from "../../../../context/AuthContext";
+import { Toaster, toast } from "react-hot-toast";
 
-const API_URL = process.env.REACT_APP_URL;
+const API_URL = process.env.REACT_APP_URL || "";
 
 const TeacherLeave = () => {
   const routes = all_routes;
@@ -30,7 +30,7 @@ const TeacherLeave = () => {
     new Date().toISOString().split("T")[0]
   );
 
-  const { token } = useAuth();
+  const { token } = useAuth() || {};
 
   useEffect(() => {
     const fetchTeacher = async () => {
@@ -38,7 +38,7 @@ const TeacherLeave = () => {
         const response = await axios.get(`${API_URL}/api/teacher/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setTeacher(response.data);
+        setTeacher(response.data || null);
         setLoading(false);
       } catch (err: any) {
         setError(err.response?.data?.message || "Failed to fetch teacher details");
@@ -54,18 +54,19 @@ const TeacherLeave = () => {
             headers: { Authorization: `Bearer ${token}` },
           }
         );
-        setAttendanceData(response.data);
+        setAttendanceData(response.data || []);
       } catch (err: any) {
         console.error("Error fetching attendance:", err);
+        toast.error("Failed to fetch attendance data.");
         setAttendanceData([]);
       }
     };
 
-    if (id) {
+    if (id && token) {
       fetchTeacher();
       fetchAttendance();
     }
-  }, [id, startDate, endDate]);
+  }, [id, startDate, endDate, token]);
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>, type: "start" | "end") => {
     const value = e.target.value;
@@ -80,32 +81,21 @@ const TeacherLeave = () => {
     {
       title: "Date",
       dataIndex: "date",
-      sorter: (a: any, b: any) => a.date.localeCompare(b.date),
-    },
-    {
-      title: "In Time",
-      dataIndex: "inTime",
-      render: (text: string | null) => (text ? text : "-"),
-      sorter: (a: any, b: any) => (a.inTime || "").localeCompare(b.inTime || ""),
-    },
-    {
-      title: "Out Time",
-      dataIndex: "outTime",
-      render: (text: string | null) => (text ? text : "-"),
-      sorter: (a: any, b: any) => (a.outTime || "").localeCompare(b.outTime || ""),
+      sorter: (a: any, b: any) => (a.date || "").localeCompare(b.date || ""),
+      render: (text: string | null) => text || "N/A",
     },
     {
       title: "Status",
       dataIndex: "status",
-      render: (text: string) => (
+      render: (text: string | null) => (
         <span
-          className={`badge badge-soft-${text === "Present" ? "success" : "danger"} d-inline-flex align-items-center`}
+          className={`badge badge-soft-${text === "Present" ? "success" : text === "Absent" ? "danger" : "warning"} d-inline-flex align-items-center`}
         >
           <i className="ti ti-circle-filled fs-5 me-1"></i>
-          {text}
+          {text || "Not Marked"}
         </span>
       ),
-      sorter: (a: any, b: any) => a.status.localeCompare(b.status),
+      sorter: (a: any, b: any) => (a.status || "").localeCompare(b.status || ""),
     },
   ];
 
@@ -116,6 +106,7 @@ const TeacherLeave = () => {
 
   return (
     <>
+      <Toaster position="top-right" />
       <div className="page-wrapper">
         <div className="content">
           <div className="row">

@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-
 const staffAttendanceSchema = new mongoose.Schema({
   staffId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -14,12 +13,8 @@ const staffAttendanceSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  inTime: {
-    type: String, // Stored as ISO string (e.g., "2025-05-16T09:00:00.000Z")
-    default: null,
-  },
-  outTime: {
-    type: String, // Stored as ISO string
+  status: {
+    type: String, // e.g., "Present", "Absent", "Holiday", "Closed"
     default: null,
   },
   date: {

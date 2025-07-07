@@ -1,62 +1,55 @@
 import React, { useRef, useState, useEffect } from "react";
 import axios from "axios";
-import CommonSelect from "../../../core/common/commonSelect";
-import {
-  AdmissionNumber,
-  classSection,
-  RollNumber,
-  studentclass,
-  studentName,
-} from "../../../core/common/selectoption/selectoption";
+import { Spin } from "antd";
+import { Link } from "react-router-dom";
+import { useAuth } from "../../../context/AuthContext";
 import Table from "../../../core/common/dataTable/index";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
-import { Link } from "react-router-dom";
 import { all_routes } from "../../router/all_routes";
-import TooltipOption from "../../../core/common/tooltipOption";
-import { Spin } from 'antd';
-import { useAuth } from "../../../context/AuthContext";
+import { toast } from "react-hot-toast";
+
+// Attendance options array
+const ATTENDANCE_OPTIONS = ["Present", "Absent", "Holiday", "Closed"];
+
 // Interfaces
 interface Class {
-  _id: string;
-  name: string;
-  teacherId: { _id: string }[];
+  _id?: string;
+  name?: string;
+  teacherId?: { _id: string }[];
 }
 
 interface Student {
-  id: string; // Added MongoDB _id
-  admissionNo: string;
-  name: string;
-  rollNo?: string;
-  class?: string;
-  section?: string;
-  inTime?: string | null;
-  outTime?: string | null;
+  id?: string;
+  admissionNo?: string;
+  name?: string;
+  status?: string | null;
 }
 
 interface AttendanceRecord {
-  inTime: string | null;
-  outTime: string | null;
+  status?: string | null;
 }
-const API_URL = process.env.REACT_APP_URL;
+
+const API_URL = process.env.REACT_APP_URL || "";
 
 const StudentAttendance = () => {
-  const { token, user } = useAuth();
+  const { token, user } = useAuth() || {};
   const routes = all_routes;
   const [loading, setLoading] = useState<boolean>(false);
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split("T")[0]
   );
-  const [markingAttendance, setMarkingAttendance] = useState<Record<string, boolean>>({});
   const [classes, setClasses] = useState<Class[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
-  const [attendanceData, setAttendanceData] = useState<
-    Record<string, AttendanceRecord>
-  >({});
-  const [mode, setMode] = useState<"in" | "out">("in");
+  const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
+  const [status, setStatus] = useState<string>("Present");
+  const [isEditing, setIsEditing] = useState<string | null>(null);
+  const [editStatus, setEditStatus] = useState<string>("");
   const dropdownMenuRef = useRef<HTMLDivElement | null>(null);
   const decodedToken = token ? JSON.parse(atob(token.split(".")[1])) : null;
-  const role = decodedToken?.role
+  const role = decodedToken?.role || "";
+  const userId = decodedToken?.userId || "";
+
   // Fetch classes and students
   useEffect(() => {
     if (token) {
@@ -76,17 +69,26 @@ const StudentAttendance = () => {
       const response = await axios.get(`${API_URL}/api/class`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const fetchedClasses = response.data;
+      let fetchedClasses = response.data || [];
+      
+      // Filter classes for teachers to only show their assigned classes
+      if (role === "teacher") {
+        fetchedClasses = fetchedClasses.filter((cls: Class) =>
+          cls?.teacherId?.some((tid) => tid?._id === userId) || false
+        );
+      }
+
       setClasses(fetchedClasses);
       if (fetchedClasses.length > 0) {
-        setSelectedClassId(fetchedClasses[0]._id);
+        setSelectedClassId(fetchedClasses[0]?._id || null);
+      } else {
+        setSelectedClassId(null);
       }
     } catch (error) {
       console.error("Error fetching classes:", error);
+    } finally {
+      setLoading(false);
     }
-    finally {
-    setLoading(false);
-  }
   };
 
   const fetchClassStudents = async (classId: string, date: string) => {
@@ -98,30 +100,15 @@ const StudentAttendance = () => {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-      const fetchedStudents: Student[] = response.data.map((student: any) => ({
-        id: student.id, // Use MongoDB _id
-        admissionNo: student.admissionNo,
-        name: student.name,
-        rollNo: student.rollNo,
-        inTime: student.inTime,
-        outTime: student.outTime,
+      const fetchedStudents: Student[] = (response.data || []).map((student: any) => ({
+        id: student?.id || "",
+        admissionNo: student?.admissionNo || "",
+        name: student?.name || "",
+        status: student?.status || null,
       }));
       setStudents(fetchedStudents);
-      console.log("Fetched students:", fetchedStudents);
-
-      const initialAttendance = fetchedStudents.reduce(
-        (acc: Record<string, AttendanceRecord>, student) => {
-          acc[student.id] = { // Use id as key
-            inTime: student.inTime || null,
-            outTime: student.outTime || null,
-          };
-          return acc;
-        },
-        {}
-      );
-      setAttendanceData(initialAttendance);
     } catch (error) {
-      console.error("Error fetching students and attendance:", error);
+      console.error("Error fetching students:", error);
     } finally {
       setLoading(false);
     }
@@ -129,56 +116,100 @@ const StudentAttendance = () => {
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedDate(e.target.value);
+    setSelectedStudents([]);
   };
 
   const handleClassChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedClassId(e.target.value);
+    setSelectedStudents([]);
   };
 
-  const handleMarkAttendance = async (studentId: string) => {
-    setMarkingAttendance(prev => ({ ...prev, [studentId]: true }));
-    const currentTime = new Date().toISOString();
-    const currentRecord = attendanceData[studentId] || { inTime: null, outTime: null };
+  const handleSelectStudent = (studentId: string) => {
+    setSelectedStudents((prev) =>
+      prev.includes(studentId)
+        ? prev.filter((id) => id !== studentId)
+        : [...prev, studentId]
+    );
+  };
 
-    const updatedRecord = {
-      ...currentRecord,
-      [mode === "in" ? "inTime" : "outTime"]: currentTime,
-    };
+  const handleSelectAll = () => {
+    if (selectedStudents.length === students.length) {
+      setSelectedStudents([]);
+    } else {
+      setSelectedStudents(students.map((student) => student.id || "").filter(Boolean));
+    }
+  };
 
+  const handleMarkAttendance = async () => {
+    if (!selectedStudents.length) {
+      toast.error("Please select at least one student.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const attendanceRecords = selectedStudents.map((studentId) => ({
+        studentId,
+        status,
+      }));
+      await axios.post(
+        `${API_URL}/api/attendance`,
+        {
+          classId: selectedClassId,
+          date: selectedDate,
+          attendanceRecords,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      setStudents((prev) =>
+        prev.map((student) =>
+          selectedStudents.includes(student.id || "")
+            ? { ...student, status }
+            : student
+        )
+      );
+      setSelectedStudents([]);
+      toast.success("Attendance marked successfully!");
+    } catch (error) {
+      console.error("Error marking attendance:", error);
+      toast.error("Failed to mark attendance.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditClick = (studentId: string, currentStatus: string | null) => {
+    setIsEditing(studentId);
+    setEditStatus(currentStatus || "Present");
+  };
+
+  const handleSaveEdit = async (studentId: string) => {
+    setLoading(true);
     try {
       await axios.post(
         `${API_URL}/api/attendance`,
         {
           classId: selectedClassId,
           date: selectedDate,
-          attendanceRecords: [
-            {
-              studentId: studentId, // Use MongoDB _id
-              inTime: updatedRecord.inTime,
-              outTime: updatedRecord.outTime,
-            },
-          ],
+          attendanceRecords: [{ studentId, status: editStatus }],
         },
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-      setAttendanceData((prev) => ({
-        ...prev,
-        [studentId]: updatedRecord,
-      }));
       setStudents((prev) =>
         prev.map((student) =>
-          student.id === studentId // Match by id
-            ? { ...student, ...updatedRecord }
-            : student
+          student.id === studentId ? { ...student, status: editStatus } : student
         )
       );
-      console.log(`Marked ${mode} time for studentId ${studentId}:`, updatedRecord);
+      setIsEditing(null);
+      toast.success("Attendance updated successfully!");
     } catch (error) {
-      console.error(`Error marking ${mode} time:`, error);
+      console.error("Error editing attendance:", error);
+      toast.error("Failed to edit attendance.");
     } finally {
-      setMarkingAttendance(prev => ({ ...prev, [studentId]: false }));
+      setLoading(false);
     }
   };
 
@@ -188,32 +219,34 @@ const StudentAttendance = () => {
     }
   };
 
-  const isStudentIn = (student: Student) => {
-    const now = new Date();
-    return (
-      student.inTime &&
-      (!student.outTime || new Date(student.outTime) > now)
-    );
-  };
-
   const columns = [
+    {
+      title: (
+        <input
+          type="checkbox"
+          checked={selectedStudents.length === students.length && students.length > 0}
+          onChange={handleSelectAll}
+        />
+      ),
+      dataIndex: "id",
+      render: (id: string) => (
+        <input
+          type="checkbox"
+          checked={selectedStudents.includes(id)}
+          onChange={() => handleSelectStudent(id)}
+        />
+      ),
+    },
     {
       title: "Admission No",
       dataIndex: "admissionNo",
       render: (text: string) => (
         <Link to="#" className="link-primary">
-          {text}
+          {text || "N/A"}
         </Link>
       ),
-      sorter: (a: Student, b: Student) => a.admissionNo.localeCompare(b.admissionNo),
+      sorter: (a: Student, b: Student) => (a.admissionNo || "").localeCompare(b.admissionNo || ""),
     },
-    // {
-    //   title: "Roll No",
-    //   dataIndex: "rollNo",
-    //   render: (text: string) => text || "N/A",
-    //   sorter: (a: Student, b: Student) =>
-    //     (a.rollNo || "").localeCompare(b.rollNo || ""),
-    // },
     {
       title: "Name",
       dataIndex: "name",
@@ -228,49 +261,65 @@ const StudentAttendance = () => {
           </Link>
           <div className="ms-2">
             <p className="text-dark mb-0">
-              <Link to="#">{text}</Link>
+              <Link to="#">{text || "N/A"}</Link>
             </p>
           </div>
         </div>
       ),
-      sorter: (a: Student, b: Student) => a.name.localeCompare(b.name),
+      sorter: (a: Student, b: Student) => (a.name || "").localeCompare(b.name || ""),
     },
     {
       title: "Class",
       dataIndex: "class",
       render: () =>
         classes.find((c) => c._id === selectedClassId)?.name || "N/A",
-      sorter: (a: Student, b: Student) =>
-        (a.class || "").localeCompare(b.class || ""),
     },
     {
-  title: "Attendance",
-  dataIndex: "attendance",
-  render: (text: string, record: Student) => (
-    <div className="d-flex align-items-center">
-      <button
-        className="btn btn-sm btn-primary"
-        onClick={() => handleMarkAttendance(record.id)}
-        disabled={
-          markingAttendance[record.id] ||
-          (mode === "in" && record.inTime !== null && record.inTime !== undefined) ||
-          (mode === "out" && (record.inTime === null || record.inTime === undefined)) ||
-          (mode === "out" && record.outTime !== null && record.outTime !== undefined)
-        }
-      >
-        {markingAttendance[record.id] ? (
-          <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-        ) : (
-          `Mark ${mode === "in" ? "In" : "Out"}`
-        )}
-      </button>
-      <span className="ms-2">
-        {record.inTime ? `In: ${new Date(record.inTime).toLocaleTimeString()}` : "Not In"}
-        {record.outTime ? ` | Out: ${new Date(record.outTime).toLocaleTimeString()}` : ""}
-      </span>
-    </div>
-  ),
-},
+      title: "Status",
+      dataIndex: "status",
+      render: (text: string | null, record: Student) => (
+        <div className="d-flex align-items-center" style={{ minWidth: "200px" }}>
+          {isEditing === record.id ? (
+            <>
+              <select
+                value={editStatus}
+                onChange={(e) => setEditStatus(e.target.value)}
+                className="form-control me-2"
+                style={{ width: "120px" }}
+              >
+                {ATTENDANCE_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="btn btn-sm btn-success me-2"
+                onClick={() => handleSaveEdit(record.id || "")}
+              >
+                Save
+              </button>
+              <button
+                className="btn btn-sm btn-secondary"
+                onClick={() => setIsEditing(null)}
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <span style={{ minWidth: "80px" }}>{text || "Not Marked"}</span>
+              <button
+                className="btn btn-sm btn-outline-primary ms-2"
+                onClick={() => handleEditClick(record.id || "", text)}
+              >
+                Edit
+              </button>
+            </>
+          )}
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -294,9 +343,6 @@ const StudentAttendance = () => {
                 </ol>
               </nav>
             </div>
-            <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">
-              <TooltipOption />
-            </div>
           </div>
           <div className="card">
             <div className="card-header d-flex align-items-center justify-content-between flex-wrap pb-0">
@@ -315,39 +361,44 @@ const StudentAttendance = () => {
                     className="form-control"
                     value={selectedClassId || ""}
                     onChange={handleClassChange}
+                    disabled={classes.length === 1 && role === "teacher"}
                   >
+                    <option value="">Select Class</option>
                     {classes.map((cls) => (
-                      <option key={cls._id} value={cls._id}>
-                        {cls.name}
+                      <option key={cls._id || ""} value={cls._id || ""}>
+                        {cls.name || "N/A"}
                       </option>
                     ))}
                   </select>
                 </div>
-              </div>
-            </div>
-            <div className="card-body p-0 py-3">
-              {/* Toggle Button */}
-              <div className="d-flex justify-content-start mb-3 px-3">
-                <div className="btn-group" role="group">
-                  <button
-                    type="button"
-                    className={`btn ${mode === "in" ? "btn-primary" : "btn-outline-primary"}`}
-                    onClick={() => setMode("in")}
+                <div className="mb-3 me-2 w-50">
+                  <select
+                    className="form-control"
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
                   >
-                    Mark In
-                  </button>
+                    {ATTENDANCE_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mb-3">
                   <button
-                    type="button"
-                    className={`btn ${mode === "out" ? "btn-primary" : "btn-outline-primary"}`}
-                    onClick={() => setMode("out")}
+                    className="btn btn-primary"
+                    onClick={handleMarkAttendance}
+                    disabled={loading || !selectedStudents.length}
                   >
-                    Mark Out
+                    Mark Attendance
                   </button>
                 </div>
               </div>
+            </div>
+            <div className="card-body p-0 py-3">
               <Spin spinning={loading} size="large">
                 {selectedClassId && students.length > 0 ? (
-                  <Table dataSource={students} columns={columns} Selection={true} />
+                  <Table dataSource={students} columns={columns} />
                 ) : (
                   <p className="px-3">
                     {selectedClassId
