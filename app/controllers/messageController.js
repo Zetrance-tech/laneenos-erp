@@ -248,7 +248,6 @@ export const getInbox = async (req, res) => {
 
   query.$or = [
     { "recipients.students": { $in: childIds } },
-    { "recipients.classes": { $in: classIds } }
   ];
 }
 

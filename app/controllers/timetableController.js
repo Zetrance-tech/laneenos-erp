@@ -94,27 +94,27 @@ function formatTimetableForParent(timetable) {
 export const getTimetable = async (req, res) => {
   try {
     const { year, month } = req.params;
-    const { email, role } = req.user;
-    const branchId = req.user.branchId;
+    const { email, role, branchId } = req.user;
 
-    // Verify user is a parent
     if (role !== "parent") {
       return res.status(403).json({ message: "Only parents can access this resource" });
     }
 
-    // Validate year and month
     const yearNum = parseInt(year, 10);
     const monthNum = parseInt(month, 10);
     if (isNaN(yearNum) || isNaN(monthNum) || monthNum < 1 || monthNum > 12) {
       return res.status(400).json({ message: "Invalid year or month" });
     }
 
-    // Find students associated with the parent's email
+    const startOfMonth = new Date(Date.UTC(yearNum, monthNum - 1, 1));
+    const endOfMonth = new Date(Date.UTC(yearNum, monthNum, 0, 23, 59, 59, 999));
+
     const students = await Student.find({
       branchId,
       $or: [
         { "fatherInfo.email": email },
         { "motherInfo.email": email },
+        { "guardianInfo.email": email },
       ],
     })
       .populate("classId", "name")
@@ -124,45 +124,73 @@ export const getTimetable = async (req, res) => {
       return res.status(404).json({ message: "No students found associated with this parent" });
     }
 
-    // Calculate date range for the month
-    const startOfMonth = new Date(Date.UTC(yearNum, monthNum - 1, 1));
-    const endOfMonth = new Date(Date.UTC(yearNum, monthNum, 0, 23, 59, 59, 999));
+    // Get all Mondays of the month
+    const weeks = [];
+    const date = new Date(startOfMonth);
+    while (date <= endOfMonth) {
+      if (date.getUTCDay() === 1) {
+        const weekStartDate = new Date(date);
+        const weekEndDate = new Date(date);
+        weekEndDate.setUTCDate(weekEndDate.getUTCDate() + 6);
+        weeks.push({ weekStartDate, weekEndDate });
+      }
+      date.setUTCDate(date.getUTCDate() + 1);
+    }
 
-    // Collect timetables for all students
     const result = [];
+
     for (const student of students) {
-      if (!student.classId || !student.sessionId) {
-        continue; // Skip students not assigned to a class or session
+      if (!student.classId || !student.sessionId) continue;
+
+      const weekData = [];
+
+      for (const { weekStartDate, weekEndDate } of weeks) {
+        const timetable = await Timetable.findOne({
+          sessionId: student.sessionId,
+          classId: student.classId,
+          branchId,
+          weekStartDate,
+        }).populate("days.slots.teacherId", "name");
+
+        if (timetable) {
+          const formatted = await formatTimetableForParent(timetable, student._id, branchId);
+          weekData.push(formatted);
+        } else {
+          // Generate 5-day Mon–Fri empty skeleton
+          const days = [];
+          for (let i = 0; i < 5; i++) {
+            const dayDate = new Date(weekStartDate);
+            dayDate.setUTCDate(dayDate.getUTCDate() + i);
+            days.push({
+              day: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"][i],
+              date: dayDate,
+              slots: [],
+            });
+          }
+
+          weekData.push({
+            _id: null,
+            classId: student.classId._id,
+            sessionId: student.sessionId._id,
+            weekStartDate,
+            weekEndDate,
+            days,
+            isEmpty: true,
+          });
+        }
       }
 
-      // Fetch timetables for the student's class and session within the month
-      const timetables = await Timetable.find({
-        sessionId: student.sessionId,
-        classId: student.classId,
-        weekStartDate: {
-          $gte: startOfMonth,
-          $lte: endOfMonth,
-        },
-        branchId
-      }).populate("days.slots.teacherId", "name");
-
-      // Format timetables for parent view
-      const formattedTimetables = timetables.map((timetable) => formatTimetableForParent(timetable));
-
-      // Include all timetables, even those with no days (for completeness)
-      if (formattedTimetables.length > 0) {
-        result.push({
-          studentId: student._id,
-          studentName: student.name,
-          className: student.classId.name,
-          sessionName: student.sessionId.name,
-          timetables: formattedTimetables,
-        });
-      }
+      result.push({
+        studentId: student._id,
+        studentName: student.name,
+        className: student.classId.name,
+        sessionName: student.sessionId.name,
+        timetables: weekData,
+      });
     }
 
     if (result.length === 0) {
-      return res.status(404).json({ message: "No timetables found for this month for any associated students" });
+      return res.status(404).json({ message: "No timetables found for this month" });
     }
 
     res.status(200).json({
@@ -174,6 +202,8 @@ export const getTimetable = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
 
 // Update timetable activity status (for teachers)
 export const updateActivityStatus = async (req, res) => {
