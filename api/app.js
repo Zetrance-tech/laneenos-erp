@@ -27,6 +27,9 @@ import homeworkRoute from './routes/homeworkRouter.js'
 import consentRoute from './routes/consentRouter.js'
 import enquiryRoute from "./routes/enquiryRouter.js";
 import concessionRoute from './routes/concessionRouter.js';
+import expenseRoute from './routes/expenseRouter.js';
+import branchRoute from './routes/branchRouter.js';
+import cctvRoute from './routes/cctvRouter.js'
 dotenv.config();
 const app = express();
 const MongoURL = process.env.MONGODB_URI;
@@ -38,6 +41,7 @@ app.use(methodOverride("_method"));
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api/auth", authRoute)
+app.use("/api/branch", branchRoute);
 app.use("/api/events", eventRoute);
 app.use("/api/student", studentRoute);
 app.use("/api/class", classRoute);
@@ -56,7 +60,9 @@ app.use("/api/leaves", leaveRoute);
 app.use("/api/homework", homeworkRoute);
 app.use("/api/consent", consentRoute);
 app.use("/api/enquiry", enquiryRoute);
+app.use("/api/expenses", expenseRoute);
 app.use("/api/concession", concessionRoute);
+app.use("/api/cctv", cctvRoute);
 
 app.get("/", (req, res) => {
   res.send("hehehehe");
