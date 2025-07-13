@@ -1,6 +1,11 @@
 import mongoose from "mongoose";
 
 const leaveSchema = new mongoose.Schema({
+  branchId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "Branch", 
+      required: true 
+    },
   studentId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Student",

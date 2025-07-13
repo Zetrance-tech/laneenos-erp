@@ -71,7 +71,7 @@ const EnquiryList = () => {
         setLoading(false);
       } catch (error) {
         console.error("Error fetching enquiries:", error);
-        toast.error("Failed to fetch enquiries");
+        // toast.error("Failed to fetch enquiries");
         setLoading(false);
       }
     };

@@ -4,7 +4,7 @@ import Counter from "../models/counter.js";
 export const createExpense = async (req, res) => {
   try {
     const expenseData = req.body;
-
+    const branchId = req.user.branchId;
     // Validate required fields
     if (
       !expenseData.invoiceNumber ||
@@ -33,7 +33,7 @@ export const createExpense = async (req, res) => {
       }
     }
 
-    const expense = new Expense(expenseData);
+    const expense = new Expense({ ...expenseData, branchId });
     await expense.save();
     res.status(201).json(expense);
   } catch (error) {
@@ -44,7 +44,8 @@ export const createExpense = async (req, res) => {
 // Get all expenses
 export const getAllExpenses = async (req, res) => {
   try {
-    const expenses = await Expense.find().sort({ createdAt: -1 });
+    const { branchId } = req.user;
+    const expenses = await Expense.find({ branchId }).sort({ createdAt: -1 });
     res.status(200).json(expenses);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -56,7 +57,7 @@ export const updateExpense = async (req, res) => {
   try {
     const { id } = req.params;
     const expenseData = req.body;
-
+    const { branchId } = req.user;
     // Validate payment-related fields when paymentStatus is 'Paid'
     if (expenseData.paymentStatus === 'Paid') {
       if (!expenseData.paymentDate || !expenseData.paymentMode) {
@@ -74,7 +75,11 @@ export const updateExpense = async (req, res) => {
       }
     }
 
-    const expense = await Expense.findByIdAndUpdate(id, expenseData, { new: true });
+    const expense = await Expense.findOneAndUpdate(
+      { _id: id, branchId },
+      expenseData,
+      { new: true }
+    );
     if (!expense) {
       return res.status(404).json({ message: "Expense not found" });
     }
@@ -88,7 +93,9 @@ export const updateExpense = async (req, res) => {
 export const deleteExpense = async (req, res) => {
   try {
     const { id } = req.params;
-    const expense = await Expense.findByIdAndDelete(id);
+    const { branchId } = req.user;
+
+    const expense = await Expense.findOneAndDelete({ _id: id, branchId });
     if (!expense) {
       return res.status(404).json({ message: "Expense not found" });
     }
@@ -100,7 +107,8 @@ export const deleteExpense = async (req, res) => {
 
 export const previewNextPaymentId = async (req, res) => {
   try {
-    const counter = await Counter.findOne({ _id: "expense_number" });
+    const branchId = req.user.branchId
+    const counter = await Counter.findOne({ type: "expense_number" , branchId});
     if (!counter) {
       return res.status(200).json({ expense_number: "EXP-000001" });
     }

@@ -64,7 +64,12 @@ const feePaymentSchema = new mongoose.Schema({
   },
   receiptUrl: {
     type: String // URL to PDF receipt
-  }
+  },
+  branchId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "Branch", 
+      required: true 
+    },
 });
 
 const FeePayment = mongoose.models.FeePayment || mongoose.model("FeePayment", feePaymentSchema);

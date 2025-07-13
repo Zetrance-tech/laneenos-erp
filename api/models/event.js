@@ -3,6 +3,11 @@ import mongoose from 'mongoose';
 
 // Define the schema for the event
 const eventSchema = new mongoose.Schema({
+  branchId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "Branch", 
+      required: true 
+    },
   eventFor: {
     type: String,
     enum: ['All', 'Students', 'Staffs'],

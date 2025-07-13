@@ -68,6 +68,23 @@ const FeesGroup: React.FC = () => {
 
   const columns = [
     {
+      title: "",
+      key: "status-dot",
+      width: 20,
+      render: (record: any) => (
+        <span
+          style={{
+            display: "inline-block",
+            width: 10,
+            height: 10,
+            borderRadius: "50%",
+            backgroundColor: "ffff",
+            marginLeft: 15,
+          }}
+        />
+      ),
+    },
+    {
       title: "Fees Group",
       dataIndex: "name",
       sorter: (a: FeesGroup, b: FeesGroup) => a.name.localeCompare(b.name),
@@ -182,7 +199,7 @@ const FeesGroup: React.FC = () => {
               <h4 className="mb-3">Fees Groups</h4>
             </div>
             <div className="card-body p-0 py-3">
-              <Table dataSource={feesGroups} columns={columns} Selection={true} />
+              <Table dataSource={feesGroups} columns={columns}/>
             </div>
           </div>
         </div>

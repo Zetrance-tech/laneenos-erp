@@ -254,6 +254,23 @@ const SessionUI = () => {
 
   // Table columns
   const columns = [
+    {
+      title: "",
+      key: "status-dot",
+      width: 20,
+      render: (record: any) => (
+        <span
+          style={{
+            display: "inline-block",
+            width: 10,
+            height: 10,
+            borderRadius: "50%",
+            backgroundColor: "ffff",
+            marginLeft: 15,
+          }}
+        />
+      ),
+    },
     // {
     //   title: "ID",
     //   dataIndex: "sessionId",
@@ -388,7 +405,7 @@ const SessionUI = () => {
                   <Spin size="large" />
                 </div>
               ) : (
-                <Table columns={columns} dataSource={sessions} Selection={true} />
+                <Table columns={columns} dataSource={sessions}/>
               )}
             </div>
           </div>

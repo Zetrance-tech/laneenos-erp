@@ -6,6 +6,7 @@ import Attendance from "../models/attendance.js";
 
 export const createOrUpdateTimetable = async (req, res) => {
   try {
+    const {branchId} = req.user;
     const { classId, weekStartDate, weekEndDate, days } = req.body;
     const userId = req.user.userId;
 
@@ -13,7 +14,7 @@ export const createOrUpdateTimetable = async (req, res) => {
       return res.status(400).json({ message: "All required fields must be provided" });
     }
 
-    const classData = await Class.findById(classId);
+    const classData = await Class.findOne({ _id: classId, branchId });
     if (!classData) {
       return res.status(404).json({ message: "Class not found" });
     }
@@ -26,6 +27,7 @@ export const createOrUpdateTimetable = async (req, res) => {
       classId,
       weekStartDate: new Date(weekStartDate),
       weekEndDate: new Date(weekEndDate),
+      branchId
     });
 
     let timetable;
@@ -41,6 +43,7 @@ export const createOrUpdateTimetable = async (req, res) => {
         days,
         createdBy: userId,
         sessionId: classData.sessionId,
+        branchId
       });
       await timetable.save();
     }
@@ -53,9 +56,11 @@ export const createOrUpdateTimetable = async (req, res) => {
 
 export const getTimetable = async (req, res) => {
   try {
+    const {branchId} = req.user;
+
     const { classId, weekStartDate } = req.params;
     const userId = req.user.userId;
-    const classData = await Class.findById(classId);
+    const classData = await Class.findOne({ _id: classId, branchId });
     if (!classData) {
       return res.status(404).json({ message: "Class not found" });
     }
@@ -68,7 +73,7 @@ export const getTimetable = async (req, res) => {
 
     const timetable = await Timetable.findOne({
       classId,
-      weekStartDate: startDate,
+      weekStartDate: startDate, branchId
     }).populate("days.slots.teacherId", "name");
     if (!timetable) {
       return res.status(404).json({ message: "Timetable not found for this week" });
@@ -82,6 +87,8 @@ export const getTimetable = async (req, res) => {
 
 export const updateActivityStatus = async (req, res) => {
   try {
+    const {branchId} = req.user;
+
     const { timetableId, dayIndex, slotIndex, status, notes } = req.body;
     const userId = req.user.userId;
 
@@ -89,12 +96,12 @@ export const updateActivityStatus = async (req, res) => {
       return res.status(400).json({ message: "Required fields missing" });
     }
 
-    const timetable = await Timetable.findById(timetableId);
+    const timetable = await Timetable.findOne({ _id: timetableId, branchId });
     if (!timetable) {
       return res.status(404).json({ message: "Timetable not found" });
     }
 
-    const classData = await Class.findById(timetable.classId);
+    const classData = await Class.findOne({ _id: timetable.classId, branchId });
     if (req.user.role === "teacher" && !classData.teacherId.includes(new mongoose.Types.ObjectId(userId))) {
       return res.status(403).json({ message: "You are not authorized to update this timetable" });
     }
@@ -118,9 +125,11 @@ export const updateActivityStatus = async (req, res) => {
 
 export const getStudentTimetable1 = async (req, res) => {
   try {
+    const {branchId} = req.user;
+
     const { studentId, weekStartDate } = req.params;
 
-    const student = await Student.findById(studentId)
+    const student = await Student.findOne({ _id: studentId, branchId })
       .populate("classId", "name")
       .populate("sessionId", "name");
 
@@ -130,7 +139,7 @@ export const getStudentTimetable1 = async (req, res) => {
 
     if (req.user.role === "parent") {
       const isParent = await Student.findOne({
-        _id: studentId,
+        _id: studentId, branchId,
         $or: [
           { "fatherInfo.email": req.user.email },
           { "motherInfo.email": req.user.email },
@@ -148,6 +157,7 @@ export const getStudentTimetable1 = async (req, res) => {
       sessionId: student.sessionId,
       classId: student.classId,
       weekStartDate: startDate,
+      branchId
     }).populate("days.slots.teacherId", "name");
 
     if (!timetable) {
@@ -155,7 +165,7 @@ export const getStudentTimetable1 = async (req, res) => {
     }
 
     if (req.user.role === "parent") {
-      const formattedTimetable = await formatTimetableForParent(timetable, studentId);
+      const formattedTimetable = await formatTimetableForParent(timetable, studentId, branchId);
       return res.status(200).json(formattedTimetable);
     }
 
@@ -165,7 +175,7 @@ export const getStudentTimetable1 = async (req, res) => {
   }
 };
 
-async function formatTimetableForParent(timetable, studentId) {
+async function formatTimetableForParent(timetable, studentId, branchId) {
   const formattedDays = [];
 
   for (const day of timetable.days) {
@@ -173,6 +183,7 @@ async function formatTimetableForParent(timetable, studentId) {
       classId: timetable.classId,
       date: day.date,
       "records.studentId": studentId,
+      branchId,
     });
 
     if (attendance) {
@@ -206,6 +217,8 @@ async function formatTimetableForParent(timetable, studentId) {
 
 export const editTimetableSlot = async (req, res) => {
   try {
+    const {branchId} = req.user;
+
     const { timetableId, dayIndex, slotIndex, description, activity } = req.body;
     const userId = req.user.userId;
 
@@ -213,12 +226,12 @@ export const editTimetableSlot = async (req, res) => {
       return res.status(400).json({ message: "Required fields missing" });
     }
 
-    const timetable = await Timetable.findById(timetableId);
+    const timetable = await Timetable.findOne({ _id: timetableId, branchId });
     if (!timetable) {
       return res.status(404).json({ message: "Timetable not found" });
     }
 
-    const classData = await Class.findById(timetable.classId);
+    const classData = await Class.findOne({ _id: timetable.classId, branchId });
     if (req.user.role === "teacher" && !classData.teacherId.includes(new mongoose.Types.ObjectId(userId))) {
       return res.status(403).json({ message: "You are not authorized to update this timetable" });
     }
@@ -240,6 +253,8 @@ export const editTimetableSlot = async (req, res) => {
 
 export const deleteTimetableSlot = async (req, res) => {
   try {
+    const {branchId} = req.user;
+
     const { timetableId, dayIndex, slotIndex } = req.body;
     const userId = req.user.userId;
 
@@ -247,12 +262,12 @@ export const deleteTimetableSlot = async (req, res) => {
       return res.status(400).json({ message: "Required fields missing" });
     }
 
-    const timetable = await Timetable.findById(timetableId);
+    const timetable = await Timetable.findOne({ _id: timetableId, branchId });
     if (!timetable) {
       return res.status(404).json({ message: "Timetable not found" });
     }
 
-    const classData = await Class.findById(timetable.classId);
+    const classData = await Class.findOne({ _id: timetable.classId, branchId });
     if (req.user.role === "teacher" && !classData.teacherId.includes(new mongoose.Types.ObjectId(userId))) {
       return res.status(403).json({ message: "You are not authorized to delete slots from this timetable" });
     }
@@ -274,213 +289,3 @@ export const deleteTimetableSlot = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
-
-// import Timetable from "../models/timetable.js";
-// import Class from "../models/class.js";
-// import mongoose from "mongoose";
-// import Student from "../models/student.js"; // Ensure Student model is imported
-// import Attendance from "../models/attendance.js"; // Ensure Attendance model is imported
-
-// export const createOrUpdateTimetable = async (req, res) => {
-//   try {
-//     const { classId, weekStartDate, weekEndDate, days } = req.body;
-//     const userId = req.user.userId;
-
-//     if (!classId || !weekStartDate || !weekEndDate || !days) {
-//       return res.status(400).json({ message: "All required fields must be provided" });
-//     }
-
-//     const classData = await Class.findById(classId);
-//     if (!classData) {
-//       return res.status(404).json({ message: "Class not found" });
-//     }
-
-//     if (req.user.role === "teacher" && !classData.teacherId.includes(new mongoose.Types.ObjectId(userId))) {
-//       return res.status(403).json({ message: "You are not authorized to manage this class timetable" });
-//     }
-
-//     const existingTimetable = await Timetable.findOne({
-//       classId,
-//       weekStartDate: new Date(weekStartDate),
-//       weekEndDate: new Date(weekEndDate),
-//     });
-
-//     let timetable;
-//     if (existingTimetable) {
-//       existingTimetable.days = days;
-//       existingTimetable.lastUpdatedBy = userId;
-//       timetable = await existingTimetable.save();
-//     } else {
-//       timetable = new Timetable({
-//         classId,
-//         weekStartDate: new Date(weekStartDate),
-//         weekEndDate: new Date(weekEndDate),
-//         days,
-//         createdBy: userId,
-//         sessionId: classData.sessionId,
-//       });
-//       await timetable.save();
-//     }
-
-//     res.status(200).json(timetable);
-//   } catch (error) {
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
-// export const getTimetable = async (req, res) => {
-//   try {
-//     const { classId, weekStartDate } = req.params;
-//     const userId = req.user.userId;
-//     console.log(req.params)
-//     const classData = await Class.findById(classId);
-//     if (!classData) {
-//       return res.status(404).json({ message: "Class not found" });
-//     }
-//     console.log("Classdata", classData)
-//     if (req.user.role === "teacher" && !classData.teacherId.includes(new mongoose.Types.ObjectId(userId))) {
-//       return res.status(403).json({ message: "You are not authorized to view this class timetable" });
-//     }
-
-//     const startDate = new Date(weekStartDate);
-//     startDate.setUTCHours(0, 0, 0, 0);
-
-//     const timetable = await Timetable.findOne({
-//       classId,
-//       weekStartDate: startDate,
-//     }).populate("days.slots.teacherId", "name");
-//     console.log("TT",timetable)
-//     if (!timetable) {
-//       return res.status(404).json({ message: "Timetable not found for this week" });
-//     }
-
-//     res.status(200).json(timetable);
-//   } catch (error) {
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
-// export const updateActivityStatus = async (req, res) => {
-//   try {
-//     const { timetableId, dayIndex, slotIndex, status, notes } = req.body;
-//     const userId = req.user.userId;
-
-//     if (!timetableId || dayIndex === undefined || slotIndex === undefined || !status) {
-//       return res.status(400).json({ message: "Required fields missing" });
-//     }
-
-//     const timetable = await Timetable.findById(timetableId);
-//     if (!timetable) {
-//       return res.status(404).json({ message: "Timetable not found" });
-//     }
-
-//     const classData = await Class.findById(timetable.classId);
-//     if (req.user.role === "teacher" && !classData.teacherId.includes(new mongoose.Types.ObjectId(userId))) {
-//       return res.status(403).json({ message: "You are not authorized to update this timetable" });
-//     }
-
-//     if (dayIndex >= timetable.days.length || slotIndex >= timetable.days[dayIndex].slots.length) {
-//       return res.status(400).json({ message: "Invalid day or slot index" });
-//     }
-
-//     timetable.days[dayIndex].slots[slotIndex].status = status;
-//     if (notes) {
-//       timetable.days[dayIndex].slots[slotIndex].notes = notes;
-//     }
-//     timetable.lastUpdatedBy = userId;
-
-//     const updatedTimetable = await timetable.save();
-//     res.status(200).json(updatedTimetable);
-//   } catch (error) {
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
-// export const getStudentTimetable1 = async (req, res) => {
-//   try {
-//     const { studentId, weekStartDate } = req.params;
-
-//     const student = await Student.findById(studentId)
-//       .populate("classId", "name")
-//       .populate("sessionId", "name");
-
-//     if (!student) {
-//       return res.status(404).json({ message: "Student not found" });
-//     }
-
-//     if (req.user.role === "parent") {
-//       const isParent = await Student.findOne({
-//         _id: studentId,
-//         $or: [
-//           { "fatherInfo.email": req.user.email },
-//           { "motherInfo.email": req.user.email },
-//           { "guardianInfo.email": req.user.email },
-//         ],
-//       });
-
-//       if (!isParent) {
-//         return res.status(403).json({ message: "You are not authorized to view this timetable" });
-//       }
-//     }
-
-//     const startDate = new Date(weekStartDate);
-//     const timetable = await Timetable.findOne({
-//       sessionId: student.sessionId,
-//       classId: student.classId,
-//       weekStartDate: startDate,
-//     }).populate("days.slots.teacherId", "name");
-
-//     if (!timetable) {
-//       return res.status(404).json({ message: "Timetable not found for this week" });
-//     }
-
-//     if (req.user.role === "parent") {
-//       const formattedTimetable = await formatTimetableForParent(timetable, studentId);
-//       return res.status(200).json(formattedTimetable);
-//     }
-
-//     res.status(200).json(timetable);
-//   } catch (error) {
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
-// async function formatTimetableForParent(timetable, studentId) {
-//   const formattedDays = [];
-
-//   for (const day of timetable.days) {
-//     const attendance = await Attendance.findOne({
-//       classId: timetable.classId,
-//       date: day.date,
-//       "records.studentId": studentId,
-//     });
-
-//     if (attendance) {
-//       const studentRecord = attendance.records.find((r) => r.studentId.toString() === studentId);
-//       if (studentRecord && studentRecord.status === "present") {
-//         const formattedDay = {
-//           day: day.day,
-//           date: day.date,
-//           slots: day.slots.map((slot) => ({
-//             description: slot.description,
-//             activity: slot.activity,
-//             teacherId: slot.teacherId,
-//             status: slot.status,
-//             notes: slot.status === "completed" ? slot.notes : undefined,
-//           })),
-//         };
-//         formattedDays.push(formattedDay);
-//       }
-//     }
-//   }
-
-//   return {
-//     _id: timetable._id,
-//     sessionId: timetable.sessionId,
-//     classId: timetable.classId,
-//     weekStartDate: timetable.weekStartDate,
-//     weekEndDate: timetable.weekEndDate,
-//     days: formattedDays,
-//   };
-// }

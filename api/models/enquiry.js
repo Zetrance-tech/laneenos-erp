@@ -1,6 +1,11 @@
 import mongoose from 'mongoose';
 
 const enquirySchema = new mongoose.Schema({
+  branchId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "Branch", 
+      required: true 
+    },
   status: {
     type: String,
     enum: ["enquiry generated", "in process", "admission taken"],

@@ -46,6 +46,9 @@ const Login = () => {
         case "student":
           navigate(routes.studentDashboard);
           break;
+         case "superadmin":
+          navigate(routes.superAdminDashboard);
+          break;
       }
     } catch (error: any) {
       toast.error(error.message);

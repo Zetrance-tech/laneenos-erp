@@ -1,12 +1,26 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { all_routes } from '../../router/all_routes';
 import { useAuth } from '../../../context/AuthContext';
-interface Sender {
-  name: string;
+import { jwtDecode } from 'jwt-decode';
+import { Select, Space, Input, Table, Modal } from 'antd';
+import { SearchOutlined } from '@ant-design/icons';
+
+interface MyTokenPayload {
+  userId: string;
   role: string;
+  branchId: string;
+  iat: number;
+  exp: number;
+}
+
+let decoded: MyTokenPayload | null = null;
+
+interface Sender {
+  name?: string; // Made optional to handle null/undefined cases
+  role?: string;
 }
 
 interface User {
@@ -26,7 +40,7 @@ interface Student {
 
 interface Message {
   _id: string;
-  sender: Sender;
+  sender: Sender | null; // Allow sender to be null
   recipients: {
     users: User[];
     classes: Class[];
@@ -37,15 +51,12 @@ interface Message {
   attachment: string | null;
   createdAt: string;
 }
+
 const API_URL = process.env.REACT_APP_URL;
 
 const ReceiveMessages: React.FC = () => {
   const routes = all_routes;
-  const userDropdownRef = useRef<HTMLDivElement | null>(null);
-  const classDropdownRef = useRef<HTMLDivElement | null>(null);
-  const studentDropdownRef = useRef<HTMLDivElement | null>(null);
   const { token } = useAuth();
-
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const [messages, setMessages] = useState<Message[]>([]);
   const [filteredMessages, setFilteredMessages] = useState<Message[]>([]);
@@ -58,34 +69,40 @@ const ReceiveMessages: React.FC = () => {
   const [selectAllUsers, setSelectAllUsers] = useState(false);
   const [selectAllClasses, setSelectAllClasses] = useState(false);
   const [selectAllStudents, setSelectAllStudents] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
 
-  // Fetch messages and available filters on mount
+  try {
+    decoded = token ? jwtDecode<MyTokenPayload>(token) : null;
+  } catch (error) {
+    console.error('Error decoding token:', error);
+    toast.error('Invalid token. Please log in again.');
+  }
+
+  // Fetch messages and available filter options on mount
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const messagesRes = await axios.get(`${API_URL}/api/messages/inbox?userId=${user._id}`, {
+        const messagesRes = await axios.get(`${API_URL}/api/messages/inbox?userId=${decoded?.userId}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         });
         setMessages(messagesRes.data);
         setFilteredMessages(messagesRes.data);
-  
-        // Fetch filter options based on role
-        if (user.role === 'teacher') {
-          // First, fetch the teacher's classes
-          const classesRes = await axios.get(`${API_URL}/api/messages/classes/teacher/${user._id}`, {
+
+        if (decoded?.role === 'teacher') {
+          const classesRes = await axios.get(`${API_URL}/api/messages/classes/teacher/${decoded?.userId}`, {
             headers: {
               Authorization: `Bearer ${token}`,
             },
           });
           setAvailableClasses(classesRes.data);
-  
-          // Then, fetch students for those classes using POST
-          const classIds = classesRes.data.map((cls:any) => cls._id);
+
+          const classIds = classesRes.data.map((cls: any) => cls._id);
           const studentsRes = await axios.post(
             `${API_URL}/api/messages/students`,
-            { classIds }, // Send classIds in the body
+            { classIds },
             {
               headers: {
                 Authorization: `Bearer ${token}`,
@@ -93,14 +110,14 @@ const ReceiveMessages: React.FC = () => {
             }
           );
           setAvailableStudents(studentsRes.data);
-        } else if (user.role === 'parent') {
+        } else if (decoded?.role === 'parent') {
           const adminsRes = await axios.get(`${API_URL}/api/messages/users/admins`, {
             headers: {
               Authorization: `Bearer ${token}`,
             },
           });
           setAvailableUsers(adminsRes.data);
-        } else if (user.role === 'student') {
+        } else if (decoded?.role === 'student') {
           const studentRes = await axios.get(`${API_URL}/api/messages/students/by-email?email=${user.email}`, {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -116,47 +133,60 @@ const ReceiveMessages: React.FC = () => {
           setAvailableClasses([classesRes.data]);
           setAvailableStudents([student]);
         }
-      } catch (error:any) {
+      } catch (error: any) {
         console.error('Error fetching data:', error.response?.data, error.response?.status);
         toast.error(error.response?.data?.error || 'Failed to fetch data');
       }
     };
     fetchData();
-  }, [user._id, user.role, user.email]);
+  }, [decoded?.userId, decoded?.role, user.email, token]);
 
-  // Filter messages (only for non-admin roles)
+  // Frontend-only filtering
   useEffect(() => {
-    if (user.role === 'admin') {
-      setFilteredMessages(messages); // No filtering needed for admin
-      return;
-    }
-  
-    let filtered = messages;
-    if (selectedUsers.length > 0) {
-      filtered = filtered.filter((msg) => msg.recipients.users.some((u) => selectedUsers.includes(u._id)));
-    }
-    if (selectedClasses.length > 0) {
-      filtered = filtered.filter((msg) => msg.recipients.classes.some((c) => selectedClasses.includes(c._id)));
-    }
-    if (selectedStudents.length > 0) {
-      filtered = filtered.filter((msg) => msg.recipients.students.some((s) => selectedStudents.includes(s._id)));
-    }
-    setFilteredMessages(filtered);
-  }, [selectedUsers, selectedClasses, selectedStudents, messages, user.role]);
+    let filtered = [...messages];
 
-  // Handle selection
-  const handleSelectionChange = (type: 'users' | 'students' | 'classes', id: string) => {
+    // Apply filters only for non-admin roles
+    if (decoded?.role !== 'admin') {
+      if (selectedUsers.length > 0) {
+        filtered = filtered.filter((msg) =>
+          msg.recipients.users.some((u) => selectedUsers.includes(u._id))
+        );
+      }
+      if (selectedClasses.length > 0) {
+        filtered = filtered.filter((msg) =>
+          msg.recipients.classes.some((c) => selectedClasses.includes(c._id))
+        );
+      }
+      if (selectedStudents.length > 0) {
+        filtered = filtered.filter((msg) =>
+          msg.recipients.students.some((s) => selectedStudents.includes(s._id))
+        );
+      }
+    }
+
+    // Apply global search filter
+    if (searchText) {
+      filtered = filtered.filter(
+        (msg) =>
+          msg.subject.toLowerCase().includes(searchText.toLowerCase()) ||
+          (msg.sender?.name?.toLowerCase()?.includes(searchText.toLowerCase()) ?? false)
+      );
+    }
+
+    setFilteredMessages(filtered);
+  }, [selectedUsers, selectedClasses, selectedStudents, messages, decoded?.role, searchText]);
+
+  // Handle selection changes for antd Select
+  const handleSelectionChange = (type: 'users' | 'students' | 'classes', values: string[]) => {
     const setter = type === 'users' ? setSelectedUsers : type === 'classes' ? setSelectedClasses : setSelectedStudents;
     const allSetter = type === 'users' ? setSelectAllUsers : type === 'classes' ? setSelectAllClasses : setSelectAllStudents;
     const available = type === 'users' ? availableUsers : type === 'classes' ? availableClasses : availableStudents;
 
-    setter((prev) => {
-      const updated = prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id];
-      allSetter(updated.length === available.length);
-      return updated;
-    });
+    setter(values);
+    allSetter(values.length === available.length);
   };
 
+  // Handle select all functionality
   const handleSelectAll = (type: 'users' | 'students' | 'classes') => {
     const allIds = type === 'users'
       ? availableUsers.map((u) => u._id)
@@ -171,22 +201,34 @@ const ReceiveMessages: React.FC = () => {
     allSetter(!isAllSelected);
   };
 
-  // Close dropdowns
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      [userDropdownRef, classDropdownRef, studentDropdownRef].forEach((ref) => {
-        if (ref.current && !ref.current.contains(event.target as Node)) {
-          ref.current.classList.remove('show');
-        }
-      });
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
   const selectedUserNames = availableUsers.filter((u) => selectedUsers.includes(u._id)).map((u) => u.name).join(', ') || 'None';
   const selectedClassNames = availableClasses.filter((c) => selectedClasses.includes(c._id)).map((c) => c.name).join(', ') || 'None';
   const selectedStudentNames = availableStudents.filter((s) => selectedStudents.includes(s._id)).map((s) => s.name).join(', ') || 'None';
+
+  // Table columns
+  const columns = [
+    {
+      title: 'Subject',
+      dataIndex: 'subject',
+      key: 'subject',
+      render: (text: string, record: Message) => (
+        <a href="#" onClick={() => setSelectedMessage(record)}>
+          {text}
+        </a>
+      ),
+    },
+    {
+      title: 'From',
+      key: 'sender',
+      render: (_: any, record: Message) => `${record.sender?.name || 'Unknown'} (${record.sender?.role || 'N/A'})`,
+    },
+    {
+      title: 'Sent On',
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      render: (text: string) => new Date(text).toLocaleDateString(),
+    },
+  ];
 
   return (
     <div className="page-wrapper">
@@ -205,169 +247,191 @@ const ReceiveMessages: React.FC = () => {
           </div>
           <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">
             <div className="mb-2">
-              <Link to="#" className="btn btn-light me-2" onClick={() => window.location.reload()}>Refresh</Link>
+              <Link to="#" className="btn btn-light me-2" onClick={() => window.location.reload()}>
+                Refresh
+              </Link>
             </div>
           </div>
         </div>
         <div className="card">
           <div className="card-header d-flex align-items-center justify-content-between flex-wrap pb-0">
             <h4 className="mb-3">Received Messages</h4>
-            {user.role !== 'admin' && (
-              <div className="d-flex align-items-center flex-wrap">
-                {user.role === 'parent' && (
-                  <div className="mb-3 me-2">
-                    <div className="dropdown" ref={userDropdownRef}>
-                      <button className="btn btn-outline-light bg-white dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                        <i className="ti ti-filter me-2" /> Filter by User
-                      </button>
-                      <div className="dropdown-menu p-3" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                        <div className="form-check">
-                          <input type="checkbox" className="form-check-input" id="select-all-users" checked={selectAllUsers} onChange={() => handleSelectAll('users')} />
-                          <label className="form-check-label" htmlFor="select-all-users">All Users</label>
-                        </div>
-                        <hr className="my-2" />
+            <Space wrap>
+              <Input
+                prefix={<SearchOutlined />}
+                placeholder="Search by subject or sender"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                style={{ width: 200, marginBottom: 12 }}
+              />
+              {decoded?.role !== 'admin' && (
+                <>
+                  {decoded?.role === 'parent' && (
+                    <div className="mb-3 me-2">
+                      <Select
+                        mode="multiple"
+                        style={{ width: 200 }}
+                        placeholder="Filter by User"
+                        value={selectedUsers}
+                        onChange={(values) => handleSelectionChange('users', values)}
+                        allowClear
+                        showSearch
+                        optionFilterProp="children"
+                        dropdownRender={(menu) => (
+                          <>
+                            <div style={{ padding: '8px' }}>
+                              <label>
+                                <input
+                                  type="checkbox"
+                                  checked={selectAllUsers}
+                                  onChange={() => handleSelectAll('users')}
+                                  style={{ marginRight: '8px' }}
+                                />
+                                All Users
+                              </label>
+                            </div>
+                            <hr style={{ margin: '4px 0' }} />
+                            {menu}
+                          </>
+                        )}
+                      >
                         {availableUsers.map((u) => (
-                          <div key={u._id} className="form-check">
-                            <input
-                              type="checkbox"
-                              className="form-check-input"
-                              id={`user-${u._id}`}
-                              checked={selectedUsers.includes(u._id)}
-                              onChange={() => handleSelectionChange('users', u._id)}
-                            />
-                            <label className="form-check-label" htmlFor={`user-${u._id}`}>{u.name}</label>
-                          </div>
+                          <Select.Option key={u._id} value={u._id}>
+                            {u.name}
+                          </Select.Option>
                         ))}
-                      </div>
+                      </Select>
+                      <small className="text-muted d-block mt-1">Selected: {selectedUserNames}</small>
                     </div>
-                    <small className="text-muted d-block mt-1">Selected: {selectedUserNames}</small>
-                  </div>
-                )}
-                {(user.role === 'teacher' || user.role === 'student') && (
-                  <>
-                    <div className="mb-3 me-2">
-                      <div className="dropdown" ref={classDropdownRef}>
-                        <button className="btn btn-outline-light bg-white dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                          <i className="ti ti-filter me-2" /> Filter by Class
-                        </button>
-                        <div className="dropdown-menu p-3" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                          <div className="form-check">
-                            <input type="checkbox" className="form-check-input" id="select-all-classes" checked={selectAllClasses} onChange={() => handleSelectAll('classes')} />
-                            <label className="form-check-label" htmlFor="select-all-classes">All Classes</label>
-                          </div>
-                          <hr className="my-2" />
+                  )}
+                  {(decoded?.role === 'teacher' || decoded?.role === 'student') && (
+                    <>
+                      <div className="mb-3 me-2">
+                        <Select
+                          mode="multiple"
+                          style={{ width: 200 }}
+                          placeholder="Filter by Class"
+                          value={selectedClasses}
+                          onChange={(values) => handleSelectionChange('classes', values)}
+                          allowClear
+                          showSearch
+                          optionFilterProp="children"
+                          dropdownRender={(menu) => (
+                            <>
+                              <div style={{ padding: '8px' }}>
+                                <label>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectAllClasses}
+                                    onChange={() => handleSelectAll('classes')}
+                                    style={{ marginRight: '8px' }}
+                                  />
+                                  All Classes
+                                </label>
+                              </div>
+                              <hr style={{ margin: '4px 0' }} />
+                              {menu}
+                            </>
+                          )}
+                        >
                           {availableClasses.map((cls) => (
-                            <div key={cls._id} className="form-check">
-                              <input
-                                type="checkbox"
-                                className="form-check-input"
-                                id={`class-${cls._id}`}
-                                checked={selectedClasses.includes(cls._id)}
-                                onChange={() => handleSelectionChange('classes', cls._id)}
-                              />
-                              <label className="form-check-label" htmlFor={`class-${cls._id}`}>{cls.name}</label>
-                            </div>
+                            <Select.Option key={cls._id} value={cls._id}>
+                              {cls.name}
+                            </Select.Option>
                           ))}
-                        </div>
+                        </Select>
+                        <small className="text-muted d-block mt-1">Selected: {selectedClassNames}</small>
                       </div>
-                      <small className="text-muted d-block mt-1">Selected: {selectedClassNames}</small>
-                    </div>
-                    <div className="mb-3 me-2">
-                      <div className="dropdown" ref={studentDropdownRef}>
-                        <button className="btn btn-outline-light bg-white dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                          <i className="ti ti-filter me-2" /> Filter by Student
-                        </button>
-                        <div className="dropdown-menu p-3" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                          <div className="form-check">
-                            <input type="checkbox" className="form-check-input" id="select-all-students" checked={selectAllStudents} onChange={() => handleSelectAll('students')} />
-                            <label className="form-check-label" htmlFor="select-all-students">All Students</label>
-                          </div>
-                          <hr className="my-2" />
+                      <div className="mb-3 me-2">
+                        <Select
+                          mode="multiple"
+                          style={{ width: 200 }}
+                          placeholder="Filter by Student"
+                          value={selectedStudents}
+                          onChange={(values) => handleSelectionChange('students', values)}
+                          allowClear
+                          showSearch
+                          optionFilterProp="children"
+                          dropdownRender={(menu) => (
+                            <>
+                              <div style={{ padding: '8px' }}>
+                                <label>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectAllStudents}
+                                    onChange={() => handleSelectAll('students')}
+                                    style={{ marginRight: '8px' }}
+                                  />
+                                  All Students
+                                </label>
+                              </div>
+                              <hr style={{ margin: '4px 0' }} />
+                              {menu}
+                            </>
+                          )}
+                        >
                           {availableStudents.map((student) => (
-                            <div key={student._id} className="form-check">
-                              <input
-                                type="checkbox"
-                                className="form-check-input"
-                                id={`student-${student._id}`}
-                                checked={selectedStudents.includes(student._id)}
-                                onChange={() => handleSelectionChange('students', student._id)}
-                              />
-                              <label className="form-check-label" htmlFor={`student-${student._id}`}>{student.name}</label>
-                            </div>
+                            <Select.Option key={student._id} value={student._id}>
+                              {student.name}
+                            </Select.Option>
                           ))}
-                        </div>
+                        </Select>
+                        <small className="text-muted d-block mt-1">Selected: {selectedStudentNames}</small>
                       </div>
-                      <small className="text-muted d-block mt-1">Selected: {selectedStudentNames}</small>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
+                    </>
+                  )}
+                </>
+              )}
+            </Space>
           </div>
-          <div className="card-body p-0 py-3">
-            {filteredMessages.length === 0 ? (
-              <div className="p-3"><p>No messages found.</p></div>
-            ) : (
-              filteredMessages.map((message) => (
-                <div key={message._id} className="card board-hover mb-3 mx-3">
-                  <div className="card-body d-md-flex align-items-center justify-content-between pb-1">
-                    <div className="d-flex align-items-center mb-3">
-                      <span className="bg-soft-primary text-primary avatar avatar-md me-2 br-5 flex-shrink-0">
-                        <i className="ti ti-mail fs-16" />
-                      </span>
-                      <div>
-                        <h6 className="mb-1 fw-semibold">
-                          <Link to="#" data-bs-toggle="modal" data-bs-target={`#view_message_${message._id}`}>
-                            {message.subject}
-                          </Link>
-                        </h6>
-                        <p><i className="ti ti-user me-1" /> From: {message.sender.name} ({message.sender.role})</p>
-                        <p><i className="ti ti-calendar me-1" /> Sent on: {new Date(message.createdAt).toLocaleDateString()}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
+          <div className="card-body py-3">
+            <Table
+              columns={columns}
+              dataSource={filteredMessages}
+              rowKey="_id"
+              pagination={{ pageSize: 10 }}
+              locale={{ emptyText: 'No messages found' }}
+            />
           </div>
         </div>
       </div>
 
-      {filteredMessages.map((message) => (
-        <div className="modal fade" id={`view_message_${message._id}`} key={message._id}>
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h4 className="modal-title">{message.subject}</h4>
-                <button type="button" className="btn-close custom-btn-close" data-bs-dismiss="modal" aria-label="Close">
-                  <i className="ti ti-x" />
-                </button>
+      <Modal
+        title={selectedMessage?.subject || 'Message Details'}
+        open={!!selectedMessage}
+        onCancel={() => setSelectedMessage(null)}
+        footer={null}
+      >
+        {selectedMessage && (
+          <div>
+            <div className="mb-3">
+              <p>{selectedMessage.message}</p>
+            </div>
+            <div className="mb-3">
+              <div className="bg-light p-3 pb-2 rounded">
+                <label className="form-label">Attachment</label>
+                <p className="text-primary">{selectedMessage.attachment || 'No attachment'}</p>
               </div>
-              <div className="modal-body pb-0">
-                <div className="mb-3"><p>{message.message}</p></div>
-                <div className="mb-3">
-                  <div className="bg-light p-3 pb-2 rounded">
-                    <label className="form-label">Attachment</label>
-                    <p className="text-primary">{message.attachment || 'No attachment'}</p>
-                  </div>
+            </div>
+            <div className="border-top pt-3">
+              <div className="d-flex align-items-center flex-wrap">
+                <div className="d-flex align-items-center me-4 mb-3">
+                  <span className="avatar avatar-sm bg-light me-1">
+                    <i className="ti ti-user text-default fs-14" />
+                  </span>
+                  From: {selectedMessage.sender?.name || 'Unknown'} ({selectedMessage.sender?.role || 'N/A'})
                 </div>
-                <div className="border-top pt-3">
-                  <div className="d-flex align-items-center flex-wrap">
-                    <div className="d-flex align-items-center me-4 mb-3">
-                      <span className="avatar avatar-sm bg-light me-1"><i className="ti ti-user text-default fs-14" /></span>
-                      From: {message.sender.name} ({message.sender.role})
-                    </div>
-                    <div className="d-flex align-items-center me-4 mb-3">
-                      <span className="avatar avatar-sm bg-light me-1"><i className="ti ti-calendar text-default fs-14" /></span>
-                      Sent on: {new Date(message.createdAt).toLocaleDateString()}
-                    </div>
-                  </div>
+                <div className="d-flex align-items-center me-4 mb-3">
+                  <span className="avatar avatar-sm bg-light me-1">
+                    <i className="ti ti-calendar text-default fs-14" />
+                  </span>
+                  Sent on: {new Date(selectedMessage.createdAt).toLocaleDateString()}
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      ))}
+        )}
+      </Modal>
     </div>
   );
 };

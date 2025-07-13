@@ -1228,6 +1228,23 @@ const FeeTemplateManager: React.FC = () => {
 
   const templateColumns = [
     {
+      title: "",
+      key: "status-dot",
+      width: 20,
+      render: (record: any) => (
+        <span
+          style={{
+            display: "inline-block",
+            width: 10,
+            height: 10,
+            borderRadius: "50%",
+            backgroundColor: "ffff",
+            marginLeft: 15,
+          }}
+        />
+      ),
+    },
+    {
       title: "Template ID",
       dataIndex: "templateId",
       render: (templateId: string) => <span>{templateId || "N/A"}</span>,

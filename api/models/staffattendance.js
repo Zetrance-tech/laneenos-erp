@@ -1,5 +1,10 @@
 import mongoose from "mongoose";
 const staffAttendanceSchema = new mongoose.Schema({
+  branchId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "Branch", 
+      required: true 
+    },
   staffId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
@@ -14,7 +19,15 @@ const staffAttendanceSchema = new mongoose.Schema({
     required: true,
   },
   status: {
-    type: String, // e.g., "Present", "Absent", "Holiday", "Closed"
+    type: String, 
+    default: null,
+  },
+  inTime: {
+    type: String, 
+    default: null,
+  },
+  outTime: {
+    type: String,
     default: null,
   },
   date: {

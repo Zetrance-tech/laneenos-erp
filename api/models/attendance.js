@@ -1,6 +1,11 @@
 import mongoose from "mongoose";
 
 const attendanceSchema = new mongoose.Schema({
+  branchId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: "Branch", 
+    required: true // References Branch._id
+  },
   studentId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Student",
@@ -30,6 +35,7 @@ const attendanceSchema = new mongoose.Schema({
     ref: "Timetable",
     required: false
   },
+  
 }, { timestamps: true });
 
 export default mongoose.model("Attendance", attendanceSchema);

@@ -19,11 +19,13 @@ interface Staff {
   name?: string | null;
   role?: string | null;
   status?: string | null;
+  inTime?: string | null | undefined;
+  outTime?: string | null | undefined;
 }
 
 const API_URL = process.env.REACT_APP_URL || "";
 
-const StaffAttendance = () => {
+const StaffAttendance: React.FC = () => {
   const { token, user } = useAuth() || {};
   const routes = all_routes;
   const [loading, setLoading] = useState<boolean>(false);
@@ -35,8 +37,12 @@ const StaffAttendance = () => {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [selectedStaff, setSelectedStaff] = useState<string[]>([]);
   const [status, setStatus] = useState<string>("Present");
+  const [inTime, setInTime] = useState<string>("");
+  const [outTime, setOutTime] = useState<string>("");
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [editStatus, setEditStatus] = useState<string>("");
+  const [editInTime, setEditInTime] = useState<string>("");
+  const [editOutTime, setEditOutTime] = useState<string>("");
   const dropdownMenuRef = useRef<HTMLDivElement | null>(null);
   const decodedToken = token ? JSON.parse(atob(token.split(".")[1])) : null;
   const role = decodedToken?.role || "";
@@ -55,23 +61,23 @@ const StaffAttendance = () => {
   }, [selectedRole, selectedDate]);
 
   const fetchRoles = async () => {
-  setLoading(true);
-  try {
-    const response = await axios.get(`${API_URL}/api/attendance/staff/roles`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    setLoading(true);
+    try {
+      const response = await axios.get(`${API_URL}/api/attendance/staff/roles`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-    const filteredRoles = (response.data || []).filter(
-      (role: string) => role !== "admin" && role !== "parent"
-    );
+      const filteredRoles = (response.data || []).filter(
+        (role: string) => role !== "admin" && role !== "parent"
+      );
 
-    setRoles(["all", ...filteredRoles]);
-  } catch (error) {
-    console.error("Error fetching roles:", error);
-  } finally {
-    setLoading(false);
-  }
-};
+      setRoles(["all", ...filteredRoles]);
+    } catch (error) {
+      console.error("Error fetching roles:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchStaff = async (role: string, date: string) => {
     setLoading(true);
@@ -89,6 +95,8 @@ const StaffAttendance = () => {
         name: staff?.name || null,
         role: staff?.role || null,
         status: staff?.status || null,
+        inTime: staff?.inTime || null,
+        outTime: staff?.outTime || null,
       }));
       setStaff(fetchedStaff);
     } catch (error) {
@@ -126,60 +134,85 @@ const StaffAttendance = () => {
   };
 
   const handleMarkAttendance = async () => {
-  if (!selectedStaff.length) {
-    toast.error("Please select at least one staff member.");
-    return;
-  }
-
-  setLoading(true);
-  try {
-    const results = await Promise.allSettled(
-      selectedStaff.map(async (staffId) => {
-        const staffMember = staff.find((s) => s._id === staffId);
-        return axios.post(
-          `${API_URL}/api/attendance/staff-attendance`,
-          {
-            staffId,
-            date: selectedDate,
-            name: staffMember?.name || "Unknown",
-            role: staffMember?.role || "Unknown",
-            status,
-          },
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-      })
-    );
-
-    const failed = results.filter((res) => res.status === "rejected");
-    if (failed.length > 0) {
-      toast.error(`Failed to mark attendance for ${failed.length} staff.`);
-    } else {
-      toast.success("Attendance marked successfully.");
+    if (!selectedStaff.length) {
+      toast.error("Please select at least one staff member.");
+      return;
+    }
+    if (status === "Present" && (!inTime || !outTime)) {
+      toast.error("Please provide both In Time and Out Time for Present status.");
+      return;
     }
 
-    setStaff((prev) =>
-      prev.map((s) =>
-        selectedStaff.includes(s._id || "") ? { ...s, status } : s
-      )
-    );
-    setSelectedStaff([]);
-  } catch (err) {
-    console.error("Unexpected error:", err);
-    toast.error("Something went wrong.");
-  } finally {
-    setLoading(false);
-  }
-};
+    setLoading(true);
+    try {
+      const results = await Promise.allSettled(
+        selectedStaff.map(async (staffId) => {
+          const staffMember = staff.find((s) => s._id === staffId);
+          return axios.post(
+            `${API_URL}/api/attendance/staff-attendance`,
+            {
+              staffId,
+              date: selectedDate,
+              name: staffMember?.name || "Unknown",
+              role: staffMember?.role || "Unknown",
+              status,
+              inTime: status === "Present" ? inTime : null,
+              outTime: status === "Present" ? outTime : null,
+            },
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
+        })
+      );
 
+      const failed = results.filter((res) => res.status === "rejected");
+      if (failed.length > 0) {
+        toast.error(`Failed to mark attendance for ${failed.length} staff.`);
+      } else {
+        toast.success("Attendance marked successfully.");
+      }
 
-  const handleEditClick = (staffId: string, currentStatus: string | null) => {
+      setStaff((prev) =>
+        prev.map((s) =>
+          selectedStaff.includes(s._id || "")
+            ? {
+                ...s,
+                status,
+                inTime: status === "Present" ? inTime : null,
+                outTime: status === "Present" ? outTime : null,
+              }
+            : s
+        )
+      );
+      setSelectedStaff([]);
+      setInTime("");
+      setOutTime("");
+    } catch (err) {
+      console.error("Unexpected error:", err);
+      toast.error("Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditClick = (
+    staffId: string,
+    currentStatus: string | null,
+    currentInTime: string | null | undefined,
+    currentOutTime: string | null | undefined
+  ) => {
     setIsEditing(staffId);
     setEditStatus(currentStatus || "Present");
+    setEditInTime(currentInTime || "");
+    setEditOutTime(currentOutTime || "");
   };
 
   const handleSaveEdit = async (staffId: string) => {
+    if (editStatus === "Present" && (!editInTime || !editOutTime)) {
+      toast.error("Please provide both In Time and Out Time for Present status.");
+      return;
+    }
     setLoading(true);
     try {
       const staffMember = staff.find((s) => s._id === staffId);
@@ -191,6 +224,8 @@ const StaffAttendance = () => {
           name: staffMember?.name || "Unknown",
           role: staffMember?.role || "Unknown",
           status: editStatus,
+          inTime: editStatus === "Present" ? editInTime : null,
+          outTime: editStatus === "Present" ? editOutTime : null,
         },
         {
           headers: { Authorization: `Bearer ${token}` },
@@ -198,7 +233,14 @@ const StaffAttendance = () => {
       );
       setStaff((prev) =>
         prev.map((s) =>
-          s._id === staffId ? { ...s, status: editStatus } : s
+          s._id === staffId
+            ? {
+                ...s,
+                status: editStatus,
+                inTime: editStatus === "Present" ? editInTime : null,
+                outTime: editStatus === "Present" ? editOutTime : null,
+              }
+            : s
         )
       );
       setIsEditing(null);
@@ -269,7 +311,7 @@ const StaffAttendance = () => {
       title: "Status",
       dataIndex: "status",
       render: (text: string | null, record: Staff) => (
-        <div className="d-flex align-items-center" style={{ minWidth: "200px" }}>
+        <div className="d-flex align-items-center" style={{ minWidth: "400px" }}>
           {isEditing === record._id ? (
             <>
               <select
@@ -284,6 +326,26 @@ const StaffAttendance = () => {
                   </option>
                 ))}
               </select>
+              {editStatus === "Present" && (
+                <>
+                  <input
+                    type="time"
+                    value={editInTime}
+                    onChange={(e) => setEditInTime(e.target.value)}
+                    className="form-control me-2"
+                    style={{ width: "120px" }}
+                    placeholder="In Time"
+                  />
+                  <input
+                    type="time"
+                    value={editOutTime}
+                    onChange={(e) => setEditOutTime(e.target.value)}
+                    className="form-control me-2"
+                    style={{ width: "120px" }}
+                    placeholder="Out Time"
+                  />
+                </>
+              )}
               <button
                 className="btn btn-sm btn-success me-2"
                 onClick={() => handleSaveEdit(record._id || "")}
@@ -300,9 +362,26 @@ const StaffAttendance = () => {
           ) : (
             <>
               <span style={{ minWidth: "80px" }}>{text || "Not Marked"}</span>
+              {text === "Present" && (
+                <>
+                  <span style={{ minWidth: "80px" }}>
+                    In: {record.inTime || "N/A"}
+                  </span>
+                  <span style={{ minWidth: "80px" }}>
+                    Out: {record.outTime || "N/A"}
+                  </span>
+                </>
+              )}
               <button
                 className="btn btn-sm btn-outline-primary ms-2"
-                onClick={() => handleEditClick(record._id || "", text)}
+                onClick={() =>
+                  handleEditClick(
+                    record._id || "",
+                    text,
+                    record.inTime,
+                    record.outTime
+                  )
+                }
               >
                 Edit
               </button>
@@ -380,6 +459,28 @@ const StaffAttendance = () => {
                     ))}
                   </select>
                 </div>
+                {status === "Present" && (
+                  <>
+                    <div className="mb-3 me-2">
+                      <input
+                        type="time"
+                        className="form-control"
+                        value={inTime}
+                        onChange={(e) => setInTime(e.target.value)}
+                        placeholder="In Time"
+                      />
+                    </div>
+                    <div className="mb-3 me-2">
+                      <input
+                        type="time"
+                        className="form-control"
+                        value={outTime}
+                        onChange={(e) => setOutTime(e.target.value)}
+                        placeholder="Out Time"
+                      />
+                    </div>
+                  </>
+                )}
                 <div className="mb-3">
                   <button
                     className="btn btn-primary"

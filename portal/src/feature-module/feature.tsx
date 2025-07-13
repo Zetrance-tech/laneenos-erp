@@ -40,7 +40,8 @@ const Feature = () => {
       location.pathname === routes.adminDashboard ||
       location.pathname === routes.teacherDashboard ||
       location.pathname === routes.studentDashboard ||
-      location.pathname === routes.parentDashboard
+      location.pathname === routes.parentDashboard || 
+      location.pathname === routes.superAdminDashboard
     ) {
       // Show the loader when navigating to a new route
       setShowLoader(true);

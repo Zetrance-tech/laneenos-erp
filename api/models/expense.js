@@ -2,9 +2,13 @@ import mongoose from "mongoose";
 import Counter from "./counter.js";
 
 const expenseSchema = new mongoose.Schema({
+  branchId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "Branch", 
+      required: true 
+    },
   expenseNumber: {
     type: String,
-    unique: true,
     required: true
   },
   invoiceNumber: {
@@ -60,7 +64,7 @@ const expenseSchema = new mongoose.Schema({
   remarks: {
     type: String,
     trim: true
-  }
+  },
 }, {
   timestamps: true
 });
@@ -70,7 +74,7 @@ expenseSchema.pre('save', async function(next) {
   if (this.isNew) {
     try {
       const counter = await Counter.findOneAndUpdate(
-        { _id: 'expense_number' },
+        { type: 'expense_number' ,branchId: this.branchId},
         { $inc: { sequence: 1 } },
         { new: true, upsert: true }
       );

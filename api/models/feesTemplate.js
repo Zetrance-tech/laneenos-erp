@@ -1,10 +1,14 @@
 import mongoose from 'mongoose';
 
 const feeTemplateSchema = new mongoose.Schema({
+  branchId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "Branch", 
+      required: true 
+    },
   templateId: {
     type: String,
     required: true,
-    unique: true, 
   },
   name: {
     type: String,

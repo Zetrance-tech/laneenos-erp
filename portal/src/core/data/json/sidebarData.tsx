@@ -12,6 +12,8 @@ const getDashboardLink = (role: string) => {
       return routes.studentDashboard;
     case "parent":
       return routes.parentDashboard;
+    case "superadmin":
+      return routes.superAdminDashboard;
     default:
       return routes.studentDashboard;
   }
@@ -111,6 +113,38 @@ export const SidebarData = (userRole: string) => {
         //   ],
         // },
       ],
+    },
+    {
+      label: "Management",
+      submenuOpen: false,
+      showSubRoute: false,
+      allowedRoles: ["superadmin"],
+      submenuItems: [
+        {
+          label: "Branch",
+          icon: "ti ti-building-bank",
+          submenu: false,
+          showSubRoute: false,
+          link:routes.addBranch,
+          allowedRoles: ["superadmin"],
+        },
+        {
+          label: "Add Admin",
+          icon: "ti ti-user-plus",
+          submenu: false,
+          link:routes.addAdmin,
+          showSubRoute: false,
+          allowedRoles: ["superadmin"],
+        },
+        {
+          label: "Assign Admin",
+          icon: "ti ti-user-check",
+          link:routes.assignAdmin,
+          submenu: false,
+          showSubRoute: false,
+          allowedRoles: ["superadmin"],
+        }
+      ]
     },
     {
       label: "Academic",
@@ -346,9 +380,13 @@ export const SidebarData = (userRole: string) => {
         {
           label: "CCTV",
           icon: "ti ti-camera",
-          submenu: false,
+          submenu: true,
           showSubRoute: false,
-          link:routes.cctvList
+          allowedRoles: ["admin"],
+          submenuItems: [
+            { label: "CCTV Details", link: routes.cctvDetails },
+            { label: "CCTV Access", link: routes.cctvList },
+          ],
         },
         {
           label: "Enquiries",
@@ -521,13 +559,13 @@ export const SidebarData = (userRole: string) => {
           showSubRoute: false,
           submenu: false,
         },
-        {
-          label: "Events",
-          link: routes.events,
-          icon: "ti ti-calendar-question",
-          showSubRoute: false,
-          submenu: false,
-        },
+        // {
+        //   label: "Events",
+        //   link: routes.events,
+        //   icon: "ti ti-calendar-question",
+        //   showSubRoute: false,
+        //   submenu: false,
+        // },
         {
           label: "Messages",
           icon: "ti ti-report-money",

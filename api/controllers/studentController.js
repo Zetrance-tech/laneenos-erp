@@ -6,17 +6,17 @@ import mongoose from "mongoose";
 import User from "../models/user.js";
 import Counter from "../models/counter.js";
 import StudentFee from "../models/studentFee.js";
-export const getNextSequence = async (name) => {
+export const getNextSequence = async (type, branchId) => {
   const counter = await Counter.findOneAndUpdate(
-    { _id: name },
+    { type: `${type}_id`, branchId },
     { $inc: { sequence: 1 } },
-    { new: true, upsert: true }
+    { new: true, upsert: true, setDefaultsOnInsert: true  }
   );
   return counter.sequence;
 };
 
-export const generateId = async (entityType) => {
-  const sequence = await getNextSequence(`${entityType}_id`);
+export const generateId = async (entityType, branchId) => {
+  const sequence = await getNextSequence(entityType, branchId);
   switch (entityType) {
     case "class":
       return `LN-144-C${sequence}`; // LN-144-C001
@@ -33,7 +33,8 @@ export const generateId = async (entityType) => {
 
 export const getNextStudentId = async (req, res) => {
   try {
-    const counter = await Counter.findOne({ _id: "student_id" });
+    const { branchId } = req.user;
+    const counter = await Counter.findOne({ type : "student_id", branchId });
     const sequence = counter ? counter.sequence + 1 : 1;
     const id = `LNS-144-${sequence}`;
     res.status(200).json({ id });
@@ -42,6 +43,7 @@ export const getNextStudentId = async (req, res) => {
   }
 };
 export const getParentsCCTVAccess = async (req, res) => {
+    const { branchId } = req.user;
   const { sessionId, classId } = req.query;
   const { userId, role } = req.user || {};
 
@@ -57,17 +59,17 @@ export const getParentsCCTVAccess = async (req, res) => {
       return res.status(400).json({ message: "Invalid session ID or class ID format" });
     }
 
-    const session = await Session.findById(sessionId).select("name startDate endDate");
+    const session = await Session.findOne({_id:sessionId, branchId}).select("name startDate endDate");
     if (!session) {
       return res.status(404).json({ message: "Session not found" });
     }
 
-    const classData = await Class.findOne({ _id: classId, sessionId }).select("name");
+    const classData = await Class.findOne({ _id: classId, sessionId, branchId }).select("name");
     if (!classData) {
       return res.status(404).json({ message: "Class not found or does not belong to the specified session" });
     }
 
-    const students = await Student.find({ sessionId, classId, status: "active" })
+    const students = await Student.find({ sessionId, classId, status: "active" , branchId})
       .select("name fatherInfo motherInfo")
       .lean();
 
@@ -117,7 +119,7 @@ export const getParentsCCTVAccess = async (req, res) => {
 export const toggleParentCCTVAccess = async (req, res) => {
   const { studentId } = req.params;
   const { parentType } = req.body; // Expect "father" or "mother"
-  const { userId, role } = req.user;
+  const { userId, role, branchId } = req.user;
 
   try {
     if (role !== "admin") {
@@ -132,7 +134,7 @@ export const toggleParentCCTVAccess = async (req, res) => {
       return res.status(400).json({ message: "Invalid parent type. Must be 'father' or 'mother'" });
     }
 
-    const student = await Student.findById(studentId);
+    const student = await Student.findOne({ _id: studentId, branchId });
     if (!student) {
       return res.status(404).json({ message: "Student not found" });
     }
@@ -155,7 +157,7 @@ export const toggleParentCCTVAccess = async (req, res) => {
 export const updateCCTVTimes = async (req, res) => {
   const { studentId } = req.params;
   const { cctvStartTime, cctvEndTime, parentType } = req.body;
-  const { role } = req.user;
+  const { role , branchId} = req.user;
 
   try {
     if (role !== "admin") {
@@ -170,7 +172,7 @@ export const updateCCTVTimes = async (req, res) => {
       return res.status(400).json({ message: "Invalid parent type. Must be 'father' or 'mother'" });
     }
 
-    const student = await Student.findById(studentId);
+    const student = await Student.findOne({ _id: studentId, branchId });
     if (!student) {
       return res.status(404).json({ message: "Student not found" });
     }
@@ -236,17 +238,17 @@ export const updateCCTVTimes = async (req, res) => {
 };
 export const getAllStudents = async (req, res) => {
   try {
-    const { role, userId } = req.user; 
+    const { role, userId, branchId } = req.user; 
     let students;
 
     if (role === "teacher") {
-      const classes = await Class.find({ teacherId: userId }).select("_id");
+      const classes = await Class.find({ teacherId: userId, branchId }).select("_id");
       if (!classes || classes.length === 0) {
         return res.status(404).json({ message: "No classes assigned to this teacher" });
       }
 
       const classIds = classes.map((cls) => cls._id);
-      students = await Student.find({ classId: { $in: classIds } })
+      students = await Student.find({ classId: { $in: classIds }, branchId })
         .select(
           "name admissionNumber admissionDate status sessionId classId profileImage dateOfBirth gender bloodGroup religion category motherTongue languagesKnown fatherInfo motherInfo guardianInfo currentAddress permanentAddress transportInfo documents medicalHistory previousSchool"
         )
@@ -254,7 +256,7 @@ export const getAllStudents = async (req, res) => {
         .populate("classId", "name id");
 
     } else if (role === "admin") {
-      students = await Student.find()
+      students = await Student.find({branchId})
         .select(
           "name admissionNumber admissionDate status sessionId classId profileImage dateOfBirth gender bloodGroup religion category motherTongue languagesKnown fatherInfo motherInfo guardianInfo currentAddress permanentAddress transportInfo documents medicalHistory previousSchool"
         )
@@ -281,7 +283,9 @@ export const getAllStudents = async (req, res) => {
 export const getStudentById = async (req, res) => {
   try {
     const { admissionNumber } = req.params;
-    const student = await Student.findOne({ admissionNumber })
+    const { branchId } = req.user;
+
+    const student = await Student.findOne({ admissionNumber, branchId })
       .populate("sessionId", "name sessionId")
       .populate("classId", "name id");
 
@@ -295,9 +299,10 @@ export const getStudentById = async (req, res) => {
 
 // Get students by filter
 export const getStudentByFilter = async (req, res) => {
+    const { branchId } = req.user;
 
   try {
-    const students = await Student.find(req.body)
+    const students = await Student.find({ ...req.body, branchId })
       .select("name admissionNumber academicYear dateOfBirth gender status sessionId classId")
       .populate("sessionId", "name sessionId")
       .populate("classId", "name id");
@@ -309,10 +314,11 @@ export const getStudentByFilter = async (req, res) => {
   }
 };
 export const getStudentByAdmissionNumber = async (req, res) => {
+    const { branchId } = req.user;
 
   try {
     const { admissionNumber } = req.params;
-    const student = await Student.findOne({ admissionNumber }).select("_id classId");
+    const student = await Student.findOne({ admissionNumber , branchId}).select("_id classId");
     if (!student) {
       return res.status(404).json({ message: "Student not found" });
     }
@@ -322,6 +328,8 @@ export const getStudentByAdmissionNumber = async (req, res) => {
   }
 };
 export const createStudent = async (req, res) => {
+    const { branchId } = req.user;
+
   const {
     admissionDate,
     status,
@@ -348,23 +356,23 @@ export const createStudent = async (req, res) => {
       console.warn("Missing required fields:", { name, sessionId, admissionDate, dateOfBirth, gender });
       return res.status(400).json({ message: "Name, sessionId, admissionDate, dateOfBirth, and gender are required" });
     }
-    const admissionNumber = await generateId("student");
+    const admissionNumber = await generateId("student", branchId);
     console.log("Generated admissionNumber:", admissionNumber);
 
-    const existingStudent = await Student.findOne({ admissionNumber });
+    const existingStudent = await Student.findOne({ admissionNumber, branchId });
     if (existingStudent) {
       console.error("Admission number conflict:", admissionNumber);
       return res.status(400).json({ message: "Admission number already exists" });
     }
 
-    const session = await Session.findById(sessionId);
+    const session = await Session.findOne({ _id: sessionId, branchId });
     if (!session) {
       console.warn("Invalid session ID:", sessionId);
       return res.status(400).json({ message: "Invalid session ID" });
     }
 
     if (classId) {
-      const classExists = await Class.findById(classId);
+      const classExists = await Class.findOne({ _id: classId, branchId });
       if (!classExists) {
         console.warn("Invalid class ID:", classId);
         return res.status(400).json({ message: "Invalid class ID" });
@@ -395,6 +403,7 @@ export const createStudent = async (req, res) => {
       transportInfo,
       medicalHistory,
       documents,
+      branchId
     });
 
     const savedStudent = await newStudent.save();
@@ -408,6 +417,8 @@ export const createStudent = async (req, res) => {
 
 // Update student (Admin only)
 export const updateStudent = async (req, res) => {
+    const { branchId } = req.user;
+
   try {
     const { admissionNumber } = req.params;
     const {
@@ -436,7 +447,7 @@ export const updateStudent = async (req, res) => {
       return res.status(400).json({ message: "Name, sessionId, admissionDate, dateOfBirth, and gender are required" });
     }
     if (sessionId) {
-      const session = await Session.findById(sessionId);
+      const session = await Session.findOne({ _id: sessionId, branchId });
       if (!session) {
         console.warn("Invalid session ID:", sessionId);
         return res.status(400).json({ message: "Invalid session ID" });
@@ -444,7 +455,7 @@ export const updateStudent = async (req, res) => {
     }
 
     if (classId) {
-      const classExists = await Class.findById(classId);
+      const classExists = await Class.findOne({ _id: classId, branchId });
       if (!classExists) {
         console.warn("Invalid class ID:", classId);
         return res.status(400).json({ message: "Invalid class ID" });
@@ -456,7 +467,7 @@ export const updateStudent = async (req, res) => {
     }
 
     const updatedStudent = await Student.findOneAndUpdate(
-      { admissionNumber },
+      { admissionNumber, branchId },
       {
         admissionDate,
         status,
@@ -499,7 +510,9 @@ export const updateStudent = async (req, res) => {
 export const deleteStudent = async (req, res) => {
   try {
     const { admissionNumber } = req.params;
-    const deletedStudent = await Student.findOneAndDelete({ admissionNumber });
+    const { branchId } = req.user;
+
+    const deletedStudent = await Student.findOneAndDelete({ admissionNumber, branchId });
     if (!deletedStudent) {
       console.warn("Student not found:", admissionNumber);
       return res.status(404).json({ message: "Student not found" });
@@ -513,6 +526,7 @@ export const deleteStudent = async (req, res) => {
 };
 // Get students by class and session
 export const getStudentsByClassAndSession = async (req, res) => {
+    const { branchId } = req.user;
 
   try {
     const { classId, sessionId } = req.params;
@@ -524,7 +538,8 @@ export const getStudentsByClassAndSession = async (req, res) => {
 
     const classExists = await Class.findOne({ 
       _id: classId, 
-      sessionId: sessionId 
+      sessionId: sessionId ,
+      branchId
     });
 
     if (!classExists) {
@@ -535,7 +550,8 @@ export const getStudentsByClassAndSession = async (req, res) => {
 
     const students = await Student.find({ 
       classId: classId, 
-      sessionId: sessionId 
+      sessionId: sessionId ,
+      branchId
     })
     .select("name admissionNumber gender category profileImage classId")
 
@@ -554,78 +570,3 @@ export const getStudentsByClassAndSession = async (req, res) => {
   }
 };
 
-// export const updateCCTVTimes = async (req, res) => {
-//   const { studentId } = req.params;
-//   const { cctvStartTime, cctvEndTime } = req.body;
-//   const { role } = req.user;
-
-//   try {
-//     if (role !== "admin") {
-//       return res.status(403).json({ message: "Only admins can update CCTV times" });
-//     }
-
-//     if (!mongoose.Types.ObjectId.isValid(studentId)) {
-//       return res.status(400).json({ message: "Invalid student ID format" });
-//     }
-
-//     // Allow empty strings for unset times
-//     if (cctvStartTime === "" && cctvEndTime === "") {
-//       const student = await Student.findById(studentId);
-//       if (!student) {
-//         return res.status(404).json({ message: "Student not found" });
-//       }
-//       student.cctvStartTime = "";
-//       student.cctvEndTime = "";
-//       await student.save();
-//       return res.status(200).json({
-//         studentId,
-//         cctvStartTime: student.cctvStartTime,
-//         cctvEndTime: student.cctvEndTime,
-//       });
-//     }
-
-//     if (!cctvStartTime || !cctvEndTime) {
-//       return res.status(400).json({ message: "CCTV start and end times are required if not unset" });
-//     }
-
-//     // Validate time format (e.g., "HH:MM AM/PM") for non-empty strings
-//     const timeRegex = /^(0?[1-9]|1[0-2]):[0-5][0-9] (AM|PM)$/i;
-//     if (!timeRegex.test(cctvStartTime) || !timeRegex.test(cctvEndTime)) {
-//       return res.status(400).json({ message: "Invalid time format. Use HH:MM AM/PM" });
-//     }
-
-//     // Convert times to 24-hour format for comparison
-//     const parseTime = (timeStr) => {
-//       const [time, period] = timeStr.split(" ");
-//       let [hours, minutes] = time.split(":").map(Number);
-//       if (period.toUpperCase() === "PM" && hours !== 12) hours += 12;
-//       if (period.toUpperCase() === "AM" && hours === 12) hours = 0;
-//       return hours * 60 + minutes;
-//     };
-
-//     const startMinutes = parseTime(cctvStartTime);
-//     const endMinutes = parseTime(cctvEndTime);
-
-//     if (startMinutes >= endMinutes) {
-//       return res.status(400).json({ message: "Start time must be before end time" });
-//     }
-
-//     const student = await Student.findById(studentId);
-//     if (!student) {
-//       return res.status(404).json({ message: "Student not found" });
-//     }
-
-//     student.cctvStartTime = cctvStartTime;
-//     student.cctvEndTime = cctvEndTime;
-//     await student.save();
-
-//     return res.status(200).json({
-//       studentId,
-//       cctvStartTime: student.cctvStartTime,
-//       cctvEndTime: student.cctvEndTime,
-//     });
-//   } catch (error) {
-//     console.error("Error in updateCCTVTimes:", error.message, "Stack:", error.stack);
-//     return res.status(500).json({ message: "Server error while updating CCTV times", error: error.message });
-//   }
-// };

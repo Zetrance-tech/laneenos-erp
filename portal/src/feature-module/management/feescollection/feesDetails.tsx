@@ -11,7 +11,7 @@ import {
   Modal,
   Row,
   Col,
-  Input,
+  Input, Descriptions
 } from "antd";
 import { all_routes } from "../../router/all_routes";
 import moment from "moment";
@@ -447,8 +447,11 @@ const StudentFeeData: React.FC = () => {
     },
   ];
 
-  const renderPaymentDetails = (paymentDetails: PaymentDetail[]) => {
+  const renderPaymentDetails = (
+    paymentDetails: PaymentDetail[]
+  ) => {
     if (!paymentDetails || paymentDetails.length === 0) return null;
+  
     return paymentDetails.map((detail, index) => {
       const relevantFields: { label: string; value: string | undefined }[] = [
         { label: "Payment ID", value: detail.paymentId },
@@ -466,12 +469,7 @@ const StudentFeeData: React.FC = () => {
             : undefined,
         },
       ];
-      if (detail.excessAmount && detail.excessAmount > 0) {
-        relevantFields.push({
-          label: "Late Fee",
-          value: `₹${detail.excessAmount.toFixed(2)}`,
-        });
-      }
+  
       if (
         detail.modeOfPayment !== "Cash" &&
         detail.modeOfPayment !== "Cheque"
@@ -487,6 +485,7 @@ const StudentFeeData: React.FC = () => {
             value: moment(detail.transactionDate).format("MMM DD, YYYY"),
           });
       }
+  
       if (detail.modeOfPayment === "Cheque") {
         if (detail.chequeNo)
           relevantFields.push({ label: "Cheque No", value: detail.chequeNo });
@@ -496,25 +495,28 @@ const StudentFeeData: React.FC = () => {
             value: moment(detail.chequeDate).format("MMM DD, YYYY"),
           });
       }
+  
       if (["BankTransfer", "IMPS", "Cheque"].includes(detail.modeOfPayment)) {
         if (detail.bankName)
           relevantFields.push({ label: "Bank Name", value: detail.bankName });
       }
+  
       if (detail.remarks)
         relevantFields.push({ label: "Remarks", value: detail.remarks });
+  
       if (detail.internalNotes)
         relevantFields.push({
           label: "Internal Notes",
           value: detail.internalNotes,
         });
-
+  
       return (
         <div
           key={index}
           style={{
-            background: "#f9f9f9",
+            
             borderRadius: "8px",
-            padding: "16px",
+            padding: "10px",
             marginBottom: "16px",
             boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
           }}
@@ -522,25 +524,22 @@ const StudentFeeData: React.FC = () => {
           <h6 style={{ marginBottom: "12px", color: "#333", fontSize: "16px" }}>
             Payment {index + 1}
           </h6>
-          {relevantFields.map(
-            (field, idx) =>
-              field.value && (
-                <div
-                  key={idx}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: "8px",
-                    fontSize: "14px",
-                  }}
-                >
-                  <span style={{ fontWeight: 500, color: "#555" }}>
-                    {field.label}:
-                  </span>
-                  <span style={{ color: "#333" }}>{field.value}</span>
-                </div>
-              )
-          )}
+  
+          <Descriptions
+            bordered
+            size="small"
+            column={1}
+            labelStyle={{ fontWeight: 500, width: 160 }}
+          >
+            {relevantFields.map(
+              (field, idx) =>
+                field.value && (
+                  <Descriptions.Item key={idx} label={field.label}>
+                    {field.value}
+                  </Descriptions.Item>
+                )
+            )}
+          </Descriptions>
         </div>
       );
     });
@@ -691,42 +690,38 @@ const StudentFeeData: React.FC = () => {
                             </p>
                           </div>
                         </div>
-                        <Row gutter={16}>
-                          <Col span={12}>
-                            <div style={{ textAlign: "left", fontSize: "14px" }}>
-                              <p>
-                                <strong>Student Name:</strong>{" "}
-                                {selectedFeeDetails.student.name}
-                              </p>
-                              <p>
-                                <strong>Admission Number:</strong>{" "}
-                                {selectedFeeDetails.student.admissionNumber}
-                              </p>
-                              <p>
-                                <strong>Class:</strong>{" "}
-                                {classes.find((c: Class) =>
-                                  c._id ===
-                                  students.find(
-                                    (s) =>
-                                      s._id === selectedFeeDetails.student._id
-                                  )?.classId
-                                )?.name || "N/A"}
-                              </p>
-                            </div>
-                          </Col>
-                          <Col span={12}>
-                            <div style={{ textAlign: "left", fontSize: "14px" }}>
-                              <p>
-                                <strong>Father's Name:</strong>{" "}
-                                {selectedFeeDetails?.student?.fatherName || "N/A"}
-                              </p>
-                              <p>
-                                <strong>Mother's Name:</strong>{" "}
-                                {selectedFeeDetails?.student?.motherName || "N/A"}
-                              </p>
-                            </div>
-                          </Col>
-                        </Row>
+                        <Descriptions
+  bordered
+  size="small"
+  column={2}
+  style={{ marginBottom: "20px" }}
+  labelStyle={{ fontWeight: 500, width: "160px" }}
+  contentStyle={{ textAlign: "left" }}
+>
+  <Descriptions.Item label="Student Name">
+    {selectedFeeDetails.student.name || "N/A"}
+  </Descriptions.Item>
+  <Descriptions.Item label="Father's Name">
+    {selectedFeeDetails?.student?.fatherName || "N/A"}
+  </Descriptions.Item>
+
+  <Descriptions.Item label="Admission Number">
+    {selectedFeeDetails.student.admissionNumber || "N/A"}
+  </Descriptions.Item>
+  <Descriptions.Item label="Mother's Name">
+    {selectedFeeDetails?.student?.motherName || "N/A"}
+  </Descriptions.Item>
+
+  <Descriptions.Item label="Class" span={2}>
+    {classes.find((c: Class) =>
+      c._id ===
+      students.find(
+        (s) => s._id === selectedFeeDetails.student._id
+      )?.classId
+    )?.name || "N/A"}
+  </Descriptions.Item>
+</Descriptions>
+
                         <Row gutter={24}>
                           <Col
                             span={

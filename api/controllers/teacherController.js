@@ -4,18 +4,17 @@ import bcrypt from "bcryptjs";
 
 import Counter from "../models/counter.js";
 
-export const getNextSequence = async (name) => {
-  console.log(`getNextSequence called for ${name}`);
+export const getNextSequence = async (type, branchId) => {
   const counter = await Counter.findOneAndUpdate(
-    { _id: name },
+   { type: `${type}_id`, branchId },
     { $inc: { sequence: 1 } },
-    { new: true, upsert: true }
+    { new: true, upsert: true, setDefaultsOnInsert: true  }
   );
   return counter.sequence;
 };
 
-export const generateId = async (entityType) => {
-  const sequence = await getNextSequence(`${entityType}_id`);
+export const generateId = async (entityType, branchId) => {
+  const sequence = await getNextSequence(entityType, branchId);
   switch (entityType) {
     case "class":
       return `LN-144-C${String(sequence).padStart(3, "0")}`; // LN-144-C001
@@ -33,7 +32,8 @@ export const generateId = async (entityType) => {
 // Get next teacher ID
 export const getNextStaffId = async (req, res) => {
   try {
-    const counter = await Counter.findOne({ _id: "teacher_id" });
+    const branchId = req.user.branchId;
+    const counter = await Counter.findOne({ type: "teacher_id", branchId });
     const sequence = counter ? counter.sequence + 1 : 1;
     const id = `LNE-144-${sequence}`;
     res.status(200).json({ id });
@@ -44,7 +44,10 @@ export const getNextStaffId = async (req, res) => {
 };
 
 export const createTeacher = async (req, res) => {
-  const id = await generateId("teacher");
+  const { branchId } = req.user;
+  console.log(req.user);
+  const id = await generateId("teacher", branchId);
+  console.log("Teacher-id-----------------------", id)
   const {
     role,
     email,
@@ -93,13 +96,13 @@ export const createTeacher = async (req, res) => {
     const firstName = name.split(" ")[0].toLowerCase();
     const generatedPassword = `${firstName}@${lastFourDigits}`;
 
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email, branchId });
     if (existingUser) {
       return res.status(400).json({ message: "Email already registered" });
     }
 
     if (id) {
-      const existingTeacher = await Teacher.findOne({ id });
+      const existingTeacher = await Teacher.findOne({ id, branchId });
       if (existingTeacher) {
         return res.status(400).json({ message: "Teacher ID already exists" });
       }
@@ -113,6 +116,7 @@ export const createTeacher = async (req, res) => {
       phone: phoneNumber,
       role: role.toLowerCase(),
       status: "active",
+      branchId
     });
     await newUser.save();
     console.log("New User: ", newUser);
@@ -136,6 +140,7 @@ export const createTeacher = async (req, res) => {
       workLocation,
       dateOfLeaving,
       documents,
+      branchId
     });
     await newTeacher.save();
     console.log("NEW TEACHER ADDED");
@@ -153,7 +158,10 @@ export const createTeacher = async (req, res) => {
 // Get all teachers
 export const getAllTeachers = async (req, res) => {
   try {
-    const teachers = await Teacher.find().populate("userId", "name email phoneNumber role");
+  const { branchId } = req.user;
+    console.log(req.user.branchId);
+
+    const teachers = await Teacher.find({branchId}).populate("userId", "name email phoneNumber role");
     res.status(200).json(teachers);
   } catch (error) {
     console.error("Error fetching teachers:", error.message);
@@ -164,7 +172,9 @@ export const getAllTeachers = async (req, res) => {
 // Get a single teacher by ID (MongoDB _id)
 export const getTeacherById = async (req, res) => {
   try {
-    const teacher = await Teacher.findById(req.params.id).populate("userId", "name email phoneNumber role");
+  const { branchId } = req.user;
+
+    const teacher = await Teacher.findOne({ _id: req.params.id, branchId }).populate("userId", "name email phoneNumber role");
     if (!teacher) {
       return res.status(404).json({ message: "Teacher not found" });
     }
@@ -178,7 +188,9 @@ export const getTeacherById = async (req, res) => {
 // Get a single teacher by custom ID (id field)
 export const getTeacherByCustomId = async (req, res) => {
   try {
-    const teacher = await Teacher.findOne({ id: req.params.id }).populate("userId", "name email phoneNumber role");
+  const { branchId } = req.user;
+
+    const teacher = await Teacher.findOne({ id: req.params.id, branchId }).populate("userId", "name email phoneNumber role");
     if (!teacher) {
       return res.status(404).json({ message: "Teacher not found" });
     }
@@ -192,6 +204,8 @@ export const getTeacherByCustomId = async (req, res) => {
 
 
 export const updateTeacher = async (req, res) => {
+  const { branchId } = req.user;
+
   const {
     id,
     role,
@@ -213,13 +227,13 @@ export const updateTeacher = async (req, res) => {
   } = req.body;
 
   try {
-    const teacher = await Teacher.findOne({ id: req.params.id });
+    const teacher = await Teacher.findOne({ id: req.params.id , branchId});
     if (!teacher) {
       return res.status(404).json({ message: "Teacher not found" });
     }
 
     if (id && id !== teacher.id) {
-      const existingTeacher = await Teacher.findOne({ id });
+      const existingTeacher = await Teacher.findOne({ id, branchId });
       if (existingTeacher) {
         return res.status(400).json({ message: "Teacher ID already exists" });
       }
@@ -243,7 +257,7 @@ export const updateTeacher = async (req, res) => {
     teacher.documents = documents || teacher.documents;
 
     if (email && teacher.userId) {
-      await User.findByIdAndUpdate(teacher.userId, { email });
+      await User.findOneAndUpdate({ _id: teacher.userId, branchId }, { email });
     }
 
     const updatedTeacher = await teacher.save();
@@ -257,12 +271,14 @@ export const updateTeacher = async (req, res) => {
 
 export const deleteTeacher = async (req, res) => {
   try {
-    const teacher = await Teacher.findByIdAndDelete(req.params.id);
+  const { branchId } = req.user;
+
+    const teacher = await Teacher.findOneAndDelete({ _id: req.params.id, branchId });
     if (!teacher) {
       return res.status(404).json({ message: "Teacher not found" });
     }
 
-    await User.findByIdAndDelete(teacher.userId);
+    await User.findOneAndDelete({ _id: teacher.userId, branchId });
 
     res.status(200).json({ message: "Teacher deleted successfully" });
   } catch (error) {

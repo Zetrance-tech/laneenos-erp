@@ -5,13 +5,14 @@ import mongoose from 'mongoose';
 export const addFeesConcession = async (req, res) => {
   try {
     const { category, discounts } = req.body;
+    const branchId = req.user.branchId;
 
-    // Validate required fields
+    if (!branchId) return res.status(400).json({ message: 'Branch ID missing in user' });
+
     if (!category || !Array.isArray(discounts) || discounts.length === 0) {
       return res.status(400).json({ message: 'All required fields (category, discounts) must be provided, and discounts must be a non-empty array' });
     }
 
-    // Validate category
     const validCategories = [
       'EWS', 'Corporate Concession', 'First Sibling Concession', 'Staff Concession',
       'Management Concession', 'Armed Forces Concession', 'Second Sibling Concession',
@@ -22,11 +23,9 @@ export const addFeesConcession = async (req, res) => {
       return res.status(400).json({ message: 'Invalid category' });
     }
 
-    // Fetch all fee groups to ensure all are included
-    const allFeeGroups = await FeesGroup.find().select('_id');
+    const allFeeGroups = await FeesGroup.find({ branchId }).select('_id');
     const allFeeGroupIds = allFeeGroups.map(fg => fg._id.toString());
 
-    // Validate discounts array
     for (const discount of discounts) {
       if (!discount.feesGroup || discount.percentageDiscount === undefined) {
         return res.status(400).json({ message: 'Each discount must include feesGroup and percentageDiscount' });
@@ -37,23 +36,22 @@ export const addFeesConcession = async (req, res) => {
       if (discount.percentageDiscount < 0 || discount.percentageDiscount > 100) {
         return res.status(400).json({ message: `Percentage discount for group ${discount.feesGroup} must be between 0 and 100` });
       }
-      const feesGroupExists = await FeesGroup.findById(discount.feesGroup);
+      const feesGroupExists = await FeesGroup.findOne({ _id: discount.feesGroup, branchId });
       if (!feesGroupExists) {
-        return res.status(400).json({ message: `FeesGroup ID ${discount.feesGroup} does not exist` });
+        return res.status(400).json({ message: `FeesGroup ID ${discount.feesGroup} does not exist in this branch` });
       }
     }
 
-    // Ensure all fee groups are included in discounts
     const providedFeeGroupIds = discounts.map(d => d.feesGroup.toString());
     const missingFeeGroups = allFeeGroupIds.filter(id => !providedFeeGroupIds.includes(id));
     if (missingFeeGroups.length > 0) {
       return res.status(400).json({ message: `Discounts must be provided for all fee groups. Missing: ${missingFeeGroups.join(', ')}` });
     }
 
-    // Create new concession
     const newConcession = new FeesConcession({
       category,
       discounts,
+      branchId,
     });
 
     await newConcession.save();
@@ -74,23 +72,21 @@ export const updateFeesConcession = async (req, res) => {
   try {
     const { id } = req.params;
     const { category, discounts } = req.body;
+    const branchId = req.user.branchId;
 
-    // Validate concession ID
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: 'Invalid concession ID' });
     }
 
-    const concession = await FeesConcession.findById(id);
+    const concession = await FeesConcession.findOne({ _id: id, branchId });
     if (!concession) {
-      return res.status(404).json({ message: 'Fee concession not found' });
+      return res.status(404).json({ message: 'Fee concession not found for this branch' });
     }
 
-    // Validate required fields
     if (!category || !Array.isArray(discounts) || discounts.length === 0) {
       return res.status(400).json({ message: 'Category and non-empty discounts array are required' });
     }
 
-    // Validate category
     const validCategories = [
       'EWS', 'Corporate Concession', 'First Sibling Concession', 'Staff Concession',
       'Management Concession', 'Armed Forces Concession', 'Second Sibling Concession',
@@ -101,11 +97,9 @@ export const updateFeesConcession = async (req, res) => {
       return res.status(400).json({ message: 'Invalid category' });
     }
 
-    // Fetch all fee groups
-    const allFeeGroups = await FeesGroup.find().select('_id');
+    const allFeeGroups = await FeesGroup.find({ branchId }).select('_id');
     const allFeeGroupIds = allFeeGroups.map(fg => fg._id.toString());
 
-    // Validate discounts array
     for (const discount of discounts) {
       if (!discount.feesGroup || discount.percentageDiscount === undefined) {
         return res.status(400).json({ message: 'Each discount must include feesGroup and percentageDiscount' });
@@ -116,20 +110,18 @@ export const updateFeesConcession = async (req, res) => {
       if (discount.percentageDiscount < 0 || discount.percentageDiscount > 100) {
         return res.status(400).json({ message: `Percentage discount for group ${discount.feesGroup} must be between 0 and 100` });
       }
-      const feesGroupExists = await FeesGroup.findById(discount.feesGroup);
+      const feesGroupExists = await FeesGroup.findOne({ _id: discount.feesGroup, branchId });
       if (!feesGroupExists) {
-        return res.status(400).json({ message: `FeesGroup ID ${discount.feesGroup} does not exist` });
+        return res.status(400).json({ message: `FeesGroup ID ${discount.feesGroup} does not exist in this branch` });
       }
     }
 
-    // Ensure all fee groups are included in discounts
     const providedFeeGroupIds = discounts.map(d => d.feesGroup.toString());
     const missingFeeGroups = allFeeGroupIds.filter(id => !providedFeeGroupIds.includes(id));
     if (missingFeeGroups.length > 0) {
       return res.status(400).json({ message: `Discounts must be provided for all fee groups. Missing: ${missingFeeGroups.join(', ')}` });
     }
 
-    // Update concession
     concession.category = category;
     concession.discounts = discounts;
     concession.updatedAt = new Date();
@@ -152,13 +144,15 @@ export const updateFeesConcession = async (req, res) => {
 export const deleteFeesConcession = async (req, res) => {
   try {
     const { id } = req.params;
+    const branchId = req.user.branchId;
+
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: 'Invalid concession ID' });
     }
 
-    const concession = await FeesConcession.findById(id);
+    const concession = await FeesConcession.findOne({ _id: id, branchId });
     if (!concession) {
-      return res.status(404).json({ message: 'Fee concession not found' });
+      return res.status(404).json({ message: 'Fee concession not found in this branch' });
     }
 
     await FeesConcession.findByIdAndDelete(id);
@@ -172,7 +166,8 @@ export const deleteFeesConcession = async (req, res) => {
 
 export const getAllFeesConcessions = async (req, res) => {
   try {
-    const concessions = await FeesConcession.find()
+    const branchId = req.user.branchId;
+    const concessions = await FeesConcession.find({ branchId })
       .populate('discounts.feesGroup', 'name')
       .lean();
     res.status(200).json(concessions);
@@ -184,7 +179,8 @@ export const getAllFeesConcessions = async (req, res) => {
 
 export const getAllFeeGroupsForConcession = async (req, res) => {
   try {
-    const feeGroups = await FeesGroup.find().select('id name').lean();
+    const branchId = req.user.branchId;
+    const feeGroups = await FeesGroup.find({ branchId }).select('id name').lean();
     res.status(200).json(feeGroups);
   } catch (error) {
     console.error('Error fetching fee groups:', error);

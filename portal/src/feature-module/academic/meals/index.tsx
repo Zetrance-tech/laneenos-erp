@@ -514,15 +514,17 @@ const MealPlan: React.FC = () => {
             <div className="my-auto mb-2">
               <h3 className="page-title mb-1">Meal Plan</h3>
               <nav>
-                <ol className="calendar mb-0">
-                  <li className="breadcrumb-item">
-                    <Link to={routes.adminDashboard}>Dashboard</Link>
-                  </li>
-                  <li className="breadcrumb-item">Management</li>
-                  <li className="">
-                    Meals
-                  </li>
-                </ol>
+                <ol className="breadcrumb mb-0">
+                <li className="breadcrumb-item">
+                  <a href="#">Dashboard</a>
+                </li>
+                <li className="breadcrumb-item">
+                  <a href="#">Academic</a>
+                </li>
+                <li className="breadcrumb-item active" aria-current="page">
+                  Meals
+                </li>
+              </ol>
               </nav>
             </div>
             <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">

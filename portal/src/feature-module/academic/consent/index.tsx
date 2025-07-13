@@ -4,7 +4,7 @@ import * as bootstrap from "bootstrap";
 import toast, { Toaster } from "react-hot-toast";
 import { Table, Spin, Input } from "antd";
 import { useAuth } from "../../../context/AuthContext";
-
+import { Alert, Descriptions } from "antd";
 const API_URL = process.env.REACT_APP_URL;
 
 interface User {
@@ -65,7 +65,9 @@ interface ConsentResponse {
 }
 
 const Consents: React.FC = () => {
-  const decodeToken = (token: string): { userId: string; role: string } | null => {
+  const decodeToken = (
+    token: string
+  ): { userId: string; role: string } | null => {
     try {
       const base64Url = token.split(".")[1];
       if (!base64Url) return null;
@@ -86,12 +88,17 @@ const Consents: React.FC = () => {
   const { token, user } = useAuth();
   const decoded = token ? decodeToken(token) : null;
   const currentUser: User = decoded
-    ? { userId: decoded.userId, role: decoded.role as "admin" | "teacher" | "parent" | "student" }
+    ? {
+        userId: decoded.userId,
+        role: decoded.role as "admin" | "teacher" | "parent" | "student",
+      }
     : { userId: "", role: "teacher" };
 
   const [consents, setConsents] = useState<Consent[]>([]);
   const [filteredConsents, setFilteredConsents] = useState<Consent[]>([]);
-  const [consentResponses, setConsentResponses] = useState<ConsentResponse[]>([]);
+  const [consentResponses, setConsentResponses] = useState<ConsentResponse[]>(
+    []
+  );
   const [classes, setClasses] = useState<Class[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedClass, setSelectedClass] = useState<string>("");
@@ -106,7 +113,8 @@ const Consents: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
   const [selectedConsent, setSelectedConsent] = useState<Consent | null>(null);
-  const [selectedResponse, setSelectedResponse] = useState<ConsentResponse | null>(null);
+  const [selectedResponse, setSelectedResponse] =
+    useState<ConsentResponse | null>(null);
   const dropdownMenuRef = useRef<HTMLDivElement>(null);
   const [applyToAllClasses, setApplyToAllClasses] = useState<boolean>(false);
   const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
@@ -130,9 +138,12 @@ const Consents: React.FC = () => {
         );
         setClasses(validClasses);
 
-        const sessionResponse = await axios.get<Session[]>(`${API_URL}/api/session/get`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const sessionResponse = await axios.get<Session[]>(
+          `${API_URL}/api/session/get`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
         const validSessions = sessionResponse.data.filter(
           (s): s is Session => s != null && s._id != null && s.name != null
         );
@@ -151,14 +162,20 @@ const Consents: React.FC = () => {
           }
         }
 
-        const consentResponse = await axios.get<Consent[] | ConsentResponse[]>(consentEndpoint, {
-          params,
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const consentResponse = await axios.get<Consent[] | ConsentResponse[]>(
+          consentEndpoint,
+          {
+            params,
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
 
         if (currentUser.role === "parent") {
-          const validResponses = (consentResponse.data as ConsentResponse[]).filter(
-            (r): r is ConsentResponse => r != null && r._id != null && r.consentId != null
+          const validResponses = (
+            consentResponse.data as ConsentResponse[]
+          ).filter(
+            (r): r is ConsentResponse =>
+              r != null && r._id != null && r.consentId != null
           );
           setConsentResponses(validResponses);
           const uniqueConsents = Array.from(
@@ -178,7 +195,10 @@ const Consents: React.FC = () => {
           setFilteredConsents(validConsents);
         }
       } catch (err: any) {
-        console.error("Failed to fetch data:", err.response?.data?.message || err.message);
+        console.error(
+          "Failed to fetch data:",
+          err.response?.data?.message || err.message
+        );
         setError(err.response?.data?.message || "Failed to fetch consents");
         setConsents([]);
         setFilteredConsents([]);
@@ -193,13 +213,17 @@ const Consents: React.FC = () => {
   useEffect(() => {
     const filtered = consents.filter((consent) => {
       const matchesClass = searchClass
-        ? consent.classId?.name?.toLowerCase().includes(searchClass.toLowerCase())
+        ? consent.classId?.name
+            ?.toLowerCase()
+            .includes(searchClass.toLowerCase())
         : true;
       const matchesTitle = searchTitle
         ? consent.title.toLowerCase().includes(searchTitle.toLowerCase())
         : true;
       const matchesCreatedBy = searchCreatedBy
-        ? consent.createdBy?.name?.toLowerCase().includes(searchCreatedBy.toLowerCase())
+        ? consent.createdBy?.name
+            ?.toLowerCase()
+            .includes(searchCreatedBy.toLowerCase())
         : true;
       return matchesClass && matchesTitle && matchesCreatedBy;
     });
@@ -219,18 +243,33 @@ const Consents: React.FC = () => {
       applyToAllClasses: applyToAllClasses,
     };
 
-    if (!consentData.sessionId || (!consentData.classId.length && !consentData.applyToAllClasses)) {
-      setError("Please select a session and at least one class or apply to all classes");
+    if (
+      !consentData.sessionId ||
+      (!consentData.classId.length && !consentData.applyToAllClasses)
+    ) {
+      setError(
+        "Please select a session and at least one class or apply to all classes"
+      );
       return;
     }
 
     try {
-      const response = await axios.post(`${API_URL}/api/consent/create`, consentData, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await axios.post(
+        `${API_URL}/api/consent/create`,
+        consentData,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
 
-      const consentEndpoint = currentUser.role === "teacher" ? `${API_URL}/api/consent/teacher` : `${API_URL}/api/consent/admin`;
-      const params = currentUser.role === "admin" && selectedClass ? { classId: selectedClass } : {};
+      const consentEndpoint =
+        currentUser.role === "teacher"
+          ? `${API_URL}/api/consent/teacher`
+          : `${API_URL}/api/consent/admin`;
+      const params =
+        currentUser.role === "admin" && selectedClass
+          ? { classId: selectedClass }
+          : {};
       const consentResponse = await axios.get<Consent[]>(consentEndpoint, {
         params,
         headers: { Authorization: `Bearer ${token}` },
@@ -246,12 +285,17 @@ const Consents: React.FC = () => {
       setSelectedClasses([]);
       const modalElement = document.getElementById("add_consent");
       if (modalElement) {
-        const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+        const modal =
+          bootstrap.Modal.getInstance(modalElement) ||
+          new bootstrap.Modal(modalElement);
         modal.hide();
       }
-      toast.success(response.data.message || "Consent request created successfully");
+      toast.success(
+        response.data.message || "Consent request created successfully"
+      );
     } catch (err: any) {
-      const errorMsg = err.response?.data?.message || "Failed to create consent";
+      const errorMsg =
+        err.response?.data?.message || "Failed to create consent";
       setError(errorMsg);
       toast.error(errorMsg);
     }
@@ -270,7 +314,9 @@ const Consents: React.FC = () => {
       description: formData.get("description") as string,
       sessionId: formData.get("sessionId") as string,
       classId: formData.get("classId") as string,
-      file: formData.get("file") ? (formData.get("file") as File).name : selectedConsent.file,
+      file: formData.get("file")
+        ? (formData.get("file") as File).name
+        : selectedConsent.file,
       validity: formData.get("validity") as string,
     };
 
@@ -280,12 +326,22 @@ const Consents: React.FC = () => {
     }
 
     try {
-      const response = await axios.put(`${API_URL}/api/consent/${selectedConsent._id}`, consentData, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await axios.put(
+        `${API_URL}/api/consent/${selectedConsent._id}`,
+        consentData,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
 
-      const consentEndpoint = currentUser.role === "teacher" ? `${API_URL}/api/consent/teacher` : `${API_URL}/api/consent/admin`;
-      const params = currentUser.role === "admin" && selectedClass ? { classId: selectedClass } : {};
+      const consentEndpoint =
+        currentUser.role === "teacher"
+          ? `${API_URL}/api/consent/teacher`
+          : `${API_URL}/api/consent/admin`;
+      const params =
+        currentUser.role === "admin" && selectedClass
+          ? { classId: selectedClass }
+          : {};
       const consentResponse = await axios.get<Consent[]>(consentEndpoint, {
         params,
         headers: { Authorization: `Bearer ${token}` },
@@ -300,12 +356,15 @@ const Consents: React.FC = () => {
       setShowEditModal(false);
       const modalElement = document.getElementById("edit_consent");
       if (modalElement) {
-        const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+        const modal =
+          bootstrap.Modal.getInstance(modalElement) ||
+          new bootstrap.Modal(modalElement);
         modal.hide();
       }
       toast.success(response.data.message || "Consent updated successfully");
     } catch (err: any) {
-      const errorMsg = err.response?.data?.message || "Failed to update consent";
+      const errorMsg =
+        err.response?.data?.message || "Failed to update consent";
       setError(errorMsg);
       toast.error(errorMsg);
     }
@@ -322,8 +381,14 @@ const Consents: React.FC = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const consentEndpoint = currentUser.role === "teacher" ? `${API_URL}/api/consent/teacher` : `${API_URL}/api/consent/admin`;
-      const params = currentUser.role === "admin" && selectedClass ? { classId: selectedClass } : {};
+      const consentEndpoint =
+        currentUser.role === "teacher"
+          ? `${API_URL}/api/consent/teacher`
+          : `${API_URL}/api/consent/admin`;
+      const params =
+        currentUser.role === "admin" && selectedClass
+          ? { classId: selectedClass }
+          : {};
       const consentResponse = await axios.get<Consent[]>(consentEndpoint, {
         params,
         headers: { Authorization: `Bearer ${token}` },
@@ -337,12 +402,15 @@ const Consents: React.FC = () => {
       setShowDeleteModal(false);
       const modalElement = document.getElementById("delete_consent");
       if (modalElement) {
-        const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+        const modal =
+          bootstrap.Modal.getInstance(modalElement) ||
+          new bootstrap.Modal(modalElement);
         modal.hide();
       }
       toast.success("Consent deleted successfully");
     } catch (err: any) {
-      const errorMsg = err.response?.data?.message || "Failed to delete consent";
+      const errorMsg =
+        err.response?.data?.message || "Failed to delete consent";
       setError(errorMsg);
       toast.error(errorMsg);
     }
@@ -362,19 +430,29 @@ const Consents: React.FC = () => {
     };
 
     try {
-      const response = await axios.put(`${API_URL}/api/consent/respond`, responseData, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await axios.put(
+        `${API_URL}/api/consent/respond`,
+        responseData,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
 
-      const consentResponse = await axios.get<ConsentResponse[]>(`${API_URL}/api/consent/my-consents`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const consentResponse = await axios.get<ConsentResponse[]>(
+        `${API_URL}/api/consent/my-consents`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
       const validResponses = consentResponse.data.filter(
-        (r): r is ConsentResponse => r != null && r._id != null && r.consentId != null
+        (r): r is ConsentResponse =>
+          r != null && r._id != null && r.consentId != null
       );
       setConsentResponses(validResponses);
       const uniqueConsents = Array.from(
-        new Map(validResponses.map((r) => [r.consentId._id, r.consentId])).values()
+        new Map(
+          validResponses.map((r) => [r.consentId._id, r.consentId])
+        ).values()
       );
       setConsents(uniqueConsents);
       setFilteredConsents(uniqueConsents);
@@ -382,12 +460,17 @@ const Consents: React.FC = () => {
       setShowRespondModal(false);
       const modalElement = document.getElementById("respond_consent");
       if (modalElement) {
-        const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+        const modal =
+          bootstrap.Modal.getInstance(modalElement) ||
+          new bootstrap.Modal(modalElement);
         modal.hide();
       }
-      toast.success(response.data.message || `Consent ${responseData.status} successfully`);
+      toast.success(
+        response.data.message || `Consent ${responseData.status} successfully`
+      );
     } catch (err: any) {
-      const errorMsg = err.response?.data?.message || "Failed to respond to consent";
+      const errorMsg =
+        err.response?.data?.message || "Failed to respond to consent";
       setError(errorMsg);
       toast.error(errorMsg);
     }
@@ -398,16 +481,21 @@ const Consents: React.FC = () => {
     setShowDetailsModal(true);
     const modalElement = document.getElementById("details_consent");
     if (modalElement) {
-      const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+      const modal =
+        bootstrap.Modal.getInstance(modalElement) ||
+        new bootstrap.Modal(modalElement);
       modal.show();
     }
   };
 
   const handleViewResponses = async (consent: Consent) => {
     try {
-      const response = await axios.get<ConsentResponse[]>(`${API_URL}/api/consent/responses/${consent._id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await axios.get<ConsentResponse[]>(
+        `${API_URL}/api/consent/responses/${consent._id}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
 
       const filteredResponses: ConsentResponse[] = [];
       const studentIds = new Set<string>();
@@ -432,13 +520,16 @@ const Consents: React.FC = () => {
       setShowResponsesModal(true);
       const modalElement = document.getElementById("responses_consent");
       if (modalElement) {
-        const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+        const modal =
+          bootstrap.Modal.getInstance(modalElement) ||
+          new bootstrap.Modal(modalElement);
         modal.show();
       }
     } catch (err: any) {
-      const errorMsg = err.response?.data?.message || "Failed to fetch consent responses";
+      const errorMsg =
+        err.response?.data?.message || "Failed to fetch consent responses";
       setError(errorMsg);
-      toast.error(errorMsg);
+      // toast.error(errorMsg);
     }
   };
 
@@ -447,7 +538,9 @@ const Consents: React.FC = () => {
     setShowRespondModal(true);
     const modalElement = document.getElementById("respond_consent");
     if (modalElement) {
-      const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+      const modal =
+        bootstrap.Modal.getInstance(modalElement) ||
+        new bootstrap.Modal(modalElement);
       modal.show();
     }
   };
@@ -457,7 +550,9 @@ const Consents: React.FC = () => {
     setShowEditModal(true);
     const modalElement = document.getElementById("edit_consent");
     if (modalElement) {
-      const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+      const modal =
+        bootstrap.Modal.getInstance(modalElement) ||
+        new bootstrap.Modal(modalElement);
       modal.show();
     }
   };
@@ -467,7 +562,9 @@ const Consents: React.FC = () => {
     setShowDeleteModal(true);
     const modalElement = document.getElementById("delete_consent");
     if (modalElement) {
-      const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+      const modal =
+        bootstrap.Modal.getInstance(modalElement) ||
+        new bootstrap.Modal(modalElement);
       modal.show();
     }
   };
@@ -478,45 +575,75 @@ const Consents: React.FC = () => {
     }
   };
 
-  const dataSource = filteredConsents?.map((consent) => ({
-    key: consent._id,
-    title: consent.title ?? "N/A",
-    className: consent.classId && consent.classId._id && consent.classId.name ? consent.classId.name : "Class Deleted",
-    sessionName: consent.sessionId && consent.sessionId._id && consent.sessionId.name ? consent.sessionId.name : "Session Deleted",
-    createdBy: consent.createdBy?.name ?? "N/A",
-    createdAt: consent.createdAt ? new Date(consent.createdAt).toLocaleDateString() : "N/A",
-    consent,
-  })) ?? [];
+  const dataSource =
+    filteredConsents?.map((consent) => ({
+      key: consent._id,
+      title: consent.title ?? "N/A",
+      className:
+        consent.classId && consent.classId._id && consent.classId.name
+          ? consent.classId.name
+          : "Class Deleted",
+      sessionName:
+        consent.sessionId && consent.sessionId._id && consent.sessionId.name
+          ? consent.sessionId.name
+          : "Session Deleted",
+      createdBy: consent.createdBy?.name ?? "N/A",
+      createdAt: consent.createdAt
+        ? new Date(consent.createdAt).toLocaleDateString()
+        : "N/A",
+      consent,
+    })) ?? [];
 
   const columns = [
+    {
+      title: "",
+      key: "status-dot",
+      width: 20,
+      render: (record: any) => (
+        <span
+          style={{
+            display: "inline-block",
+            width: 10,
+            height: 10,
+            borderRadius: "50%",
+            backgroundColor: "ffff",
+            marginLeft: 15,
+          }}
+        />
+      ),
+    },
     {
       title: "Title",
       dataIndex: "title",
       key: "title",
-      sorter: (a:any, b:any) => a.title.localeCompare(b.title),
+      sorter: (a: any, b: any) => a.title.localeCompare(b.title),
     },
     {
       title: "Class",
       dataIndex: "className",
       key: "className",
-      sorter: (a:any, b:any) => a.className.localeCompare(b.className),
+      sorter: (a: any, b: any) => a.className.localeCompare(b.className),
     },
     {
       title: "Created By",
       dataIndex: "createdBy",
       key: "createdBy",
-      sorter: (a:any, b:any) => a.createdBy.localeCompare(b.createdBy),
+      sorter: (a: any, b: any) => a.createdBy.localeCompare(b.createdBy),
     },
     {
-    title: "Created Date",
-    dataIndex: "createdAt",
-    key: "createdAt",
-    sorter: (a:any, b:any) => {
-      const dateA = a.consent.createdAt ? new Date(a.consent.createdAt).getTime() : 0;
-      const dateB = b.consent.createdAt ? new Date(b.consent.createdAt).getTime() : 0;
-      return dateA - dateB;
+      title: "Created Date",
+      dataIndex: "createdAt",
+      key: "createdAt",
+      sorter: (a: any, b: any) => {
+        const dateA = a.consent.createdAt
+          ? new Date(a.consent.createdAt).getTime()
+          : 0;
+        const dateB = b.consent.createdAt
+          ? new Date(b.consent.createdAt).getTime()
+          : 0;
+        return dateA - dateB;
+      },
     },
-  },
     {
       title: "Action",
       key: "action",
@@ -539,7 +666,8 @@ const Consents: React.FC = () => {
                 View Details
               </button>
             </li>
-            {(currentUser.role === "teacher" || currentUser.role === "admin") && (
+            {(currentUser.role === "teacher" ||
+              currentUser.role === "admin") && (
               <>
                 <li>
                   <button
@@ -550,7 +678,9 @@ const Consents: React.FC = () => {
                     View Responses
                   </button>
                 </li>
-                {(currentUser.role === "admin" || (currentUser.role === "teacher" && record.consent.createdBy?._id === currentUser.userId)) && (
+                {(currentUser.role === "admin" ||
+                  (currentUser.role === "teacher" &&
+                    record.consent.createdBy?._id === currentUser.userId)) && (
                   <>
                     <li>
                       <button
@@ -648,9 +778,6 @@ const Consents: React.FC = () => {
           .ant-table-tbody > tr:nth-child(odd) > td {
             background-color: #ffffff !important;
           }
-          .ant-table-container {
-            margin-left: 20px !important;
-          }
         `}
       </style>
       <div className="content">
@@ -705,7 +832,7 @@ const Consents: React.FC = () => {
                 </select>
               </div>
             )}
-            
+
             <div className="col-md-3">
               <label className="form-label">Search by Title</label>
               <Input
@@ -731,17 +858,26 @@ const Consents: React.FC = () => {
           <div className="card-body p-0 py-3">
             <div style={{ minHeight: "200px", position: "relative" }}>
               {loading ? (
-                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    height: "100%",
+                  }}
+                >
                   <Spin size="large" />
                 </div>
               ) : filteredConsents.length === 0 ? (
-                <p>{selectedClass ? "No consents found for this class" : "No consents found"}</p>
-              ) : (
-                <Table
-                  columns={columns}
-                  dataSource={dataSource}
-                  rowKey="key"
+                <Alert
+                  message="No Consent found"
+                  // type="MealType"
+                  showIcon
+                  className="mx-3"
+                  style={{ textAlign: "center" }}
                 />
+              ) : (
+                <Table columns={columns} dataSource={dataSource} rowKey="key" />
               )}
             </div>
           </div>
@@ -759,9 +895,12 @@ const Consents: React.FC = () => {
                       onClick={() => {
                         setApplyToAllClasses(false);
                         setSelectedClasses([]);
-                        const modalElement = document.getElementById("add_consent");
+                        const modalElement =
+                          document.getElementById("add_consent");
                         if (modalElement) {
-                          const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                          const modal =
+                            bootstrap.Modal.getInstance(modalElement) ||
+                            new bootstrap.Modal(modalElement);
                           modal.hide();
                         }
                       }}
@@ -775,7 +914,11 @@ const Consents: React.FC = () => {
                         <div className="col-md-12">
                           <div className="mb-3">
                             <label className="form-label">Session</label>
-                            <select className="form-select" name="sessionId" required>
+                            <select
+                              className="form-select"
+                              name="sessionId"
+                              required
+                            >
                               <option value="">Select a session</option>
                               {sessions?.map((s) => (
                                 <option key={s._id} value={s._id}>
@@ -799,7 +942,10 @@ const Consents: React.FC = () => {
                                   }
                                 }}
                               />
-                              <label className="form-check-label" htmlFor="applyToAllClasses">
+                              <label
+                                className="form-check-label"
+                                htmlFor="applyToAllClasses"
+                              >
                                 Apply to all classes
                               </label>
                             </div>
@@ -813,18 +959,25 @@ const Consents: React.FC = () => {
                                         className="form-check-input"
                                         id={`class-${c._id}`}
                                         value={c._id}
-                                        checked={selectedClasses.includes(c._id)}
+                                        checked={selectedClasses.includes(
+                                          c._id
+                                        )}
                                         onChange={(e) => {
                                           const classId = e.target.value;
                                           setSelectedClasses((prev) =>
                                             e.target.checked
                                               ? [...prev, classId]
-                                              : prev.filter((id) => id !== classId)
+                                              : prev.filter(
+                                                  (id) => id !== classId
+                                                )
                                           );
                                         }}
                                         disabled={applyToAllClasses}
                                       />
-                                      <label className="form-check-label" htmlFor={`class-${c._id}`}>
+                                      <label
+                                        className="form-check-label"
+                                        htmlFor={`class-${c._id}`}
+                                      >
                                         {c.name}
                                       </label>
                                     </div>
@@ -881,9 +1034,12 @@ const Consents: React.FC = () => {
                         onClick={() => {
                           setApplyToAllClasses(false);
                           setSelectedClasses([]);
-                          const modalElement = document.getElementById("add_consent");
+                          const modalElement =
+                            document.getElementById("add_consent");
                           if (modalElement) {
-                            const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                            const modal =
+                              bootstrap.Modal.getInstance(modalElement) ||
+                              new bootstrap.Modal(modalElement);
                             modal.hide();
                           }
                         }}
@@ -909,9 +1065,12 @@ const Consents: React.FC = () => {
                       onClick={() => {
                         setShowEditModal(false);
                         setSelectedConsent(null);
-                        const modalElement = document.getElementById("edit_consent");
+                        const modalElement =
+                          document.getElementById("edit_consent");
                         if (modalElement) {
-                          const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                          const modal =
+                            bootstrap.Modal.getInstance(modalElement) ||
+                            new bootstrap.Modal(modalElement);
                           modal.hide();
                         }
                       }}
@@ -928,7 +1087,9 @@ const Consents: React.FC = () => {
                             <select
                               className="form-select"
                               name="sessionId"
-                              defaultValue={selectedConsent?.sessionId?._id || ""}
+                              defaultValue={
+                                selectedConsent?.sessionId?._id || ""
+                              }
                               required
                             >
                               <option value="">Select a session</option>
@@ -986,7 +1147,9 @@ const Consents: React.FC = () => {
                               accept=".pdf,.doc,.docx"
                             />
                             {selectedConsent?.file && (
-                              <p className="mt-2">Current file: {selectedConsent.file}</p>
+                              <p className="mt-2">
+                                Current file: {selectedConsent.file}
+                              </p>
                             )}
                           </div>
                           <div className="mb-3">
@@ -995,7 +1158,13 @@ const Consents: React.FC = () => {
                               type="date"
                               className="form-control"
                               name="validity"
-                              defaultValue={selectedConsent?.validity ? new Date(selectedConsent.validity).toISOString().split("T")[0] : ""}
+                              defaultValue={
+                                selectedConsent?.validity
+                                  ? new Date(selectedConsent.validity)
+                                      .toISOString()
+                                      .split("T")[0]
+                                  : ""
+                              }
                               min={new Date().toISOString().split("T")[0]}
                             />
                           </div>
@@ -1009,9 +1178,12 @@ const Consents: React.FC = () => {
                         onClick={() => {
                           setShowEditModal(false);
                           setSelectedConsent(null);
-                          const modalElement = document.getElementById("edit_consent");
+                          const modalElement =
+                            document.getElementById("edit_consent");
                           if (modalElement) {
-                            const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                            const modal =
+                              bootstrap.Modal.getInstance(modalElement) ||
+                              new bootstrap.Modal(modalElement);
                             modal.hide();
                           }
                         }}
@@ -1034,7 +1206,10 @@ const Consents: React.FC = () => {
                       <i className="ti ti-trash-x" />
                     </span>
                     <h4>Confirm Deletion</h4>
-                    <p>You want to delete this consent request. This cannot be undone once deleted.</p>
+                    <p>
+                      You want to delete this consent request. This cannot be
+                      undone once deleted.
+                    </p>
                     <div className="d-flex justify-content-center">
                       <button
                         type="button"
@@ -1042,9 +1217,12 @@ const Consents: React.FC = () => {
                         onClick={() => {
                           setShowDeleteModal(false);
                           setSelectedConsent(null);
-                          const modalElement = document.getElementById("delete_consent");
+                          const modalElement =
+                            document.getElementById("delete_consent");
                           if (modalElement) {
-                            const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                            const modal =
+                              bootstrap.Modal.getInstance(modalElement) ||
+                              new bootstrap.Modal(modalElement);
                             modal.hide();
                           }
                         }}
@@ -1076,9 +1254,12 @@ const Consents: React.FC = () => {
                   onClick={() => {
                     setShowDetailsModal(false);
                     setSelectedConsent(null);
-                    const modalElement = document.getElementById("details_consent");
+                    const modalElement =
+                      document.getElementById("details_consent");
                     if (modalElement) {
-                      const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                      const modal =
+                        bootstrap.Modal.getInstance(modalElement) ||
+                        new bootstrap.Modal(modalElement);
                       modal.hide();
                     }
                   }}
@@ -1089,14 +1270,47 @@ const Consents: React.FC = () => {
               <div className="modal-body">
                 {selectedConsent && (
                   <div>
-                    <p><strong>Title:</strong> {selectedConsent.title ?? "N/A"}</p>
-                    <p><strong>Class:</strong> {selectedConsent.classId && selectedConsent.classId._id && selectedConsent.classId.name ? selectedConsent.classId.name : "Class Deleted"}</p>
-                    <p><strong>Session:</strong> {selectedConsent.sessionId && selectedConsent.sessionId._id && selectedConsent.sessionId.name ? selectedConsent.sessionId.name : "Session Deleted"}</p>
-                    <p><strong>Created By:</strong> {selectedConsent.createdBy?.name ?? "N/A"}</p>
-                    <p><strong>Description:</strong> {selectedConsent.description ?? "N/A"}</p>
-                    <p><strong>Attachment:</strong> {selectedConsent.file ? selectedConsent.file : "None"}</p>
-                    <p><strong>Validity:</strong> {selectedConsent.validity ? new Date(selectedConsent.validity).toLocaleDateString() : "Not specified"}</p>
-                    <p><strong>Created Date:</strong> {selectedConsent.createdAt ? new Date(selectedConsent.createdAt).toLocaleDateString() : "N/A"}</p>
+                    <Descriptions bordered column={1}>
+                      <Descriptions.Item label="Title">
+                        {selectedConsent.title ?? "N/A"}
+                      </Descriptions.Item>
+
+                      <Descriptions.Item label="Class">
+                        {selectedConsent.classId?.name ?? "Class Deleted"}
+                      </Descriptions.Item>
+
+                      <Descriptions.Item label="Session">
+                        {selectedConsent.sessionId?.name ?? "Session Deleted"}
+                      </Descriptions.Item>
+
+                      <Descriptions.Item label="Created By">
+                        {selectedConsent.createdBy?.name ?? "N/A"}
+                      </Descriptions.Item>
+
+                      <Descriptions.Item label="Description">
+                        {selectedConsent.description ?? "N/A"}
+                      </Descriptions.Item>
+
+                      <Descriptions.Item label="Attachment">
+                        {selectedConsent.file ?? "None"}
+                      </Descriptions.Item>
+
+                      <Descriptions.Item label="Validity">
+                        {selectedConsent.validity
+                          ? new Date(
+                              selectedConsent.validity
+                            ).toLocaleDateString()
+                          : "Not specified"}
+                      </Descriptions.Item>
+
+                      <Descriptions.Item label="Created Date">
+                        {selectedConsent.createdAt
+                          ? new Date(
+                              selectedConsent.createdAt
+                            ).toLocaleDateString()
+                          : "N/A"}
+                      </Descriptions.Item>
+                    </Descriptions>
                   </div>
                 )}
               </div>
@@ -1107,9 +1321,12 @@ const Consents: React.FC = () => {
                   onClick={() => {
                     setShowDetailsModal(false);
                     setSelectedConsent(null);
-                    const modalElement = document.getElementById("details_consent");
+                    const modalElement =
+                      document.getElementById("details_consent");
                     if (modalElement) {
-                      const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                      const modal =
+                        bootstrap.Modal.getInstance(modalElement) ||
+                        new bootstrap.Modal(modalElement);
                       modal.hide();
                     }
                   }}
@@ -1123,7 +1340,10 @@ const Consents: React.FC = () => {
         {(currentUser.role === "teacher" || currentUser.role === "admin") && (
           <div className="modal fade" id="responses_consent">
             <div className="modal-dialog modal-xl" style={{ maxWidth: "90vw" }}>
-              <div className="modal-content" style={{ maxHeight: "80vh", overflowY: "auto" }}>
+              <div
+                className="modal-content"
+                style={{ maxHeight: "80vh", overflowY: "auto" }}
+              >
                 <div className="modal-header">
                   <h4 className="modal-title">Consent Responses</h4>
                   <button
@@ -1132,9 +1352,12 @@ const Consents: React.FC = () => {
                     onClick={() => {
                       setShowResponsesModal(false);
                       setSelectedConsent(null);
-                      const modalElement = document.getElementById("responses_consent");
+                      const modalElement =
+                        document.getElementById("responses_consent");
                       if (modalElement) {
-                        const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                        const modal =
+                          bootstrap.Modal.getInstance(modalElement) ||
+                          new bootstrap.Modal(modalElement);
                         modal.hide();
                       }
                     }}
@@ -1146,7 +1369,14 @@ const Consents: React.FC = () => {
                   {selectedConsent && (
                     <div>
                       <h5>{selectedConsent.title ?? "N/A"}</h5>
-                      <p><strong>Class:</strong> {selectedConsent.classId && selectedConsent.classId._id && selectedConsent.classId.name ? selectedConsent.classId.name : "Class Deleted"}</p>
+                      <p>
+                        <strong>Class:</strong>{" "}
+                        {selectedConsent.classId &&
+                        selectedConsent.classId._id &&
+                        selectedConsent.classId.name
+                          ? selectedConsent.classId.name
+                          : "Class Deleted"}
+                      </p>
                       {consentResponses.length === 0 ? (
                         <p>No responses found</p>
                       ) : (
@@ -1166,8 +1396,14 @@ const Consents: React.FC = () => {
                               {consentResponses?.map((response) => (
                                 <tr key={response._id}>
                                   <td>{response.studentId?.name ?? "N/A"}</td>
-                                  <td>{response.studentId?.admissionNumber ?? "N/A"}</td>
-                                  <td>{response.parentId?.name ?? "N/A"} ({response.parentId?.email ?? "N/A"})</td>
+                                  <td>
+                                    {response.studentId?.admissionNumber ??
+                                      "N/A"}
+                                  </td>
+                                  <td>
+                                    {response.parentId?.name ?? "N/A"} (
+                                    {response.parentId?.email ?? "N/A"})
+                                  </td>
                                   <td>
                                     <span
                                       className={`badge ${
@@ -1183,7 +1419,9 @@ const Consents: React.FC = () => {
                                   </td>
                                   <td>
                                     {response.responseDate
-                                      ? new Date(response.responseDate).toLocaleDateString()
+                                      ? new Date(
+                                          response.responseDate
+                                        ).toLocaleDateString()
                                       : "N/A"}
                                   </td>
                                   <td>{response.respondedBy?.name ?? "N/A"}</td>
@@ -1203,9 +1441,12 @@ const Consents: React.FC = () => {
                     onClick={() => {
                       setShowResponsesModal(false);
                       setSelectedConsent(null);
-                      const modalElement = document.getElementById("responses_consent");
+                      const modalElement =
+                        document.getElementById("responses_consent");
                       if (modalElement) {
-                        const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                        const modal =
+                          bootstrap.Modal.getInstance(modalElement) ||
+                          new bootstrap.Modal(modalElement);
                         modal.hide();
                       }
                     }}
@@ -1229,9 +1470,12 @@ const Consents: React.FC = () => {
                     onClick={() => {
                       setShowRespondModal(false);
                       setSelectedResponse(null);
-                      const modalElement = document.getElementById("respond_consent");
+                      const modalElement =
+                        document.getElementById("respond_consent");
                       if (modalElement) {
-                        const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                        const modal =
+                          bootstrap.Modal.getInstance(modalElement) ||
+                          new bootstrap.Modal(modalElement);
                         modal.hide();
                       }
                     }}
@@ -1243,14 +1487,39 @@ const Consents: React.FC = () => {
                   <div className="modal-body">
                     {selectedResponse && (
                       <div>
-                        <p><strong>Title:</strong> {selectedResponse.consentId.title ?? "N/A"}</p>
-                        <p><strong>Student:</strong> {selectedResponse.studentId.name ?? "N/A"}</p>
-                        <p><strong>Description:</strong> {selectedResponse.consentId.description ?? "N/A"}</p>
-                        <p><strong>Attachment:</strong> {selectedResponse.consentId.file ? selectedResponse.consentId.file : "None"}</p>
-                        <p><strong>Validity:</strong> {selectedResponse.consentId.validity ? new Date(selectedResponse.consentId.validity).toLocaleDateString() : "Not specified"}</p>
+                        <p>
+                          <strong>Title:</strong>{" "}
+                          {selectedResponse.consentId.title ?? "N/A"}
+                        </p>
+                        <p>
+                          <strong>Student:</strong>{" "}
+                          {selectedResponse.studentId.name ?? "N/A"}
+                        </p>
+                        <p>
+                          <strong>Description:</strong>{" "}
+                          {selectedResponse.consentId.description ?? "N/A"}
+                        </p>
+                        <p>
+                          <strong>Attachment:</strong>{" "}
+                          {selectedResponse.consentId.file
+                            ? selectedResponse.consentId.file
+                            : "None"}
+                        </p>
+                        <p>
+                          <strong>Validity:</strong>{" "}
+                          {selectedResponse.consentId.validity
+                            ? new Date(
+                                selectedResponse.consentId.validity
+                              ).toLocaleDateString()
+                            : "Not specified"}
+                        </p>
                         <div className="mb-3">
                           <label className="form-label">Response</label>
-                          <select className="form-select" name="status" required>
+                          <select
+                            className="form-select"
+                            name="status"
+                            required
+                          >
                             <option value="">Select response</option>
                             <option value="approved">Approve</option>
                             <option value="rejected">Reject</option>
@@ -1266,9 +1535,12 @@ const Consents: React.FC = () => {
                       onClick={() => {
                         setShowRespondModal(false);
                         setSelectedResponse(null);
-                        const modalElement = document.getElementById("respond_consent");
+                        const modalElement =
+                          document.getElementById("respond_consent");
                         if (modalElement) {
-                          const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                          const modal =
+                            bootstrap.Modal.getInstance(modalElement) ||
+                            new bootstrap.Modal(modalElement);
                           modal.hide();
                         }
                       }}

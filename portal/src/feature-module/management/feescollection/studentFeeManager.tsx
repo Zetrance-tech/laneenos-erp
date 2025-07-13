@@ -490,6 +490,23 @@ const StudentFeeManager: React.FC = () => {
 
   const studentColumns = [
     {
+      title: "",
+      key: "status-dot",
+      width: 20,
+      render: (record: any) => (
+        <span
+          style={{
+            display: "inline-block",
+            width: 10,
+            height: 10,
+            borderRadius: "50%",
+            backgroundColor: "ffff",
+            marginLeft: 15,
+          }}
+        />
+      ),
+    },
+    {
       title: "Admission Number",
       dataIndex: "admissionNumber",
       render: (admissionNumber: string) => <span>{admissionNumber || "N/A"}</span>,
@@ -526,6 +543,23 @@ const StudentFeeManager: React.FC = () => {
     : [];
 
   const feeColumns = [
+    {
+      title: "",
+      key: "status-dot",
+      width: 20,
+      render: (record: any) => (
+        <span
+          style={{
+            display: "inline-block",
+            width: 10,
+            height: 10,
+            borderRadius: "50%",
+            backgroundColor: "ffff",
+            marginLeft: 15,
+          }}
+        />
+      ),
+    },
     // {
     //   title: "Month",
     //   dataIndex: "month",

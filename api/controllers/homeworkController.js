@@ -6,15 +6,16 @@ import Class from '../models/class.js';
 
 export const getHomework = async (req, res) => {
   try {
-    const { role, email, userId } = req.user; // Extract role, email, and userId from JWT payload
+    const { role, email, userId, branchId } = req.user; // Extract role, email, and userId from JWT payload
     let homework = [];
 
     if (role === "parent") {
       // Parent: Get homework for their children's classes
       const children = await Student.find({
+        branchId,
         $or: [
           { "fatherInfo.email": email },
-          { "motherInfo.email": email },
+          { "motherInfo.email": email }
         ],
       }).select("classId");
 
@@ -23,15 +24,15 @@ export const getHomework = async (req, res) => {
       }
 
       const classIds = children.map((child) => child.classId);
-      homework = await Homework.find({ classId: { $in: classIds } })
+      homework = await Homework.find({ classId: { $in: classIds }, branchId })
         .populate("classId", "name")
         .populate("teacherId", "name email")
         .sort({ createdAt: -1 });
 
     } else if (role === "admin") {
       // Admin: Get all homework or filter by classId if provided
-      const query = req.query.classId ? { classId: req.query.classId } : {};
-      console.log("Admin query:", req.query); // Debug log
+      const query = req.query.classId ? { classId: req.query.classId, branchId } : { branchId }
+      console.log("Admin query:", query); // Debug log
       homework = await Homework.find(query)
         .populate("classId", "name")
         .populate("teacherId", "name email")
@@ -39,14 +40,14 @@ export const getHomework = async (req, res) => {
 
     } else if (role === "teacher") {
       // Teacher: Get homework for their assigned classes
-      const classes = await Class.find({ teacherId: userId }).select("_id");
+      const classes = await Class.find({ teacherId: userId, branchId }).select("_id");
       const classIds = classes.map((cls) => cls._id);
       
       if (!classIds.length) {
         return res.status(404).json({ message: "No classes assigned to this teacher" });
       }
 
-      homework = await Homework.find({ classId: { $in: classIds } })
+      homework = await Homework.find({ classId: { $in: classIds }, branchId })
         .populate("classId", "name")
         .populate("teacherId", "name email")
         .sort({ createdAt: -1 });
@@ -68,7 +69,7 @@ export const getHomework = async (req, res) => {
 
 export const addHomework = async (req, res) => {
   try {
-    const { userId, role, email } = req.user; // Adjusted destructuring
+    const { userId, role, email, branchId } = req.user; // Adjusted destructuring
     console.log("addHomework request body:", req.body); // Debug log
 
     const { title, subject, description, dueDate, classIds } = req.body;
@@ -77,7 +78,7 @@ export const addHomework = async (req, res) => {
     }
 
     // Fetch the teacher's name from the User collection using userId
-    const teacher = await User.findById(userId).select("name");
+    const teacher = await User.findOne({ _id: userId, branchId });
     if (!teacher || !teacher.name) {
       return res.status(400).json({ message: "Teacher name not found in user profile" });
     }
@@ -85,14 +86,14 @@ export const addHomework = async (req, res) => {
 
     let targetClassIds = [];
     if (classIds.includes("all")) {
-      const classes = await Class.find().select("_id");
+      const classes = await Class.find({branchId}).select("_id");
       targetClassIds = classes.map((cls) => cls._id);
     } else {
       targetClassIds = classIds;
     }
 
     // Validate class IDs
-    const validClasses = await Class.find({ _id: { $in: targetClassIds } });
+    const validClasses = await Class.find({ _id: { $in: targetClassIds }, branchId });
     if (validClasses.length !== targetClassIds.length) {
       return res.status(400).json({ message: "One or more class IDs are invalid" });
     }
@@ -108,6 +109,7 @@ export const addHomework = async (req, res) => {
           teacherName,
           dueDate,
           classId,
+          branchId
         });
         return await newHomework.save();
       })
@@ -124,12 +126,12 @@ export const editHomework = async (req, res) => {
   try {
     const { id } = req.params;
     const { title, subject, description, dueDate, classId } = req.body;
-    const { userId, role } = req.user; // From JWT payload
+    const { userId, role, branchId } = req.user; // From JWT payload
 
     console.log("editHomework request body:", req.body); // Debug log
 
     // Find the homework
-    const homework = await Homework.findById(id);
+    const homework = await Homework.findOne({_id:id, branchId});
     if (!homework) {
       return res.status(404).json({ message: "Homework not found" });
     }
@@ -141,7 +143,7 @@ export const editHomework = async (req, res) => {
 
     // Validate classId if provided
     if (classId) {
-      const classExists = await Class.findById(classId);
+      const classExists = await Class.findOne({_id:classId, branchId});
       if (!classExists) {
         return res.status(400).json({ message: "Invalid class ID" });
       }
@@ -157,7 +159,7 @@ export const editHomework = async (req, res) => {
     await homework.save();
 
     // Populate classId and teacherId for response
-    const updatedHomework = await Homework.findById(id)
+    const updatedHomework = await Homework.findOne({_id:id, branchId})
       .populate("classId", "name")
       .populate("teacherId", "name email");
 
@@ -171,10 +173,10 @@ export const editHomework = async (req, res) => {
 export const deleteHomework = async (req, res) => {
   try {
     const { id } = req.params;
-    const { userId, role } = req.user; // From JWT payload
+    const { userId, role, branchId } = req.user; // From JWT payload
 
     // Find the homework
-    const homework = await Homework.findById(id);
+    const homework = await Homework.findOne({_id:id, branchId});
     if (!homework) {
       return res.status(404).json({ message: "Homework not found" });
     }
@@ -185,7 +187,7 @@ export const deleteHomework = async (req, res) => {
     }
 
     // Delete the homework
-    await Homework.findByIdAndDelete(id);
+    await Homework.findOneAndDelete({_id:id, branchId});
 
     res.json({ message: "Homework deleted successfully" });
   } catch (error) {

@@ -1,6 +1,11 @@
 import mongoose from "mongoose";
 
 const timetableSchema = new mongoose.Schema({
+  branchId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "Branch", 
+      required: true 
+    },
   sessionId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Session",

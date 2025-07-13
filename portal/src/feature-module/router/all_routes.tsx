@@ -4,7 +4,7 @@ export const all_routes = {
   parentDashboard: "/parent-dashboard",
   studentDashboard: "/student-dashboard",
   teacherDashboard: "/teacher-dashboard",
-
+  superAdminDashboard: "superAdmin-dashboard",
   blankPage: "/blank-page",
   calendar: "/calendar",
   dataTables: "/data-tables",
@@ -222,7 +222,9 @@ export const all_routes = {
   parentList: "/parent/parent-list",
   guardiansGrid: "/parent/guardians-grid",
   guardiansList: "/parent/guardians-list",
-
+  addBranch:"/management/branch",
+  addAdmin:"/management/add-admin",
+  assignAdmin:"/management/assign-admin",
   // Management
   feesGroup:"/management/fees-group",
   feesType:"/management/fees-type",
@@ -248,6 +250,7 @@ export const all_routes = {
   transportPickupPoints:"/management/transport-pickup-points",
   transportRoutes:"/management/transport-routes",
   cctvList:"/management/cctv",
+  cctvDetails:"management/cctv-details",
   enquiry:"/management/enquiry/add",
   enquiryList:"/management/enquiryList",
   viewEnquiry:"/management/enquiry/view/:id",

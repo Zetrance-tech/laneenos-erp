@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
 import { all_routes } from './router/all_routes';
 
 interface ProtectedFeatureProps {
-  allowedRoles?: Array<'admin' | 'student' | 'parent' | 'teacher'>;
+  allowedRoles?: Array<'admin' | 'student' | 'parent' | 'teacher' | 'superadmin'>;
 }
 
 const ProtectedFeature: React.FC<ProtectedFeatureProps> = ({ allowedRoles }) => {
@@ -39,7 +39,8 @@ const ProtectedFeature: React.FC<ProtectedFeatureProps> = ({ allowedRoles }) => 
       location.pathname === routes.adminDashboard ||
       location.pathname === routes.teacherDashboard ||
       location.pathname === routes.studentDashboard ||
-      location.pathname === routes.parentDashboard
+      location.pathname === routes.parentDashboard || 
+      location.pathname === routes.superAdminDashboard
     ) {
       setShowLoader(true);
       const timeoutId = setTimeout(() => setShowLoader(false), 1000);

@@ -2,9 +2,10 @@ import Leave from "../models/leave.js";
 import Student from "../models/student.js";
 import User from "../models/user.js";
 import Class from "../models/class.js"
+
 export const applyLeave = async (req, res) => {
   try {
-    const { userId, role, email } = req.user;
+    const { userId, role, email, branchId } = req.user;
     const { reason, startDate, endDate } = req.body;
 
     if (role !== "parent") {
@@ -24,6 +25,7 @@ export const applyLeave = async (req, res) => {
     // Find student where either father or mother has the matching email
     const student = await Student.findOne({
       $or: [{ "fatherInfo.email": email }, { "motherInfo.email": email }],
+      branchId,
     });
 
     if (!student) {
@@ -39,6 +41,7 @@ export const applyLeave = async (req, res) => {
       },
       startDate,
       endDate,
+      branchId,
     });
 
     await leave.save();
@@ -48,42 +51,9 @@ export const applyLeave = async (req, res) => {
   }
 };
 
-// export const getLeaves = async (req, res) => {
-//   try {
-//     const { userId, role, email } = req.user;
-//     let leaves;
-
-//     if (role === "parent") {
-//       // Find the student related to the parent
-//       const student = await Student.findOne({
-//         $or: [{ "fatherInfo.email": email }, { "motherInfo.email": email }],
-//       });
-
-//       if (!student) {
-//         return res.status(404).json({ message: "No student found for this parent." });
-//       }
-
-//       leaves = await Leave.find({ studentId: student._id })
-//         .populate("studentId", "name")
-//         .populate("approvedBy", "name");
-//     } else if (role === "admin") {
-//       // Admin sees all leave requests
-//       leaves = await Leave.find()
-//         .populate("studentId", "name")
-//         .populate("parentId", "name email")
-//         .populate("approvedBy", "name");
-//     } else {
-//       return res.status(403).json({ message: "Access denied." });
-//     }
-
-//     res.status(200).json(leaves);
-//   } catch (error) {
-//     res.status(500).json({ message: "Server error", error: error.message });
-//   }
-// };
 export const getLeaves = async (req, res) => {
   try {
-    const { userId, role, email } = req.user;
+    const { userId, role, email, branchId } = req.user;
     const { classId } = req.query; // Add classId from query params
     let leaves;
 
@@ -91,24 +61,25 @@ export const getLeaves = async (req, res) => {
       // Find the student related to the parent
       const student = await Student.findOne({
         $or: [{ "fatherInfo.email": email }, { "motherInfo.email": email }],
+        branchId,
       });
 
       if (!student) {
         return res.status(404).json({ message: "No student found for this parent." });
       }
 
-      leaves = await Leave.find({ studentId: student._id })
+      leaves = await Leave.find({ studentId: student._id, branchId })
         .populate("studentId", "name")
         .populate("approvedBy", "name");
     } else if (role === "admin") {
-      let query = {};
+      let query = { branchId };
       if (classId) {
         // Find students in the specified class
-        const students = await Student.find({ classId }).select("_id");
+        const students = await Student.find({ classId, branchId }).select("_id");
         if (students.length === 0) {
           return res.status(200).json([]);
         }
-        query = { studentId: { $in: students.map((s) => s._id) } };
+        query = { studentId: { $in: students.map((s) => s._id) }, branchId };
       }
       // Admin sees all leave requests or filtered by class
       leaves = await Leave.find(query)
@@ -124,9 +95,10 @@ export const getLeaves = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
 export const updateLeaveStatus = async (req, res) => {
   try {
-    const { userId, role } = req.user;
+    const { userId, role, branchId } = req.user;
     const { leaveId, status } = req.body;
 
     if (role !== "teacher" && role !== "admin") {
@@ -137,7 +109,7 @@ export const updateLeaveStatus = async (req, res) => {
       return res.status(400).json({ message: "Invalid status update." });
     }
 
-    const leave = await Leave.findById(leaveId);
+    const leave = await Leave.findOne({ _id: leaveId, branchId });
     if (!leave) {
       return res.status(404).json({ message: "Leave request not found." });
     }
@@ -155,14 +127,14 @@ export const updateLeaveStatus = async (req, res) => {
 
 export const getTeacherClassLeaves = async (req, res) => {
   try {
-    const { userId, role } = req.user;
+    const { userId, role, branchId } = req.user;
 
     if (role !== "teacher") {
       return res.status(403).json({ message: "Only teachers can access this endpoint." });
     }
 
     // Find classes assigned to the teacher
-    const classes = await Class.find({ teacherId: userId });
+    const classes = await Class.find({ teacherId: userId, branchId });
     console.log(classes);
     if (!classes || classes.length === 0) {
       return res.status(404).json({ message: "No classes assigned to this teacher." });
@@ -171,11 +143,11 @@ export const getTeacherClassLeaves = async (req, res) => {
     const classIds = classes.map((c) => c._id);
 
     // Find students in those classes
-    const students = await Student.find({ classId: { $in: classIds } });
+    const students = await Student.find({ classId: { $in: classIds }, branchId });
     const studentIds = students.map((s) => s._id);
 
     // Find leave requests for those students
-    const leaves = await Leave.find({ studentId: { $in: studentIds } })
+    const leaves = await Leave.find({ studentId: { $in: studentIds }, branchId })
       .populate("studentId", "name")
       .populate("approvedBy", "name");
 

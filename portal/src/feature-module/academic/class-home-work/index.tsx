@@ -4,7 +4,7 @@ import * as bootstrap from "bootstrap";
 import toast, { Toaster } from "react-hot-toast";
 import { Table, Spin, Input } from "antd";
 import { useAuth } from "../../../context/AuthContext";
-
+import { Alert, Descriptions } from "antd";
 const API_URL = process.env.REACT_APP_URL;
 
 interface User {
@@ -37,7 +37,9 @@ interface Homework {
 }
 
 const ClassHomeWork: React.FC = () => {
-  const decodeToken = (token: string): { userId: string; role: string } | null => {
+  const decodeToken = (
+    token: string
+  ): { userId: string; role: string } | null => {
     try {
       const base64Url = token.split(".")[1];
       if (!base64Url) return null;
@@ -60,7 +62,10 @@ const ClassHomeWork: React.FC = () => {
   const { token, user } = useAuth();
   const decoded = token ? decodeToken(token) : null;
   const currentUser: User = decoded
-    ? { userId: decoded.userId, role: decoded.role as "admin" | "teacher" | "parent" | "student" }
+    ? {
+        userId: decoded.userId,
+        role: decoded.role as "admin" | "teacher" | "parent" | "student",
+      }
     : { userId: "", role: "teacher" };
 
   const [homework, setHomework] = useState<Homework[]>([]);
@@ -72,7 +77,9 @@ const ClassHomeWork: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState<boolean>(false);
-  const [selectedHomework, setSelectedHomework] = useState<Homework | null>(null);
+  const [selectedHomework, setSelectedHomework] = useState<Homework | null>(
+    null
+  );
   const dropdownMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -93,12 +100,18 @@ const ClassHomeWork: React.FC = () => {
         );
         setClasses(validClasses);
 
-        const params = currentUser.role === "admin" && selectedClass ? { classId: selectedClass } : {};
+        const params =
+          currentUser.role === "admin" && selectedClass
+            ? { classId: selectedClass }
+            : {};
         console.log("Fetching homework with params:", params);
-        const homeworkResponse = await axios.get<Homework[]>(`${API_URL}/api/homework`, {
-          params,
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const homeworkResponse = await axios.get<Homework[]>(
+          `${API_URL}/api/homework`,
+          {
+            params,
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
         const validHomework = homeworkResponse.data.filter(
           (h): h is Homework => h != null && h._id != null
         );
@@ -116,7 +129,9 @@ const ClassHomeWork: React.FC = () => {
   useEffect(() => {
     const filtered = homework.filter((item) => {
       const matchesCreatedBy = searchCreatedBy
-        ? item.teacherId?.name?.toLowerCase().includes(searchCreatedBy.toLowerCase())
+        ? item.teacherId?.name
+            ?.toLowerCase()
+            .includes(searchCreatedBy.toLowerCase())
         : true;
       const matchesSubject = searchSubject
         ? item.subject?.toLowerCase().includes(searchSubject.toLowerCase())
@@ -146,14 +161,24 @@ const ClassHomeWork: React.FC = () => {
     }
 
     try {
-      const response = await axios.post(`${API_URL}/api/homework/add`, homeworkData, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const params = currentUser.role === "admin" && selectedClass ? { classId: selectedClass } : {};
-      const homeworkResponse = await axios.get<Homework[]>(`${API_URL}/api/homework`, {
-        params,
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await axios.post(
+        `${API_URL}/api/homework/add`,
+        homeworkData,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      const params =
+        currentUser.role === "admin" && selectedClass
+          ? { classId: selectedClass }
+          : {};
+      const homeworkResponse = await axios.get<Homework[]>(
+        `${API_URL}/api/homework`,
+        {
+          params,
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
       const validHomework = homeworkResponse.data.filter(
         (h): h is Homework => h != null && h._id != null
       );
@@ -162,7 +187,9 @@ const ClassHomeWork: React.FC = () => {
       (e.target as HTMLFormElement).reset();
       const modalElement = document.getElementById("add_home_work");
       if (modalElement) {
-        const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+        const modal =
+          bootstrap.Modal.getInstance(modalElement) ||
+          new bootstrap.Modal(modalElement);
         modal.hide();
       }
       toast.success(response.data.message || "Homework added successfully");
@@ -191,14 +218,24 @@ const ClassHomeWork: React.FC = () => {
     }
 
     try {
-      await axios.put(`${API_URL}/api/homework/${selectedHomework._id}`, homeworkData, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const params = currentUser.role === "admin" && selectedClass ? { classId: selectedClass } : {};
-      const homeworkResponse = await axios.get<Homework[]>(`${API_URL}/api/homework`, {
-        params,
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await axios.put(
+        `${API_URL}/api/homework/${selectedHomework._id}`,
+        homeworkData,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      const params =
+        currentUser.role === "admin" && selectedClass
+          ? { classId: selectedClass }
+          : {};
+      const homeworkResponse = await axios.get<Homework[]>(
+        `${API_URL}/api/homework`,
+        {
+          params,
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
       const validHomework = homeworkResponse.data.filter(
         (h): h is Homework => h != null && h._id != null
       );
@@ -207,7 +244,9 @@ const ClassHomeWork: React.FC = () => {
       (e.target as HTMLFormElement).reset();
       const modalElement = document.getElementById("edit_home_work");
       if (modalElement) {
-        const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+        const modal =
+          bootstrap.Modal.getInstance(modalElement) ||
+          new bootstrap.Modal(modalElement);
         modal.hide();
       }
       toast.success("Homework updated successfully");
@@ -222,11 +261,17 @@ const ClassHomeWork: React.FC = () => {
       await axios.delete(`${API_URL}/api/homework/${selectedHomework._id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const params = currentUser.role === "admin" && selectedClass ? { classId: selectedClass } : {};
-      const homeworkResponse = await axios.get<Homework[]>(`${API_URL}/api/homework`, {
-        params,
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const params =
+        currentUser.role === "admin" && selectedClass
+          ? { classId: selectedClass }
+          : {};
+      const homeworkResponse = await axios.get<Homework[]>(
+        `${API_URL}/api/homework`,
+        {
+          params,
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
       const validHomework = homeworkResponse.data.filter(
         (h): h is Homework => h != null && h._id != null
       );
@@ -234,7 +279,9 @@ const ClassHomeWork: React.FC = () => {
       setFilteredHomework(validHomework);
       const modalElement = document.getElementById("delete-modal");
       if (modalElement) {
-        const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+        const modal =
+          bootstrap.Modal.getInstance(modalElement) ||
+          new bootstrap.Modal(modalElement);
         modal.hide();
       }
       toast.success("Homework deleted successfully");
@@ -252,7 +299,9 @@ const ClassHomeWork: React.FC = () => {
     setShowDetailsModal(true);
     const modalElement = document.getElementById("details_home_work");
     if (modalElement) {
-      const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+      const modal =
+        bootstrap.Modal.getInstance(modalElement) ||
+        new bootstrap.Modal(modalElement);
       modal.show();
     }
   };
@@ -263,36 +312,65 @@ const ClassHomeWork: React.FC = () => {
     }
   };
 
-  const dataSource = filteredHomework?.map((item) => ({
-    key: item._id,
-    className: item.classId && item.classId._id && item.classId.name ? item.classId.name : "Class Deleted",
-    subject: item.subject ?? "N/A",
-    createdAt: item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "N/A",
-    dueDate: item.dueDate ? new Date(item.dueDate).toLocaleDateString() : "N/A",
-    teacherName: item.teacherId?.name ?? "N/A",
-    homework: item,
-  })) ?? [];
+  const dataSource =
+    filteredHomework?.map((item) => ({
+      key: item._id,
+      className:
+        item.classId && item.classId._id && item.classId.name
+          ? item.classId.name
+          : "Class Deleted",
+      subject: item.subject ?? "N/A",
+      createdAt: item.createdAt
+        ? new Date(item.createdAt).toLocaleDateString()
+        : "N/A",
+      dueDate: item.dueDate
+        ? new Date(item.dueDate).toLocaleDateString()
+        : "N/A",
+      teacherName: item.teacherId?.name ?? "N/A",
+      homework: item,
+    })) ?? [];
 
   const columns = [
+    {
+      title: "",
+      key: "status-dot",
+      width: 20,
+      render: (record: any) => (
+        <span
+          style={{
+            display: "inline-block",
+            width: 10,
+            height: 10,
+            borderRadius: "50%",
+            backgroundColor: "ffff",
+            marginLeft: 15,
+          }}
+        />
+      ),
+    },
     {
       title: "Class",
       dataIndex: "className",
       key: "className",
-      sorter: (a:any, b:any) => a.className.localeCompare(b.className),
+      sorter: (a: any, b: any) => a.className.localeCompare(b.className),
     },
     {
       title: "Subject",
       dataIndex: "subject",
       key: "subject",
-      sorter: (a:any, b:any) => a.subject.localeCompare(b.subject),
+      sorter: (a: any, b: any) => a.subject.localeCompare(b.subject),
     },
     {
       title: "Homework Date",
       dataIndex: "createdAt",
       key: "createdAt",
-      sorter: (a:any, b:any) => {
-        const dateA = a.homework.createdAt ? new Date(a.homework.createdAt).getTime() : 0;
-        const dateB = b.homework.createdAt ? new Date(b.homework.createdAt).getTime() : 0;
+      sorter: (a: any, b: any) => {
+        const dateA = a.homework.createdAt
+          ? new Date(a.homework.createdAt).getTime()
+          : 0;
+        const dateB = b.homework.createdAt
+          ? new Date(b.homework.createdAt).getTime()
+          : 0;
         return dateA - dateB;
       },
     },
@@ -300,9 +378,13 @@ const ClassHomeWork: React.FC = () => {
       title: "Submission Date",
       dataIndex: "dueDate",
       key: "dueDate",
-      sorter: (a:any, b:any) => {
-        const dateA = a.homework.dueDate ? new Date(a.homework.dueDate).getTime() : 0;
-        const dateB = b.homework.dueDate ? new Date(b.homework.dueDate).getTime() : 0;
+      sorter: (a: any, b: any) => {
+        const dateA = a.homework.dueDate
+          ? new Date(a.homework.dueDate).getTime()
+          : 0;
+        const dateB = b.homework.dueDate
+          ? new Date(b.homework.dueDate).getTime()
+          : 0;
         return dateA - dateB;
       },
     },
@@ -310,7 +392,7 @@ const ClassHomeWork: React.FC = () => {
       title: "Created By",
       dataIndex: "teacherName",
       key: "teacherName",
-      sorter: (a:any, b:any) => a.teacherName.localeCompare(b.teacherName),
+      sorter: (a: any, b: any) => a.teacherName.localeCompare(b.teacherName),
     },
     {
       title: "Action",
@@ -339,9 +421,12 @@ const ClassHomeWork: React.FC = () => {
                 className="dropdown-item rounded-1"
                 onClick={() => {
                   setSelectedHomework(record.homework);
-                  const modalElement = document.getElementById("edit_home_work");
+                  const modalElement =
+                    document.getElementById("edit_home_work");
                   if (modalElement) {
-                    const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                    const modal =
+                      bootstrap.Modal.getInstance(modalElement) ||
+                      new bootstrap.Modal(modalElement);
                     modal.show();
                   }
                 }}
@@ -357,7 +442,9 @@ const ClassHomeWork: React.FC = () => {
                   setSelectedHomework(record.homework);
                   const modalElement = document.getElementById("delete-modal");
                   if (modalElement) {
-                    const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                    const modal =
+                      bootstrap.Modal.getInstance(modalElement) ||
+                      new bootstrap.Modal(modalElement);
                     modal.show();
                   }
                 }}
@@ -416,9 +503,6 @@ const ClassHomeWork: React.FC = () => {
           .ant-table-tbody > tr:nth-child(even) > td,
           .ant-table-tbody > tr:nth-child(odd) > td {
             background-color: #ffffff !important;
-          }
-          .ant-table-container {
-            margin-left: 20px !important;
           }
         `}
       </style>
@@ -499,17 +583,27 @@ const ClassHomeWork: React.FC = () => {
           <div className="card-body p-0 py-3">
             <div style={{ minHeight: "200px", position: "relative" }}>
               {loading ? (
-                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    height: "100%",
+                  }}
+                >
                   <Spin size="large" />
                 </div>
               ) : dataSource.length === 0 ? (
-                <p>No homework found</p>
+                <div className="text-center py-4">
+                  <Alert
+                    message="No homework found"
+                    // type="MealType"
+                    showIcon
+                    className="mx-3"
+                  />
+                </div>
               ) : (
-                <Table
-                  columns={columns}
-                  dataSource={dataSource}
-                  rowKey="key"
-                />
+                <Table columns={columns} dataSource={dataSource} rowKey="key" />
               )}
             </div>
           </div>
@@ -523,9 +617,12 @@ const ClassHomeWork: React.FC = () => {
                   type="button"
                   className="btn-close custom-btn-close"
                   onClick={() => {
-                    const modalElement = document.getElementById("add_home_work");
+                    const modalElement =
+                      document.getElementById("add_home_work");
                     if (modalElement) {
-                      const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                      const modal =
+                        bootstrap.Modal.getInstance(modalElement) ||
+                        new bootstrap.Modal(modalElement);
                       modal.hide();
                     }
                   }}
@@ -547,7 +644,10 @@ const ClassHomeWork: React.FC = () => {
                             value="all"
                             id="allClasses"
                             onChange={(e) => {
-                              const checkboxes = document.querySelectorAll<HTMLInputElement>('input[name="classId"]');
+                              const checkboxes =
+                                document.querySelectorAll<HTMLInputElement>(
+                                  'input[name="classId"]'
+                                );
                               checkboxes.forEach((checkbox) => {
                                 if (checkbox.value !== "all") {
                                   checkbox.checked = e.target.checked;
@@ -556,7 +656,10 @@ const ClassHomeWork: React.FC = () => {
                               });
                             }}
                           />
-                          <label className="form-check-label" htmlFor="allClasses">
+                          <label
+                            className="form-check-label"
+                            htmlFor="allClasses"
+                          >
                             All Classes
                           </label>
                         </div>
@@ -570,7 +673,10 @@ const ClassHomeWork: React.FC = () => {
                                 value={c._id}
                                 id={`class-${c._id}`}
                               />
-                              <label className="form-check-label" htmlFor={`class-${c._id}`}>
+                              <label
+                                className="form-check-label"
+                                htmlFor={`class-${c._id}`}
+                              >
                                 {c.name}
                               </label>
                             </div>
@@ -622,9 +728,12 @@ const ClassHomeWork: React.FC = () => {
                     type="button"
                     className="btn btn-light me-2"
                     onClick={() => {
-                      const modalElement = document.getElementById("add_home_work");
+                      const modalElement =
+                        document.getElementById("add_home_work");
                       if (modalElement) {
-                        const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                        const modal =
+                          bootstrap.Modal.getInstance(modalElement) ||
+                          new bootstrap.Modal(modalElement);
                         modal.hide();
                       }
                     }}
@@ -648,9 +757,12 @@ const ClassHomeWork: React.FC = () => {
                   type="button"
                   className="btn-close custom-btn-close"
                   onClick={() => {
-                    const modalElement = document.getElementById("edit_home_work");
+                    const modalElement =
+                      document.getElementById("edit_home_work");
                     if (modalElement) {
-                      const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                      const modal =
+                        bootstrap.Modal.getInstance(modalElement) ||
+                        new bootstrap.Modal(modalElement);
                       modal.hide();
                     }
                   }}
@@ -664,7 +776,12 @@ const ClassHomeWork: React.FC = () => {
                     <div className="col-md-12">
                       <div className="mb-3">
                         <label className="form-label">Class</label>
-                        <select className="form-select" name="classId" defaultValue={selectedHomework?.classId?._id} required>
+                        <select
+                          className="form-select"
+                          name="classId"
+                          defaultValue={selectedHomework?.classId?._id}
+                          required
+                        >
                           <option value="">Select a class</option>
                           {classes?.map((c) =>
                             c && c._id && c.name ? (
@@ -724,9 +841,12 @@ const ClassHomeWork: React.FC = () => {
                     type="button"
                     className="btn btn-light me-2"
                     onClick={() => {
-                      const modalElement = document.getElementById("edit_home_work");
+                      const modalElement =
+                        document.getElementById("edit_home_work");
                       if (modalElement) {
-                        const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                        const modal =
+                          bootstrap.Modal.getInstance(modalElement) ||
+                          new bootstrap.Modal(modalElement);
                         modal.hide();
                       }
                     }}
@@ -749,15 +869,21 @@ const ClassHomeWork: React.FC = () => {
                   <i className="ti ti-trash-x" />
                 </span>
                 <h4>Confirm Deletion</h4>
-                <p>You want to delete this homework. This cannot be undone once deleted.</p>
+                <p>
+                  You want to delete this homework. This cannot be undone once
+                  deleted.
+                </p>
                 <div className="d-flex justify-content-center">
                   <button
                     type="button"
                     className="btn btn-light me-3"
                     onClick={() => {
-                      const modalElement = document.getElementById("delete-modal");
+                      const modalElement =
+                        document.getElementById("delete-modal");
                       if (modalElement) {
-                        const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                        const modal =
+                          bootstrap.Modal.getInstance(modalElement) ||
+                          new bootstrap.Modal(modalElement);
                         modal.hide();
                       }
                     }}
@@ -786,9 +912,12 @@ const ClassHomeWork: React.FC = () => {
                   className="btn-close custom-btn-close"
                   onClick={() => {
                     setShowDetailsModal(false);
-                    const modalElement = document.getElementById("details_home_work");
+                    const modalElement =
+                      document.getElementById("details_home_work");
                     if (modalElement) {
-                      const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                      const modal =
+                        bootstrap.Modal.getInstance(modalElement) ||
+                        new bootstrap.Modal(modalElement);
                       modal.hide();
                     }
                   }}
@@ -798,15 +927,43 @@ const ClassHomeWork: React.FC = () => {
               </div>
               <div className="modal-body">
                 {selectedHomework && (
-                  <div>
-                    <p><strong>Title:</strong> {selectedHomework.title ?? "N/A"}</p>
-                    <p><strong>Class:</strong> {selectedHomework.classId && selectedHomework.classId._id && selectedHomework.classId.name ? selectedHomework.classId.name : "Class Deleted"}</p>
-                    <p><strong>Subject:</strong> {selectedHomework.subject ?? "N/A"}</p>
-                    <p><strong>Description:</strong> {selectedHomework.description ?? "N/A"}</p>
-                    <p><strong>Homework Date:</strong> {selectedHomework.createdAt ? new Date(selectedHomework.createdAt).toLocaleDateString() : "N/A"}</p>
-                    <p><strong>Submission Date:</strong> {selectedHomework.dueDate ? new Date(selectedHomework.dueDate).toLocaleDateString() : "N/A"}</p>
-                    <p><strong>Created By:</strong> {selectedHomework.teacherId?.name ?? "N/A"}</p>
-                  </div>
+                  <Descriptions bordered column={1}>
+                    <Descriptions.Item label="Title">
+                      {selectedHomework.title ?? "N/A"}
+                    </Descriptions.Item>
+
+                    <Descriptions.Item label="Class">
+                      {selectedHomework.classId?.name ?? "Class Deleted"}
+                    </Descriptions.Item>
+
+                    <Descriptions.Item label="Subject">
+                      {selectedHomework.subject ?? "N/A"}
+                    </Descriptions.Item>
+
+                    <Descriptions.Item label="Description">
+                      {selectedHomework.description ?? "N/A"}
+                    </Descriptions.Item>
+
+                    <Descriptions.Item label="Homework Date">
+                      {selectedHomework.createdAt
+                        ? new Date(
+                            selectedHomework.createdAt
+                          ).toLocaleDateString()
+                        : "N/A"}
+                    </Descriptions.Item>
+
+                    <Descriptions.Item label="Submission Date">
+                      {selectedHomework.dueDate
+                        ? new Date(
+                            selectedHomework.dueDate
+                          ).toLocaleDateString()
+                        : "N/A"}
+                    </Descriptions.Item>
+
+                    <Descriptions.Item label="Created By">
+                      {selectedHomework.teacherId?.name ?? "N/A"}
+                    </Descriptions.Item>
+                  </Descriptions>
                 )}
               </div>
               <div className="modal-footer">
@@ -815,9 +972,12 @@ const ClassHomeWork: React.FC = () => {
                   className="btn btn-light"
                   onClick={() => {
                     setShowDetailsModal(false);
-                    const modalElement = document.getElementById("details_home_work");
+                    const modalElement =
+                      document.getElementById("details_home_work");
                     if (modalElement) {
-                      const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+                      const modal =
+                        bootstrap.Modal.getInstance(modalElement) ||
+                        new bootstrap.Modal(modalElement);
                       modal.hide();
                     }
                   }}

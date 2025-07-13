@@ -1,6 +1,11 @@
 import mongoose from 'mongoose';
 
 const feesConcessionSchema = new mongoose.Schema({
+  branchId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "Branch", 
+      required: true 
+    },
   category: {
     type: String,
     required: true,
@@ -40,7 +45,7 @@ const feesConcessionSchema = new mongoose.Schema({
   updatedAt: {
     type: Date,
     default: Date.now
-  }
+  },
 });
 
 feesConcessionSchema.pre('save', function(next) {

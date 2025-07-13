@@ -24,6 +24,7 @@ interface TimetableSlot {
   status?: string;
   notes?: string;
   _id?: string;
+  description?:string;
 }
 
 interface TimetableDay {
@@ -259,15 +260,13 @@ const StudentTimeTable: React.FC = () => {
                                       : "pending"
                                   } rounded p-3 mb-4`}
                                 >
-                                  <p className="d-flex align-items-center text-nowrap mb-1">
-                                    <i className="ti ti-clock me-1" />
-                                    {formatTime(slot.startTime)} -{" "}
-                                    {formatTime(slot.endTime)}
+                                  <p className="text-dark">
+                                    <strong>{slot.activity}</strong>
                                   </p>
                                   <p className="text-dark">
-                                    Activity: {slot.activity}
+                                    {slot.description}
                                   </p>
-                                  <div className="bg-white rounded p-1 mt-3">
+                                  {/* <div className="bg-white rounded p-1 mt-3">
                                     <span className="text-muted d-flex align-items-center">
                                       <span className="avatar avatar-sm me-2">
                                         <ImageWithBasePath
@@ -277,7 +276,7 @@ const StudentTimeTable: React.FC = () => {
                                       </span>
                                       {slot.teacherId?.name || "Not Assigned"}
                                     </span>
-                                  </div>
+                                  </div> */}
                                 </div>
                               ))}
                             </div>

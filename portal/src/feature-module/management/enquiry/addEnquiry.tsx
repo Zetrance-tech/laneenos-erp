@@ -166,7 +166,7 @@ const AddEnquiry = () => {
         })
         .catch((err) => {
           console.error("Error fetching enquiry:", err);
-          toast.error("Failed to fetch enquiry");
+          // toast.error("Failed to fetch enquiry");
         });
     }
   }, [id]);

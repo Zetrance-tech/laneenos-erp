@@ -22,6 +22,7 @@ export const addEvent = async (req, res) => {
         message: 'All required fields must be provided',
       });
     }
+    const branchId = req.user.branchId;
     const parsedStartDate = startDate ? new Date(startDate) : null;
     const parsedEndDate = endDate ? new Date(endDate) : null;
 
@@ -41,7 +42,8 @@ export const addEvent = async (req, res) => {
       startTime,
       endTime,
       message,
-      attachment: attachment || undefined, // Ensure attachment is undefined if not provided
+      attachment: attachment || undefined, 
+      branchId
     });
 
     await newEvent.save();
@@ -62,8 +64,8 @@ export const addEvent = async (req, res) => {
 };
 export const getAllEvents = async (req, res) => {
   try {
-    const events = await Event.find().sort({ startDate: 1 }); // Sort by start date ascending
-    
+    const branchId = req.user.branchId;
+    const events = await Event.find({branchId}).sort({ startDate: 1 }); // Sort by start date ascending
     res.status(200).json({
       message: 'Events retrieved successfully',
       count: events.length,
@@ -80,8 +82,8 @@ export const getAllEvents = async (req, res) => {
 export const getEventById = async (req, res) => {
   try {
     const eventId = req.params.id;
-    
-    const event = await Event.findById(eventId);
+    const branchId = req.user.branchId;
+    const event = await Event.findOne({eventId, branchId});
     
     if (!event) {
       return res.status(404).json({ message: 'Event not found' });
@@ -102,8 +104,8 @@ export const getEventById = async (req, res) => {
 export const getEventsByCategory = async (req, res) => {
   try {
     const category = req.params.category;
-    
-    const events = await Event.find({ eventCategory: category }).sort({ startDate: 1 });
+    const { branchId } = req.user;
+    const events = await Event.find({ eventCategory: category, branchId }).sort({ startDate: 1 });
     
     res.status(200).json({
       message: 'Events retrieved successfully',
@@ -120,6 +122,7 @@ export const getEventsByCategory = async (req, res) => {
 
 export const updateEvent = async (req, res) => {
   try {
+    const { branchId } = req.user;
     const eventId = req.params.id;
     const {
       eventFor,
@@ -149,8 +152,8 @@ export const updateEvent = async (req, res) => {
         message: 'Invalid date format',
       });
     }
-    const updatedEvent = await Event.findByIdAndUpdate(
-      eventId,
+    const updatedEvent = await Event.findOneAndUpdate(
+       { _id: eventId, branchId },
       {
         eventFor,
         eventTitle,
@@ -192,9 +195,9 @@ export const updateEvent = async (req, res) => {
 export const deleteEvent = async (req, res) => {
   try {
     const eventId = req.params.id;
-
+    const { branchId } = req.user;
     // Find and delete the event
-    const deletedEvent = await Event.findByIdAndDelete(eventId);
+    const deletedEvent = await Event.findOneAndDelete({ _id: eventId, branchId });
 
     if (!deletedEvent) {
       return res.status(404).json({

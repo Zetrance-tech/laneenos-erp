@@ -1,26 +1,27 @@
+import mongoose from "mongoose";
 import Session from "../models/session.js";
 import Counter from "../models/counter.js";
 
-export const getNextSequence = async (name) => {
+const getNextSequence = async (type, branchId) => {
   const counter = await Counter.findOneAndUpdate(
-    { _id: name },
+    { type: `${type}_id`, branchId },
     { $inc: { sequence: 1 } },
-    { new: true, upsert: true }
+    { new: true, upsert: true, setDefaultsOnInsert: true }
   );
   return counter.sequence;
 };
 
-export const generateId = async (entityType) => {
-  const sequence = await getNextSequence(`${entityType}_id`);
+const generateId = async (entityType, branchId) => {
+  const sequence = await getNextSequence(entityType, branchId);
   switch (entityType) {
     case "class":
-      return `LN-144-C${String(sequence).padStart(3, "0")}`; // LN-144-C001
+      return `LN-144-C${String(sequence).padStart(3, "0")}`;
     case "session":
-      return `LN-144-S${String(sequence).padStart(3, "0")}`; // LN-144-S001
+      return `LN-144-S${String(sequence).padStart(3, "0")}`;
     case "student":
-      return `LNS-144-${sequence}`; // LNS-144-1
+      return `LNS-144-${sequence}`;
     case "teacher":
-      return `LNE-144-${sequence}`; // LNE-144-1
+      return `LNE-144-${sequence}`;
     default:
       throw new Error("Invalid entity type");
   }
@@ -28,8 +29,8 @@ export const generateId = async (entityType) => {
 
 export const getNextSessionId = async (req, res) => {
   try {
-    const counter = await Counter.findOne({ _id: "session_id" });
-    const sequence = counter ? counter.sequence + 1 : 1;
+    const branchId = req.user.branchId;
+    const sequence = await getNextSequence("session", branchId);
     const id = `LN-144-S${String(sequence).padStart(3, "0")}`;
     res.status(200).json({ id });
   } catch (error) {
@@ -37,10 +38,10 @@ export const getNextSessionId = async (req, res) => {
   }
 };
 
-// Create a new session
 export const createSession = async (req, res) => {
   try {
-    const sessionId = await generateId("session");
+    const branchId = req.user.branchId;
+    const sessionId = await generateId("session", branchId);
     const { name, startDate, endDate, status } = req.body;
 
     const newSession = new Session({
@@ -49,6 +50,7 @@ export const createSession = async (req, res) => {
       endDate,
       sessionId,
       status,
+      branchId,
     });
 
     const savedSession = await newSession.save();
@@ -58,20 +60,20 @@ export const createSession = async (req, res) => {
   }
 };
 
-// Get all sessions
 export const getAllSessions = async (req, res) => {
   try {
-    const sessions = await Session.find();
+    const branchId = req.user.branchId;
+    const sessions = await Session.find({ branchId });
     res.status(200).json(sessions);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-// Get a single session by ID
 export const getSessionById = async (req, res) => {
   try {
-    const session = await Session.findById(req.params.id);
+    const branchId = req.user.branchId;
+    const session = await Session.findOne({ _id: req.params.id, branchId });
     if (!session) {
       return res.status(404).json({ message: "Session not found" });
     }
@@ -81,13 +83,13 @@ export const getSessionById = async (req, res) => {
   }
 };
 
-// Update a session by ID
 export const updateSession = async (req, res) => {
   try {
+    const branchId = req.user.branchId;
     const { name, startDate, endDate, sessionId, status } = req.body;
 
-    const updatedSession = await Session.findByIdAndUpdate(
-      req.params.id,
+    const updatedSession = await Session.findOneAndUpdate(
+      { _id: req.params.id, branchId },
       { name, startDate, endDate, sessionId, status },
       { new: true, runValidators: true }
     );
@@ -102,10 +104,10 @@ export const updateSession = async (req, res) => {
   }
 };
 
-// Delete a session by ID
 export const deleteSession = async (req, res) => {
   try {
-    const deletedSession = await Session.findByIdAndDelete(req.params.id);
+    const branchId = req.user.branchId;
+    const deletedSession = await Session.findOneAndDelete({ _id: req.params.id, branchId });
     if (!deletedSession) {
       return res.status(404).json({ message: "Session not found" });
     }

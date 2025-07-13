@@ -10,18 +10,19 @@ const months = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "
 const quarterlyMonths = ["Apr", "Jul", "Oct", "Jan"];
 
 // Get next payment ID
-const getNextPaymentId = async () => {
+const getNextPaymentId = async (branchId) => {
   const counter = await Counter.findOneAndUpdate(
-    { _id: "payment_id" },
+    { type: "payment_id", branchId },
     { $inc: { sequence: 1 } },
-    { upsert: true, new: true }
+    { upsert: true, new: true, setDefaultsOnInsert: true }
   );
   return `FC${String(counter.sequence).padStart(6, '0')}`; // Format: PAY000001
 };
 
 export const nextTransactionId = async (req, res) => {
+  const {branchId} = req.user;
   try {
-    const paymentId = await getNextPaymentId();
+    const paymentId = await getNextPaymentId(branchId);
     res.status(200).json({ paymentId });
   } catch (error) {
     console.error("Error in getNextPaymentId:", error);
@@ -33,6 +34,7 @@ export const updateStudentFees = async (req, res) => {
   try {
     const { studentId } = req.params;
     const { fees } = req.body;
+    const { branchId } = req.user;
 
     if (!mongoose.Types.ObjectId.isValid(studentId)) {
       return res.status(400).json({ message: "Invalid student ID format" });
@@ -51,14 +53,14 @@ export const updateStudentFees = async (req, res) => {
       }
     }
 
-    const student = await Student.findById(studentId).select("sessionId classId name admissionNumber");
+    const student = await Student.findOne({ _id: studentId, branchId }).select("sessionId classId name admissionNumber");
     if (!student) {
       return res.status(404).json({ message: "Student not found" });
     }
 
     const feesByMonth = {};
     for (const fee of fees) {
-      const feesGroup = await FeesGroup.findById(fee.feesGroup);
+      const feesGroup = await FeesGroup.findOne({ _id: fee.feesGroup, branchId });
       if (!feesGroup) continue;
 
       const applicableMonths = feesGroup.periodicity === "Monthly" ? months :
@@ -87,6 +89,7 @@ export const updateStudentFees = async (req, res) => {
             studentId,
             sessionId: student.sessionId,
             month,
+            branchId
           },
           update: {
             $set: {
@@ -100,6 +103,7 @@ export const updateStudentFees = async (req, res) => {
               isCustom: true,
               status: "pending",
               updatedAt: new Date(),
+              branchId
             },
             $setOnInsert: {
               createdAt: new Date(),
@@ -115,6 +119,7 @@ export const updateStudentFees = async (req, res) => {
     const updatedFees = await StudentFee.find({
       studentId,
       sessionId: student.sessionId,
+      branchId
     }).populate("fees.feesGroup", "name periodicity");
 
     const responseFees = updatedFees.map((fee) => ({
@@ -154,12 +159,14 @@ export const updateStudentFees = async (req, res) => {
 
 export const getStudentFees = async (req, res) => {
   try {
+    const { branchId } = req.user;
+
     const { studentId } = req.params;
     if (!mongoose.Types.ObjectId.isValid(studentId)) {
       return res.status(400).json({ message: "Invalid student ID format" });
     }
 
-    const student = await Student.findById(studentId)
+    const student = await Student.findOne({ _id: studentId, branchId })
       .select("name admissionNumber sessionId classId")
       .populate("sessionId", "name sessionId")
       .populate("classId", "name id");
@@ -171,6 +178,7 @@ export const getStudentFees = async (req, res) => {
     const studentFees = await StudentFee.find({
       studentId,
       sessionId: student.sessionId,
+      branchId
     }).populate("fees.feesGroup", "name periodicity");
 
     const fees = studentFees.map((fee) => ({
@@ -210,6 +218,7 @@ export const getStudentFees = async (req, res) => {
 
 export const updateFeesForStudent = async (req, res) => {
   const { templateId, sessionId, studentIds, customFees, mergeTemplateFees = false } = req.body;
+    const { branchId } = req.user;
 
   try {
     if (!templateId || !sessionId || !studentIds || !Array.isArray(studentIds) || studentIds.length === 0) {
@@ -217,7 +226,7 @@ export const updateFeesForStudent = async (req, res) => {
       return res.status(400).json({ message: "Missing required fields: templateId, sessionId, or studentIds" });
     }
 
-    const feeTemplate = await FeesTemplate.findById(templateId).populate("classIds fees.feesGroup");
+    const feeTemplate = await FeesTemplate.findOne({ _id: templateId, branchId }).populate("classIds fees.feesGroup");
     if (!feeTemplate) {
       console.error(`Fee Template not found for ID: ${templateId}`);
       return res.status(404).json({ message: "Fee Template not found" });
@@ -233,6 +242,7 @@ export const updateFeesForStudent = async (req, res) => {
       sessionId,
       classId: { $in: feeTemplate.classIds.map((c) => c._id) },
       status: "active",
+      branchId
     });
 
     if (students.length === 0) {
@@ -242,7 +252,7 @@ export const updateFeesForStudent = async (req, res) => {
 
     const defaultFees = [];
     for (const fee of feeTemplate.fees) {
-      const feesGroup = await FeesGroup.findById(fee.feesGroup);
+      const feesGroup = await FeesGroup.findOne({ _id: fee.feesGroup, branchId });
       if (!feesGroup) continue;
 
       const applicableMonths = feesGroup.periodicity === 'Monthly' ? months :
@@ -323,6 +333,7 @@ export const updateFeesForStudent = async (req, res) => {
                 studentId: student._id,
                 sessionId,
                 month,
+                branchId
               },
               update: {
                 $set: {
@@ -337,6 +348,7 @@ export const updateFeesForStudent = async (req, res) => {
                   isCustom: true,
                   updatedAt: new Date(),
                   month,
+                  branchId
                 },
                 $setOnInsert: {
                   createdAt: new Date(),
@@ -366,10 +378,13 @@ export const updateFeesForStudent = async (req, res) => {
 
 export const getStudentFeesByMonth = async (req, res) => {
   const { studentId, month } = req.params;
+    const { branchId } = req.user;
+
   try {
     const studentFee = await StudentFee.findOne({
       studentId,
       month,
+      branchId
     }).populate([
       { path: "fees.feesGroup", select: "name periodicity" },
       { path: "studentId", select: "name admissionNumber fatherInfo.name motherInfo.name" },
@@ -389,10 +404,12 @@ export const getStudentFeesByMonth = async (req, res) => {
 };
 
 export const getAllStudentFeesByAdmission = async (req, res) => {
+    const { branchId } = req.user;
+
   const { admissionNumber } = req.params;
   const { sessionId } = req.query;
   try {
-    const student = await Student.findOne({ admissionNumber, sessionId });
+    const student = await Student.findOne({ admissionNumber, sessionId, branchId });
     if (!student) {
       return res.status(404).json({ message: "Student not found" });
     }
@@ -400,6 +417,7 @@ export const getAllStudentFeesByAdmission = async (req, res) => {
     const studentFees = await StudentFee.find({
       studentId: student._id,
       sessionId,
+      branchId
     }).populate([
       { path: "fees.feesGroup", select: "name periodicity" },
     ]);
@@ -419,6 +437,8 @@ export const getAllStudentFeesByAdmission = async (req, res) => {
 
 export const getStudentsWithFeesByClassSession = async (req, res) => {
   const { classId, sessionId } = req.params;
+    const { branchId } = req.user;
+
   try {
     if (!mongoose.Types.ObjectId.isValid(classId) || !mongoose.Types.ObjectId.isValid(sessionId)) {
       return res.status(400).json({ message: "Invalid classId or sessionId format" });
@@ -428,6 +448,7 @@ export const getStudentsWithFeesByClassSession = async (req, res) => {
       classId,
       sessionId,
       status: "active",
+      branchId,
     }).select("_id name admissionNumber classId sessionId motherInfo.name fatherInfo.name");
 
     if (!students.length) {
@@ -439,6 +460,7 @@ export const getStudentsWithFeesByClassSession = async (req, res) => {
       studentId: { $in: studentIds },
       sessionId,
       classId,
+      branchId
     }).select("studentId").distinct("studentId");
 
     const studentsWithFees = students.filter(student => 
@@ -468,6 +490,8 @@ export const getStudentsWithFeesByClassSession = async (req, res) => {
 
 export const getStudentsWithFeesBySession = async (req, res) => {
   const {sessionId } = req.params;
+    const { branchId } = req.user;
+
   try {
     if (!mongoose.Types.ObjectId.isValid(sessionId)) {
       return res.status(400).json({ message: "Invalid sessionId format" });
@@ -476,6 +500,7 @@ export const getStudentsWithFeesBySession = async (req, res) => {
     const students = await Student.find({
       sessionId,
       status: "active",
+      branchId,
     }).select("_id name admissionNumber classId sessionId");
 
     if (!students.length) {
@@ -486,6 +511,7 @@ export const getStudentsWithFeesBySession = async (req, res) => {
     const studentFees = await StudentFee.find({
       studentId: { $in: studentIds },
       sessionId,
+      branchId
     }).select("studentId").distinct("studentId");
 
     const studentsWithFees = students.filter(student => 
@@ -514,6 +540,8 @@ export const getStudentsWithFeesBySession = async (req, res) => {
 export const getMonthsWithFeesByStudent = async (req, res) => {
   const { studentId } = req.params;
   const { sessionId } = req.query;
+    const { branchId } = req.user;
+
   try {
     if (!mongoose.Types.ObjectId.isValid(studentId)) {
       return res.status(400).json({ message: "Invalid studentId format" });
@@ -522,7 +550,7 @@ export const getMonthsWithFeesByStudent = async (req, res) => {
       return res.status(400).json({ message: "Invalid or missing sessionId" });
     }
 
-    const student = await Student.findOne({ _id: studentId, sessionId }).select("_id");
+    const student = await Student.findOne({ _id: studentId, sessionId, branchId }).select("_id");
     if (!student) {
       return res.status(404).json({ message: "Student not found for the specified session" });
     }
@@ -530,6 +558,7 @@ export const getMonthsWithFeesByStudent = async (req, res) => {
     const monthsWithFees = await StudentFee.find({
       studentId,
       sessionId,
+      branchId
     }).select("month").distinct("month");
 
     res.status(200).json(monthsWithFees.filter(month => month && month !== ""));
@@ -541,6 +570,8 @@ export const getMonthsWithFeesByStudent = async (req, res) => {
 
 export const getGeneratedFeesSummaryByClass = async (req, res) => {
   const { classId, sessionId } = req.params;
+    const { branchId } = req.user;
+
   
   try {
     if (!mongoose.Types.ObjectId.isValid(classId) || !mongoose.Types.ObjectId.isValid(sessionId)) {
@@ -551,6 +582,7 @@ export const getGeneratedFeesSummaryByClass = async (req, res) => {
       classId,
       sessionId,
       status: "active",
+      branchId
     }).select("_id name admissionNumber");
 
     if (!students.length) {
@@ -564,6 +596,7 @@ export const getGeneratedFeesSummaryByClass = async (req, res) => {
       sessionId,
       classId,
       dueDate: { $exists: true, $ne: null },
+      branchId,
     }).populate([
       { path: "fees.feesGroup", select: "name periodicity" },
       { path: "studentId", select: "name admissionNumber" },
@@ -622,11 +655,13 @@ export const getGeneratedFeesSummaryByClass = async (req, res) => {
 
 export const updateStudentFeeDueDate = async (req, res) => {
   const { studentId, sessionId, month, dueDate } = req.body;
+    const { branchId } = req.user;
+
   try {
     if (!studentId || !sessionId || !month || !dueDate) {
       return res.status(400).json({ message: "Missing required fields: studentId, sessionId, month, or dueDate" });
     }
-    const student = await Student.findOne({ _id: studentId, sessionId, status: "active" });
+    const student = await Student.findOne({ _id: studentId, sessionId, status: "active", branchId });
     if (!student) {
       return res.status(404).json({ message: "Student not found or not active" });
     }
@@ -637,6 +672,7 @@ export const updateStudentFeeDueDate = async (req, res) => {
         sessionId,
         month,
         dueDate: { $exists: true },
+        branchId
       },
       {
         $set: {
@@ -667,12 +703,14 @@ export const updateStudentFeeDueDate = async (req, res) => {
 
 export const deleteGeneratedFees = async (req, res) => {
   const { studentId, sessionId, month } = req.body;
+    const { branchId } = req.user;
+
   try {
     if (!studentId || !sessionId || !month) {
       return res.status(400).json({ message: "Missing required fields: studentId, sessionId, or month" });
     }
 
-    const student = await Student.findOne({ _id: studentId, sessionId, status: "active" });
+    const student = await Student.findOne({ _id: studentId, sessionId, status: "active" , branchId});
     if (!student) {
       return res.status(404).json({ message: "Student not found or not active" });
     }
@@ -683,6 +721,7 @@ export const deleteGeneratedFees = async (req, res) => {
         sessionId,
         month,
         dueDate: { $exists: true, $ne: null },
+        branchId
       },
       {
         $set: {
@@ -715,6 +754,8 @@ export const generateStudentFees = async (req, res) => {
   const { studentId, sessionId, months, dueDate } = req.body;
   const generatedAt = new Date();
   const generationGroupId = uuidv4();
+    const { branchId } = req.user;
+
 
   try {
     if (!studentId || !sessionId || !months || !Array.isArray(months) || months.length === 0 || !dueDate) {
@@ -726,7 +767,7 @@ export const generateStudentFees = async (req, res) => {
       return res.status(400).json({ message: "Invalid month provided" });
     }
 
-    const student = await Student.findOne({ _id: studentId, sessionId, status: "active" })
+    const student = await Student.findOne({ _id: studentId, sessionId, status: "active", branchId })
       .select("_id name admissionNumber classId");
     if (!student) {
       return res.status(404).json({ message: "Student not found or not active" });
@@ -735,6 +776,7 @@ export const generateStudentFees = async (req, res) => {
     const feeTemplate = await FeesTemplate.findOne({
       sessionId,
       classIds: student.classId,
+      branchId
     }).populate("fees.feesGroup");
 
     if (!feeTemplate) {
@@ -747,6 +789,7 @@ export const generateStudentFees = async (req, res) => {
       sessionId,
       month: { $in: months },
       dueDate: { $exists: true, $ne: null },
+      branchId,
     }).populate("fees.feesGroup");
 
     const existingGeneratedMonths = new Set(existingGeneratedFees.map(fee => fee.month));
@@ -765,6 +808,8 @@ export const generateStudentFees = async (req, res) => {
         studentId,
         sessionId,
         month,
+      branchId,
+        
       }).populate("fees.feesGroup");
 
       if (existingStudentFee) {
@@ -774,6 +819,8 @@ export const generateStudentFees = async (req, res) => {
               studentId,
               sessionId,
               month,
+      branchId,
+
             },
             update: {
               $set: {
@@ -837,6 +884,8 @@ export const generateStudentFees = async (req, res) => {
               studentId,
               sessionId,
               month,
+      branchId,
+
             },
             update: {
               $set: {
@@ -853,6 +902,8 @@ export const generateStudentFees = async (req, res) => {
                 month,
                 status: "pending",
                 generationGroupId,
+      branchId,
+
               },
               $setOnInsert: {
                 createdAt: generatedAt,
@@ -918,6 +969,8 @@ export const generateStudentFees = async (req, res) => {
 export const generateFeesForClass = async (req, res) => {
   const { classId, sessionId, months, dueDate, generatedAt } = req.body;
   const generationGroupId = uuidv4();
+    const { branchId } = req.user;
+
 
   try {
     if (!classId || !sessionId || !months || !Array.isArray(months) || months.length === 0 || !dueDate || !generatedAt) {
@@ -933,10 +986,10 @@ export const generateFeesForClass = async (req, res) => {
     }
 
     const [students, feeTemplate] = await Promise.all([
-      Student.find({ classId, sessionId, status: "active" })
+      Student.find({ classId, sessionId, status: "active", branchId })
         .select("_id classId name admissionNumber")
         .lean(),
-      FeesTemplate.findOne({ sessionId, classIds: classId })
+      FeesTemplate.findOne({ sessionId, classIds: classId , branchId})
         .populate("fees.feesGroup")
         .lean(),
     ]);
@@ -954,6 +1007,7 @@ export const generateFeesForClass = async (req, res) => {
       sessionId,
       month: { $in: months },
       dueDate: { $exists: true, $ne: null },
+       branchId
     }).populate("fees.feesGroup").lean();
 
     const existingFeesMap = new Map(
@@ -978,6 +1032,7 @@ export const generateFeesForClass = async (req, res) => {
           studentId: student._id,
           sessionId,
           month,
+           branchId
         }).populate("fees.feesGroup").lean();
 
         if (existingFee) {
@@ -987,6 +1042,7 @@ export const generateFeesForClass = async (req, res) => {
                 studentId: student._id,
                 sessionId,
                 month,
+                 branchId
               },
               update: {
                 $set: {
@@ -1047,6 +1103,7 @@ export const generateFeesForClass = async (req, res) => {
                 studentId: student._id,
                 sessionId,
                 month,
+                 branchId
               },
               update: {
                 $set: {
@@ -1063,6 +1120,7 @@ export const generateFeesForClass = async (req, res) => {
                   month,
                   status: "pending",
                   generationGroupId,
+                   branchId
                 },
                 $setOnInsert: {
                   createdAt: new Date(generatedAt),
@@ -1137,12 +1195,14 @@ export const generateFeesForClass = async (req, res) => {
 
 export const getGenerationGroups = async (req, res) => {
   const { studentId, classId, sessionId } = req.query;
+    const { branchId } = req.user;
+
   try {
     if (!sessionId || !mongoose.Types.ObjectId.isValid(sessionId)) {
       return res.status(400).json({ message: "Invalid or missing sessionId" });
     }
 
-    let query = { sessionId, dueDate: { $exists: true, $ne: null } };
+    let query = { sessionId, dueDate: { $exists: true, $ne: null },  branchId };
     if (studentId && mongoose.Types.ObjectId.isValid(studentId)) {
       query.studentId = studentId;
     } else if (classId && mongoose.Types.ObjectId.isValid(classId)) {
@@ -1209,6 +1269,7 @@ export const getGenerationGroups = async (req, res) => {
 
 export const collectStudentFees = async (req, res) => {
   const { studentId, sessionId, month, paymentDetails, excessAmount, discount } = req.body;
+    const { branchId } = req.user;
 
   try {
     // Input validation
@@ -1235,7 +1296,7 @@ export const collectStudentFees = async (req, res) => {
     }
 
     // Fetch student and fee records
-    const student = await Student.findOne({ _id: studentId, sessionId, status: "active" })
+    const student = await Student.findOne({ _id: studentId, sessionId, status: "active",  branchId })
       .select("_id name admissionNumber classId");
     if (!student) {
       return res.status(404).json({ message: "Student not found or not active" });
@@ -1246,6 +1307,7 @@ export const collectStudentFees = async (req, res) => {
       sessionId,
       month,
       dueDate: { $exists: true, $ne: null },
+       branchId
     }).populate("fees.feesGroup", "name periodicity");
 
     if (!studentFee) {
@@ -1274,7 +1336,7 @@ export const collectStudentFees = async (req, res) => {
     }
 
     // Generate payment ID
-    const paymentId = await getNextPaymentId();
+    const paymentId = await getNextPaymentId( branchId);
 
     // Prepare payment details
     const newPayment = {
@@ -1294,7 +1356,7 @@ export const collectStudentFees = async (req, res) => {
 
     // Update fee record
     const updatedFee = await StudentFee.findOneAndUpdate(
-      { _id: studentFee._id },
+      { _id: studentFee._id, branchId },
       {
         $push: { paymentDetails: newPayment },
         $set: {
@@ -1328,6 +1390,7 @@ export const collectStudentFees = async (req, res) => {
 
 export const editPaymentDetails = async (req, res) => {
   const { studentId, sessionId, month, paymentId, paymentDetails, excessAmount, discount} = req.body;
+    const { branchId } = req.user;
 
   try {
     // Input validation
@@ -1356,7 +1419,7 @@ export const editPaymentDetails = async (req, res) => {
     }
 
     // Fetch student and fee records
-    const student = await Student.findOne({ _id: studentId, sessionId, status: "active" })
+    const student = await Student.findOne({ _id: studentId, sessionId, status: "active", branchId })
       .select("_id").select("name admissionNumber classId");
     if (!student) {
       return res.status(404).json({ message: "Student not found or not active" });
@@ -1367,7 +1430,8 @@ export const editPaymentDetails = async (req, res) => {
       sessionId:   sessionId,
       month:   month,
       dueDate: { $exists: true, $ne: null },
-      "paymentDetails._id": paymentDetails._id
+      "paymentDetails._id": paymentDetails._id,
+       branchId
     }).populate("fees.feesGroup", "name periodicity");
 
     if (!studentFee) {
@@ -1399,7 +1463,8 @@ export const editPaymentDetails = async (req, res) => {
     const updatedFee = await StudentFee.findOneAndUpdate(
       { 
         _id: studentFee._id,
-        "paymentDetails._id": paymentDetails._id
+        "paymentDetails._id": paymentDetails._id,
+         branchId
       },
       {
         $set: {
@@ -1482,6 +1547,8 @@ function formatFeeForResponse(fee) {
 
 export const getFeesByMonth = async (req, res) => {
   try {
+    const { branchId } = req.user;
+
     const { studentId, month } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(studentId)) {
@@ -1491,6 +1558,7 @@ export const getFeesByMonth = async (req, res) => {
     const fees = await StudentFee.find({
       studentId: new mongoose.Types.ObjectId(studentId),
       month,
+       branchId
     }).populate('fees.feesGroup', 'name periodicity');
 
     if (!fees.length) {
@@ -1509,6 +1577,7 @@ export const getFeesByMonth = async (req, res) => {
 export const getFeesBySession = async (req, res) => {
   try {
     const { studentId, sessionId } = req.params;
+    const { branchId } = req.user;
 
     if (!mongoose.Types.ObjectId.isValid(studentId) || !mongoose.Types.ObjectId.isValid(sessionId)) {
       return res.status(400).json({ message: 'Invalid student or session ID' });
@@ -1517,6 +1586,7 @@ export const getFeesBySession = async (req, res) => {
     const fees = await StudentFee.find({
       studentId: new mongoose.Types.ObjectId(studentId),
       sessionId: new mongoose.Types.ObjectId(sessionId),
+       branchId
     }).populate([
       { path: 'fees.feesGroup', select: 'name periodicity' },
       { path: 'studentId', select: 'name admissionNumber fatherInfo.name motherInfo.name' }, // Add this to populate student data
@@ -1537,7 +1607,9 @@ export const getFeesBySession = async (req, res) => {
 
 export const previewNextPaymentId = async (req, res) => {
   try {
-    const counter = await Counter.findOne({ _id: "payment_id" });
+    const branchId = req.user.branchId
+    const counter = await Counter.findOne({ type: "payment_id", branchId });
+    console.log(counter)
     if (!counter) {
       return res.status(200).json({ paymentId: "FC000001" });
     }
@@ -1550,7 +1622,9 @@ export const previewNextPaymentId = async (req, res) => {
 
 export const editFeesForMonth = async (req, res) => {
   const { studentId, sessionId, month, fees } = req.body;
-  console.log(req.body);
+  // console.log(req.body);
+    const { branchId } = req.user;
+
   try {
     // Input validation
     if (!studentId || !sessionId || !month || !Array.isArray(fees) || fees.length === 0) {
@@ -1582,7 +1656,7 @@ export const editFeesForMonth = async (req, res) => {
     }
 
     // Fetch student and fee records
-    const student = await Student.findOne({ _id: studentId, sessionId, status: "active" })
+    const student = await Student.findOne({ _id: studentId, sessionId, status: "active",  branchId })
       .select("_id name admissionNumber classId");
     if (!student) {
       return res.status(404).json({ message: "Student not found or not active" });
@@ -1592,6 +1666,7 @@ export const editFeesForMonth = async (req, res) => {
       studentId,
       sessionId,
       month,
+       branchId
     }).populate("fees.feesGroup", "name periodicity");
 
     if (!studentFee) {
@@ -1600,7 +1675,7 @@ export const editFeesForMonth = async (req, res) => {
 
     // Validate fee groups
     for (const fee of fees) {
-      const feesGroup = await FeesGroup.findById(fee.feesGroup);
+      const feesGroup = await FeesGroup.findOne({ _id: fee.feesGroup, branchId });
       if (!feesGroup) {
         return res.status(404).json({ message: `FeesGroup ${fee.feesGroup} not found` });
       }
@@ -1615,7 +1690,7 @@ export const editFeesForMonth = async (req, res) => {
 
     // Update fee record without modifying status
     const updatedFee = await StudentFee.findOneAndUpdate(
-      { studentId, sessionId, month },
+      { studentId, sessionId, month, branchId },
       {
         $set: {
           fees,

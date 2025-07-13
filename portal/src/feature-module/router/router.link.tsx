@@ -27,6 +27,8 @@ import Carousel from "../uiInterface/base-ui/carousel";
 import Colors from "../uiInterface/base-ui/colors";
 import Dropdowns from "../uiInterface/base-ui/dropdowns";
 import Grid from "../uiInterface/base-ui/grid";
+import AddBranch from "../superadmin/branch";
+import CctvData from "../management/cctv/index";
 import Images from "../uiInterface/base-ui/images";
 import Lightboxes from "../uiInterface/base-ui/lightbox";
 import Media from "../uiInterface/base-ui/media";
@@ -229,6 +231,7 @@ import NoticeBoard from "../announcements/notice-board";
 import Tickets from "../support/tickets";
 import TicketGrid from "../support/ticket-grid";
 import TicketDetails from "../support/ticket-details";
+import SuperAdminDashboard from "../mainMenu/superAdminDashboard";
 import FeesReport from "../report/fees-report/feesReport";
 import LeaveReport from "../report/leave-report/leaveReport";
 import GradeReport from "../report/grade-report/gradeReport";
@@ -263,6 +266,8 @@ import EnquiryList from "../management/enquiry/enquiryList";
 import StudentFeeManager from "../management/feescollection/studentFeeManager";
 import StudentFeeData from "../management/feescollection/feesDetails";
 import ExpenseManager from "../management/expense";
+import AddAdmin from "../superadmin/addAdmin";
+import AssignAdmin from "../superadmin/assignAdmin";
 const routes = all_routes;
 interface StudentLeaves {
   admissionNumber: string; // Updated prop name to match API field
@@ -972,6 +977,11 @@ export const protectedPublicRoutes = [
     route: Route,
   },
   {
+    path: routes.superAdminDashboard,
+    element: <SuperAdminDashboard />,
+    route: Route,
+  },
+  {
     path: routes.teacherDashboard,
     element: <TeacherDashboard />,
     route: Route,
@@ -1024,8 +1034,20 @@ export const protectedPublicRoutes = [
     element: <StudentResult />,
   },
   {
+    path: routes.addBranch,
+    element: <AddBranch />,
+  },
+  {
+    path: routes.addAdmin,
+    element: <AddAdmin />,
+  },
+  {
+    path: routes.assignAdmin,
+    element: <AssignAdmin />,
+  },
+  {
     path: routes.studentTimeTable,
-    element: <StudentTimeTable />,
+    element: <StudentTimeTable/>,
   },
   {
     path: routes.studentPromotion,
@@ -1251,6 +1273,10 @@ export const protectedPublicRoutes = [
   {
     path: routes.cctvList,
     element: <ParentCCTVList />,
+  },
+  {
+    path: routes.cctvDetails,
+    element: <CctvData/>,
   },
   {
     path: routes.enquiry,

@@ -380,6 +380,7 @@
 // };
 
 // export default Sidebar;
+import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import Scrollbars from "react-custom-scrollbars-2";
@@ -388,12 +389,17 @@ import ImageWithBasePath from "../imageWithBasePath";
 import "../../../style/icon/tabler-icons/webfont/tabler-icons.css";
 import { setExpandMenu } from "../../data/redux/sidebarSlice";
 import { useDispatch } from "react-redux";
+import { useAuth } from "../../../context/AuthContext";
 import {
   resetAllMode,
   setDataLayout,
 } from "../../data/redux/themeSettingSlice";
 import usePreviousRoute from "./usePreviousRoute";
-
+interface Branch {
+  _id: string;
+  name: string;
+  // Add other branch properties as needed
+}
 // Define types for SidebarData and its nested structures
 interface SubMenuItem {
   label: string;
@@ -426,16 +432,24 @@ interface SidebarItem {
 interface User {
   role: string;
 }
+const API_URL = process.env.REACT_APP_URL;
 
 const Sidebar = () => {
   const Location = useLocation();
   const dispatch = useDispatch();
   const previousLocation = usePreviousRoute();
-
+  // const [branch, setBranch] = useState(null);
+  const [branch, setBranch] = useState<Branch | null>(null);
   // Get user role from localStorage
   const user: User = JSON.parse(localStorage.getItem("user") || JSON.stringify({ role: "student" }));
   const userRole = user.role;
-
+  const {token} = useAuth();
+  const config = {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  };
+  // console.log(config)
   // Call SidebarData with userRole to get the filtered sidebar data
   const sidebarData: SidebarItem[] = SidebarData(userRole);
 
@@ -472,7 +486,7 @@ const Sidebar = () => {
       default: return "";
     }
   };
-
+  
   useEffect(() => {
     const layoutPages = [
       "/layout-dark",
@@ -494,6 +508,19 @@ const Sidebar = () => {
     }
   }, [Location, previousLocation, dispatch]);
 
+
+  useEffect(() => {
+  const fetchBranch = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/branch/details`, config); // Adjust endpoint as needed
+      setBranch(response.data);
+      // console.log(response.data)
+    } catch (error) {
+      console.error("Error fetching branch:", error);
+    }
+  };
+  fetchBranch();
+  }, []);
   useEffect(() => {
     setSubopen(localStorage.getItem("menuOpened") || "");
     const submenus = document.querySelectorAll(".submenu");
@@ -532,13 +559,13 @@ const Sidebar = () => {
                   to="#"
                   className="d-flex align-items-center border bg-white rounded p-2 mb-4"
                 >
-                  <ImageWithBasePath
+                  {/* <ImageWithBasePath
                     src="assets/img/icons/global-img.svg"
                     className="avatar avatar-md img-fluid rounded"
                     alt="Profile"
-                  />
+                  /> */}
                   <span className="text-dark ms-2 fw-normal">
-                    Sector 144 Noida
+                    {branch ? branch.name : "Loading..."}
                   </span>
                 </Link>
               </li>

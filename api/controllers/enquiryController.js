@@ -1,9 +1,15 @@
 import Enquiry from '../models/enquiry.js';
+import mongoose from 'mongoose';
 // Create enquiry
 export const createEnquiry = async (req, res) => {
   try {
+    console.log(req.user)
     const enquiryData = req.body;
-    const enquiry = new Enquiry(enquiryData);
+    console.log(enquiryData)
+    const branchId = req.user.branchId;
+    console.log("_____________________________",branchId)
+    const enquiry = new Enquiry({...enquiryData, branchId});
+    console.log(enquiry)
     await enquiry.save();
     res.status(201).json(enquiry);
   } catch (error) {
@@ -14,7 +20,11 @@ export const createEnquiry = async (req, res) => {
 // Get enquiry by ID
 export const getEnquiry = async (req, res) => {
   try {
-    const enquiry = await Enquiry.findById(req.params.id);
+    const branchId = new mongoose.Types.ObjectId(req.user.branchId);
+    const enquiry = await Enquiry.findOne({
+      _id: req.params.id,
+      branchId
+    });
     if (!enquiry) {
       return res.status(404).json({ message: "Enquiry not found" });
     }
@@ -27,10 +37,12 @@ export const getEnquiry = async (req, res) => {
 // Update enquiry
 export const updateEnquiry = async (req, res) => {
   try {
-    const enquiry = await Enquiry.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true,
-    });
+    const branchId = new mongoose.Types.ObjectId(req.user.branchId);
+    const enquiry = await Enquiry.findOneAndUpdate(
+      { _id: req.params.id, branchId },
+      req.body,
+      { new: true, runValidators: true }
+    );
     if (!enquiry) {
       return res.status(404).json({ message: "Enquiry not found" });
     }
@@ -43,7 +55,11 @@ export const updateEnquiry = async (req, res) => {
 // Delete enquiry
 export const deleteEnquiry = async (req, res) => {
   try {
-    const enquiry = await Enquiry.findByIdAndDelete(req.params.id);
+    const branchId = new mongoose.Types.ObjectId(req.user.branchId);
+    const enquiry = await Enquiry.findOneAndDelete({
+      _id: req.params.id,
+      branchId
+    });
     if (!enquiry) {
       return res.status(404).json({ message: "Enquiry not found" });
     }
@@ -55,7 +71,8 @@ export const deleteEnquiry = async (req, res) => {
 
 export const getAllEnquiries = async (req, res) => {
   try {
-    const enquiries = await Enquiry.find()
+    const branchId = new mongoose.Types.ObjectId(req.user.branchId);
+    const enquiries = await Enquiry.find({ branchId })
       .populate('sessionId', 'name')
       .populate('classId', 'name');
     res.status(200).json(enquiries);

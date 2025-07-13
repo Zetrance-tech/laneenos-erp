@@ -31,6 +31,13 @@ const userSchema = new mongoose.Schema(
     lastLogin: {
       type: Date,
     },
+    branchId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Branch",
+    required: function () {
+      return this.role !== "superadmin" && this.role !== "admin";
+    },
+  },
   },
   { timestamps: true }
 );

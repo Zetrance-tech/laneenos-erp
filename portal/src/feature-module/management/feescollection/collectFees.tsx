@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
 import toast from "react-hot-toast";
+import { Descriptions } from "antd";
 import {
   Spin,
   Select,
@@ -676,107 +677,103 @@ const CollectStudentFees: React.FC = () => {
   ];
 
   const renderPaymentDetails = (
-    paymentDetails: PaymentDetail[],
-    excessAmount: number
-  ) => {
-    if (!paymentDetails || paymentDetails.length === 0) return null;
+  paymentDetails: PaymentDetail[],
+  excessAmount: number
+) => {
+  if (!paymentDetails || paymentDetails.length === 0) return null;
 
-    return paymentDetails.map((detail, index) => {
-      const relevantFields: { label: string; value: string | undefined }[] = [
-        { label: "Payment ID", value: detail.paymentId },
-        { label: "Mode of Payment", value: detail.modeOfPayment },
-        {
-          label: "Collection Date",
-          value: detail.collectionDate
-            ? moment(detail.collectionDate).format("MMM DD, YYYY")
-            : undefined,
-        },
-        {
-          label: "Amount Paid",
-          value: detail.amountPaid
-            ? `₹${detail.amountPaid.toFixed(2)}`
-            : undefined,
-        },
-      ];
+  return paymentDetails.map((detail, index) => {
+    const relevantFields: { label: string; value: string | undefined }[] = [
+      { label: "Payment ID", value: detail.paymentId },
+      { label: "Mode of Payment", value: detail.modeOfPayment },
+      {
+        label: "Collection Date",
+        value: detail.collectionDate
+          ? moment(detail.collectionDate).format("MMM DD, YYYY")
+          : undefined,
+      },
+      {
+        label: "Amount Paid",
+        value: detail.amountPaid
+          ? `₹${detail.amountPaid.toFixed(2)}`
+          : undefined,
+      },
+    ];
 
-      // Only show the excessAmount (late fee) for the first payment if it exists
-      // if (excessAmount > 0 && index === 0) {
-      //   relevantFields.push({ label: "Late Fee", value: `₹${excessAmount.toFixed(2)}` });
-      // }
-
-      if (
-        detail.modeOfPayment !== "Cash" &&
-        detail.modeOfPayment !== "Cheque"
-      ) {
-        if (detail.transactionNo)
-          relevantFields.push({
-            label: "Transaction No",
-            value: detail.transactionNo,
-          });
-        if (detail.transactionDate)
-          relevantFields.push({
-            label: "Transaction Date",
-            value: moment(detail.transactionDate).format("MMM DD, YYYY"),
-          });
-      }
-      if (detail.modeOfPayment === "Cheque") {
-        if (detail.chequeNo)
-          relevantFields.push({ label: "Cheque No", value: detail.chequeNo });
-        if (detail.chequeDate)
-          relevantFields.push({
-            label: "Cheque Date",
-            value: moment(detail.chequeDate).format("MMM DD, YYYY"),
-          });
-      }
-      if (["BankTransfer", "IMPS", "Cheque"].includes(detail.modeOfPayment)) {
-        if (detail.bankName)
-          relevantFields.push({ label: "Bank Name", value: detail.bankName });
-      }
-      if (detail.remarks)
-        relevantFields.push({ label: "Remarks", value: detail.remarks });
-      if (detail.internalNotes)
+    if (
+      detail.modeOfPayment !== "Cash" &&
+      detail.modeOfPayment !== "Cheque"
+    ) {
+      if (detail.transactionNo)
         relevantFields.push({
-          label: "Internal Notes",
-          value: detail.internalNotes,
+          label: "Transaction No",
+          value: detail.transactionNo,
         });
+      if (detail.transactionDate)
+        relevantFields.push({
+          label: "Transaction Date",
+          value: moment(detail.transactionDate).format("MMM DD, YYYY"),
+        });
+    }
 
-      return (
-        <div
-          key={index}
-          style={{
-            background: "#f9f9f9",
-            borderRadius: "8px",
-            padding: "16px",
-            marginBottom: "16px",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-          }}
+    if (detail.modeOfPayment === "Cheque") {
+      if (detail.chequeNo)
+        relevantFields.push({ label: "Cheque No", value: detail.chequeNo });
+      if (detail.chequeDate)
+        relevantFields.push({
+          label: "Cheque Date",
+          value: moment(detail.chequeDate).format("MMM DD, YYYY"),
+        });
+    }
+
+    if (["BankTransfer", "IMPS", "Cheque"].includes(detail.modeOfPayment)) {
+      if (detail.bankName)
+        relevantFields.push({ label: "Bank Name", value: detail.bankName });
+    }
+
+    if (detail.remarks)
+      relevantFields.push({ label: "Remarks", value: detail.remarks });
+
+    if (detail.internalNotes)
+      relevantFields.push({
+        label: "Internal Notes",
+        value: detail.internalNotes,
+      });
+
+    return (
+      <div
+        key={index}
+        style={{
+          
+          borderRadius: "8px",
+          padding: "10px",
+          marginBottom: "16px",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+        }}
+      >
+        <h6 style={{ marginBottom: "12px", color: "#333", fontSize: "16px" }}>
+          Payment {index + 1}
+        </h6>
+
+        <Descriptions
+          bordered
+          size="small"
+          column={1}
+          labelStyle={{ fontWeight: 500, width: 160 }}
         >
-          <h6 style={{ marginBottom: "12px", color: "#333", fontSize: "16px" }}>
-            Payment {index + 1}
-          </h6>
           {relevantFields.map(
             (field, idx) =>
               field.value && (
-                <div
-                  key={idx}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: "8px",
-                    fontSize: "14px",
-                  }}
-                >
-                  <span style={{ fontWeight: 500, color: "#555" }}>
-                    {field.label}:
-                  </span>
-                  <span style={{ color: "#333" }}>{field.value}</span>
-                </div>
+                <Descriptions.Item key={idx} label={field.label}>
+                  {field.value}
+                </Descriptions.Item>
               )
           )}
-        </div>
-      );
-    });
-  };
+        </Descriptions>
+      </div>
+    );
+  });
+};
 
   return (
     <div className="page-wrapper">
@@ -991,53 +988,49 @@ const CollectStudentFees: React.FC = () => {
                           </div>
 
                           <Row gutter={16}>
-                            <Col span={12}>
-                              <div
-                                style={{ textAlign: "left", fontSize: "14px" }}
-                              >
-                                <p>
-                                  <strong>Student Name:</strong>{" "}
-                                  {selectedFeeDetails.student.name}
-                                </p>
-                                <p>
-                                  <strong>Admission Number:</strong>{" "}
-                                  {selectedFeeDetails.student.admissionNumber}
-                                </p>
-                                <p>
-                                  <strong>Class:</strong>{" "}
-                                  {classes.find(
-                                    (c) =>
-                                      c._id ===
-                                      students.find(
-                                        (s) =>
-                                          s._id ===
-                                          selectedFeeDetails.student._id
-                                      )?.classId
-                                  )?.name || "N/A"}
-                                </p>
-                              </div>
-                            </Col>
-                            <Col span={12}>
-                              <div
-                                style={{ textAlign: "left", fontSize: "14px" }}
-                              >
-                                <p>
-                                  <strong>Father's Name:</strong>{" "}
-                                  {students.find(
-                                    (s) =>
-                                      s._id === selectedFeeDetails.student._id
-                                  )?.fatherInfo?.name || "N/A"}
-                                </p>
-                                <p>
-                                  <strong>Mother's Name:</strong>{" "}
-                                  {students.find(
-                                    (s) =>
-                                      s._id === selectedFeeDetails.student._id
-                                  )?.motherInfo?.name || "N/A"}
-                                </p>
-                              </div>
-                            </Col>
-                          </Row>
+  <Col span={12}>
+    <Descriptions
+      column={1}
+      size="small"
+      labelStyle={{ fontWeight: 500 }}
+      bordered
+    >
+      <Descriptions.Item label="Student Name">
+        {selectedFeeDetails.student.name}
+      </Descriptions.Item>
+      <Descriptions.Item label="Admission Number">
+        {selectedFeeDetails.student.admissionNumber}
+      </Descriptions.Item>
+      <Descriptions.Item label="Class">
+        {classes.find(
+          (c) =>
+            c._id ===
+            students.find((s) => s._id === selectedFeeDetails.student._id)
+              ?.classId
+        )?.name || "N/A"}
+      </Descriptions.Item>
+    </Descriptions>
+  </Col>
+
+  <Col span={12}>
+    <Descriptions
+      column={1}
+      size="small"
+      labelStyle={{ fontWeight: 500 }}
+      bordered
+    >
+      <Descriptions.Item label="Father's Name">
+        {students.find((s) => s._id === selectedFeeDetails.student._id)
+          ?.fatherInfo?.name || "N/A"}
+      </Descriptions.Item>
+      <Descriptions.Item label="Mother's Name">
+        {students.find((s) => s._id === selectedFeeDetails.student._id)
+          ?.motherInfo?.name || "N/A"}
+      </Descriptions.Item>
+    </Descriptions>
+  </Col>
+</Row>
+
                         </div>
 
                         <Row gutter={24}>
@@ -1080,14 +1073,14 @@ const CollectStudentFees: React.FC = () => {
 
                                 return (
                                   <div className="text-right">
-                                    <div>
-                                      <strong>Month: {month}</strong>
+                                    <div className="mt-2">
+                                      <strong >Month: {month}</strong>
                                     </div>
 
-                                    <div>
+                                    <div className="mt-2">
                                       <strong>
                                         Total Fees: ₹{totalAmount.toFixed(2)}{" "}
-                                        <span
+                                        {/* <span
                                           style={{
                                             fontWeight: "normal",
                                             fontSize: "13px",
@@ -1095,12 +1088,12 @@ const CollectStudentFees: React.FC = () => {
                                         >
                                           (₹{baseAmountTotal.toFixed(2)} + ₹
                                           {gstAmountTotal.toFixed(2)} GST @18%)
-                                        </span>
+                                        </span> */}
                                       </strong>
                                     </div>
 
                                     {amountPaid > 0 && (
-                                      <div>
+                                      <div className="mt-2">
                                         <strong>
                                           Amount Paid: ₹{amountPaid.toFixed(2)}{" "}
                                           <span
@@ -1116,7 +1109,7 @@ const CollectStudentFees: React.FC = () => {
                                       </div>
                                     )}
                                     {(selectedFeeDetails.discount || 0) > 0 && (
-                                      <div>
+                                      <div  className="mt-2">
                                         <strong>
                                           Discount Amount: ₹
                                           {(
@@ -1126,7 +1119,7 @@ const CollectStudentFees: React.FC = () => {
                                       </div>
                                     )}
                                     {balanceAmount > 0 && (
-                                      <div>
+                                      <div className="mt-2">
                                         <strong>
                                           Balance Amount: ₹
                                           {balanceAmount.toFixed(2)}
@@ -1135,14 +1128,14 @@ const CollectStudentFees: React.FC = () => {
                                     )}
 
                                     {excessAmount > 0 && (
-                                      <div>
+                                      <div className="mt-2">
                                         <strong>
                                           Late Fee: ₹{excessAmount.toFixed(2)}
                                         </strong>
                                       </div>
                                     )}
 
-                                    <div>
+                                    <div className="mt-2">
                                       <strong>
                                         Status:{" "}
                                         <span
@@ -1189,7 +1182,7 @@ const CollectStudentFees: React.FC = () => {
                             selectedFeeDetails.status === "partially_paid") &&
                             selectedFeeDetails.paymentDetails?.length > 0 && (
                               <Col span={12}>
-                                <h5
+                                {/* <h5
                                   style={{
                                     marginBottom: "16px",
                                     color: "#333",
@@ -1197,7 +1190,7 @@ const CollectStudentFees: React.FC = () => {
                                   }}
                                 >
                                   Payment Details
-                                </h5>
+                                </h5> */}
                                 {renderPaymentDetails(
                                   selectedFeeDetails.paymentDetails,
                                   selectedFeeDetails.excessAmount

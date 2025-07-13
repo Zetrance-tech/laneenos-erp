@@ -4,6 +4,7 @@ import Meal from "../models/meal.js";
 export const addMeal = async (req, res) => {
   try {
     const meal = req.body;
+    const branchId = req.user.branchId;
     console.log("Received single meal:", meal);
 
     const { month, dayOfWeek, name, description, mealType } = meal;
@@ -35,7 +36,7 @@ export const addMeal = async (req, res) => {
     }
 
     // Check for existing meal
-    const existingMeal = await Meal.findOne({ month, dayOfWeek, mealType });
+    const existingMeal = await Meal.findOne({ month, dayOfWeek, mealType, branchId });
     if (existingMeal) {
       console.log("Validation failed: Duplicate meal", { month, dayOfWeek, mealType });
       return res.status(400).json({
@@ -45,7 +46,7 @@ export const addMeal = async (req, res) => {
 
     // Insert meal
     console.log("Inserting meal:", meal);
-    const insertedMeal = await new Meal({ ...meal}).save();
+    const insertedMeal = await new Meal({ ...meal, branchId}).save();
     console.log("Inserted meal:", insertedMeal);
     res.status(201).json({ message: "Meal added successfully", meal: insertedMeal });
   } catch (error) {
@@ -58,6 +59,7 @@ export const addMeal = async (req, res) => {
 export const batchAddMeals = async (req, res) => {
   try {
     const meals = req.body;
+    const branchId = req.user.branchId;
 
     if (!Array.isArray(meals) || meals.length === 0) {
       console.log("Validation failed: Meals array is required and cannot be empty");
@@ -116,6 +118,7 @@ export const batchAddMeals = async (req, res) => {
       month: { $in: meals.map((m) => m.month) },
       dayOfWeek: { $in: meals.map((m) => m.dayOfWeek) },
       mealType: { $in: validMealTypes },
+      branchId
     });
 
     for (const meal of meals) {
@@ -140,6 +143,7 @@ export const batchAddMeals = async (req, res) => {
       name: meal.name,
       description: meal.description,
       picture: null,
+      branchId
     }));
 
     console.log("Inserting meals:", newMeals);
@@ -148,7 +152,7 @@ export const batchAddMeals = async (req, res) => {
 
     // Fetch updated meal plan for the month
     const monthMeals = await Meal.find({
-      month: meals[0].month,
+      month: meals[0].month, branchId
     }).sort({ dayOfWeek: 1, mealType: 1 });
 
     const mealPlan = {
@@ -187,6 +191,7 @@ export const getMealPlan = async (req, res) => {
   try {
     const { month } = req.query;
     // const userId = req.user.id;
+    const branchId = req.user.branchId;
 
     if (!month) {
       console.log("Validation failed: Missing month");
@@ -199,7 +204,7 @@ export const getMealPlan = async (req, res) => {
     }
 
     console.log("Fetching meals for month:", month);
-    const meals = await Meal.find({ month }).sort({ dayOfWeek: 1, mealType: 1 }).lean();
+    const meals = await Meal.find({ month, branchId }).sort({ dayOfWeek: 1, mealType: 1 }).lean();
 
     const mealPlan = {
       Monday: { breakfast: null, lunch: null, snack: null },
@@ -232,6 +237,8 @@ export const getMealPlan = async (req, res) => {
 export const editMeal = async (req, res) => {
   try {
     const { role } = req.user;
+    const branchId = req.user.branchId;
+
     if (role !== "admin") {
       console.log("Access denied: User is not admin", req.user);
       return res.status(403).json({ message: "Only admins can edit meals" });
@@ -267,7 +274,7 @@ export const editMeal = async (req, res) => {
       return res.status(400).json({ message: `Invalid meal type: ${mealType}. Must be breakfast, lunch, or snack` });
     }
 
-    const meal = await Meal.findById(id);
+    const meal = await Meal.findOne({_id:id, branchId});
     if (!meal) {
       console.log("Meal not found", id);
       return res.status(404).json({ message: "Meal not found" });
@@ -277,6 +284,7 @@ export const editMeal = async (req, res) => {
       month,
       dayOfWeek,
       mealType,
+      branchId,
       _id: { $ne: id },
     });
     if (existingMeal) {
@@ -309,6 +317,8 @@ export const editMeal = async (req, res) => {
 export const deleteMeal = async (req, res) => {
   try {
     const { role } = req.user;
+    const branchId = req.user.branchId;
+
     if (role !== "admin") {
       console.log("Access denied: User is not admin", req.user);
       return res.status(403).json({ message: "Only admins can delete meals" });
@@ -321,7 +331,7 @@ export const deleteMeal = async (req, res) => {
     }
 
     console.log("Deleting meal:", id);
-    const meal = await Meal.findByIdAndDelete(id);
+    const meal = await Meal.findOneAndDelete({_id:id, branchId});
     if (!meal) {
       console.log("Meal not found", id);
       return res.status(404).json({ message: "Meal not found" });

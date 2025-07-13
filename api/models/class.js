@@ -1,10 +1,14 @@
 import mongoose from "mongoose";
 
 const classSchema = new mongoose.Schema({
+  branchId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: "Branch", 
+    required: true // References Branch._id
+  },
   id: { 
     type: String, 
     required: true, 
-    unique: true 
   },
   name: { 
     type: String, 
@@ -22,6 +26,7 @@ const classSchema = new mongoose.Schema({
     ref: "Session", 
     required: true 
   },
+  
 }, { timestamps: true });
 
 

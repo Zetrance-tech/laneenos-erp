@@ -1,21 +1,17 @@
-import { DatePicker } from "antd";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
-import PredefinedDateRanges from "../../core/common/datePicker";
-import CommonSelect from "../../core/common/commonSelect";
-import {
-  messageTo,
-  transactionDate,
-} from "../../core/common/selectoption/selectoption";
 import { all_routes } from "../router/all_routes";
 import TooltipOption from "../../core/common/tooltipOption";
+import CommonSelect from "../../core/common/commonSelect";
 import axios from "axios";
-import { Dayjs } from "dayjs";
-import dayjs from "dayjs";
-import * as bootstrap from "bootstrap"; // Import Bootstrap JS
-import toast from "react-hot-toast"; // Import react-hot-toast
+import Table from "../../core/common/dataTable/index";
+import { Modal } from "bootstrap";
+import toast, { Toaster } from "react-hot-toast";
+import { Spin, Descriptions } from "antd";
+import { useAuth } from "../../context/AuthContext";
+
 const API_URL = process.env.REACT_APP_URL;
-// Define types for the notice data
+
 interface Notice {
   _id: string;
   title: string;
@@ -23,207 +19,461 @@ interface Notice {
   publishOn: string;
   message: string;
   messageTo: string[];
+  sessionId?: { _id: string; name: string } | string; // Updated to handle populated session
+  classIds?: Array<{ _id: string; name: string }> | string[]; // Updated to handle populated classes
   createdAt: string;
   attachment: string | null;
 }
 
-// Define types for the form data
-interface FormData {
-  title: string;
-  noticeDate: Dayjs | null;
-  publishOn: Dayjs | null;
-  message: string;
-  messageTo: string[];
+interface Session {
+  _id: string;
+  name: string;
 }
 
-// Define types for the select options
-interface SelectOption {
-  label: string;
-  value: string;
+interface Class {
+  _id: string;
+  name: string;
 }
+
+interface FormData {
+  title: string;
+  noticeDate: string;
+  publishOn: string;
+  message: string;
+  messageTo: string;
+  sessionId: string;
+  classId: string;
+}
+
+interface Option {
+  value: string;
+  label: string;
+}
+
+const messageToOptions: Option[] = [
+  { label: "Parent", value: "Parent" },
+  { label: "Teacher", value: "Teacher" },
+  { label: "Both", value: "Both" },
+];
+
+const roleOptions: Option[] = [
+  { label: "All Roles", value: "all" },
+  { label: "Parent", value: "Parent" },
+  { label: "Teacher", value: "Teacher" },
+];
 
 const NoticeBoard: React.FC = () => {
   const routes = all_routes;
+  const dropdownMenuRef = useRef<HTMLDivElement | null>(null);
   const [notices, setNotices] = useState<Notice[]>([]);
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [classes, setClasses] = useState<Class[]>([]);
   const [formData, setFormData] = useState<FormData>({
     title: "",
-    noticeDate: null,
-    publishOn: null,
+    noticeDate: "",
+    publishOn: "",
     message: "",
-    messageTo: [],
+    messageTo: "Parent",
+    sessionId: "",
+    classId: "",
   });
-  const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
-  const [selectedNoticeId, setSelectedNoticeId] = useState<string | null>(null);
+  const [editNotice, setEditNotice] = useState<Notice | null>(null);
+  const [noticeToDelete, setNoticeToDelete] = useState<Notice | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isFormLoading, setIsFormLoading] = useState<boolean>(false);
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [filterRole, setFilterRole] = useState<string>("all");
+  const { token, user } = useAuth();
+  const userRole = user?.role || "student";
 
-  // Get user role from localStorage
-  const user = JSON.parse(localStorage.getItem("user") || JSON.stringify({ role: "student" }));
-  const userRole = user.role;
-
-  // Fetch notices on component mount based on user role
-  useEffect(() => {
-    fetchNoticesByRole();
-  }, [userRole]);
-
-  // Fetch notices for the current user's role
+  // Fetch notices based on role
   const fetchNoticesByRole = async () => {
     try {
-      const response = await axios.get<Notice[]>(
-        `${API_URL}/api/notices/role/${userRole}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      }
-      );
+      setIsLoading(true);
+      const endpoint =
+        userRole === "admin" || userRole === "superadmin"
+          ? `${API_URL}/api/notices`
+          : `${API_URL}/api/notices/role/${userRole}`;
+      const response = await axios.get<Notice[]>(endpoint, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      // Log the response to debug
+      console.log("Fetched notices:", response.data);
       setNotices(response.data);
     } catch (error) {
       console.error(`Error fetching notices for role ${userRole}:`, error);
       toast.error("Failed to fetch notices");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Handle form input changes
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
+  // Fetch sessions
+  const fetchSessions = async () => {
+    try {
+      const response = await axios.get<Session[]>(`${API_URL}/api/session/get`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      // Log sessions to debug
+      console.log("Fetched sessions:", response.data);
+      setSessions(response.data);
+    } catch (error) {
+      console.error("Error fetching sessions:", error);
+      toast.error("Failed to fetch sessions");
+    }
+  };
+
+  // Fetch classes for a session
+  const fetchClasses = async (sessionId: string) => {
+    if (!sessionId || typeof sessionId !== "string") return;
+    try {
+      setIsFormLoading(true);
+      const response = await axios.get<Class[]>(`${API_URL}/api/class/session/${sessionId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      // Log classes to debug
+      console.log("Fetched classes:", response.data);
+      setClasses(response.data);
+    } catch (error) {
+      console.error("Error fetching classes:", error);
+      toast.error("Failed to fetch classes");
+    } finally {
+      setIsFormLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchNoticesByRole();
+    fetchSessions();
+  }, [userRole]);
+
+  // Handle input changes
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  // Handle date picker changes
-  const handleDateChange = (
-    name: "noticeDate" | "publishOn",
-    date: Dayjs | null
-  ) => {
-    setFormData((prev) => ({ ...prev, [name]: date }));
-  };
-
-  // Handle checkbox changes for messageTo
-  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { value, checked } = e.target;
-    setFormData((prev) => {
-      const updatedMessageTo = checked
-        ? [...prev.messageTo, value]
-        : prev.messageTo.filter((item) => item !== value);
-      return { ...prev, messageTo: updatedMessageTo };
-    });
-  };
-
-  // Handle form submission (Add Notice)
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    try {
-      const payload = {
-        title: formData.title,
-        noticeDate: formData.noticeDate?.toISOString(),
-        publishOn: formData.publishOn?.toISOString(),
-        message: formData.message,
-        messageTo: formData.messageTo,
-      };
-      await axios.post(`${API_URL}/api/notices`, payload, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      });
-      toast.success("Notice added successfully");
-      setFormData({
-        title: "",
-        noticeDate: null,
-        publishOn: null,
-        message: "",
-        messageTo: [],
-      });
-      setIsAddModalOpen(false);
-      const addModal = document.getElementById("add_message");
-      if (addModal) {
-        const modalInstance = bootstrap.Modal.getInstance(addModal);
-        modalInstance?.hide();
-      }
-      fetchNoticesByRole(); // Refresh the notice list
-    } catch (error) {
-      console.error("Error adding notice:", error);
-      toast.error("Failed to add notice");
+    if (name === "sessionId" && value) {
+      setFormData({ ...formData, [name]: value, classId: "" });
+      setClasses([]);
+      fetchClasses(value);
+    } else {
+      setFormData({ ...formData, [name]: value });
     }
   };
 
-  // Handle edit button click
-  const handleEditClick = (id: string) => {
-    const notice = notices.find((n) => n._id === id);
-    if (notice) {
-      setFormData({
-        title: notice.title,
-        noticeDate: dayjs(notice.noticeDate),
-        publishOn: dayjs(notice.publishOn),
-        message: notice.message,
-        messageTo: notice.messageTo,
-      });
-      setSelectedNoticeId(id);
-      setIsEditModalOpen(true);
-    }
-  };
-
-  // Handle update submission (Edit Notice)
-  const handleUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!selectedNoticeId) return;
-    try {
-      const payload = {
-        title: formData.title,
-        noticeDate: formData.noticeDate?.toISOString(),
-        publishOn: formData.publishOn?.toISOString(),
-        message: formData.message,
-        messageTo: formData.messageTo,
-      };
-      await axios.put(
-        `${API_URL}/api/notices/${selectedNoticeId}`,
-        payload, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
+  // Handle CommonSelect changes
+  const handleSelectChange = (option: Option | null, name: string) => {
+    if (option) {
+      if (name === "filterRole") {
+        setFilterRole(option.value);
+      } else {
+        setFormData({ ...formData, [name]: option.value });
+        if (name === "sessionId") {
+          setClasses([]);
+          fetchClasses(option.value);
         }
-      );
-      toast.success("Notice updated successfully");
-      setFormData({
-        title: "",
-        noticeDate: null,
-        publishOn: null,
-        message: "",
-        messageTo: [],
-      });
-      setSelectedNoticeId(null);
-      setIsEditModalOpen(false);
-      const editModal = document.getElementById("edit_message");
-      if (editModal) {
-        const modalInstance = bootstrap.Modal.getInstance(editModal);
-        modalInstance?.hide();
       }
-      fetchNoticesByRole(); // Refresh the notice list
-    } catch (error) {
-      console.error("Error updating notice:", error);
-      toast.error("Failed to update notice");
     }
   };
 
-  // Handle delete notice
-  const handleDelete = async (id: string) => {
+  // Handle add notice
+  // Handle add notice
+const handleAddNotice = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!formData.title || !formData.noticeDate || !formData.publishOn || !formData.message || !formData.sessionId || !formData.classId) {
+    toast.error("All fields are required");
+    return;
+  }
+  try {
+    setIsFormLoading(true);
+    const payload = {
+      title: formData.title,
+      noticeDate: new Date(formData.noticeDate).toISOString(),
+      publishOn: new Date(formData.publishOn).toISOString(),
+      message: formData.message,
+      messageTo: formData.messageTo === "Both" ? ["Parent", "Teacher"] : [formData.messageTo],
+      sessionId: formData.sessionId,
+      classIds: formData.classId === "all" ? classes.map(cls => cls._id) : [formData.classId],
+    };
+    await axios.post(`${API_URL}/api/notices`, payload, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    toast.success("Notice added successfully");
+    setFormData({
+      title: "",
+      noticeDate: "",
+      publishOn: "",
+      message: "",
+      messageTo: "Parent",
+      sessionId: "",
+      classId: "",
+    });
+    setClasses([]);
+    fetchNoticesByRole();
+    const modal = document.getElementById("add_notice");
+    if (modal) {
+      const modalInstance = Modal.getInstance(modal) || new Modal(modal);
+      modalInstance.hide();
+    }
+  } catch (error) {
+    console.error("Error adding notice:", error);
+    toast.error("Failed to add notice");
+  } finally {
+    setIsFormLoading(false);
+  }
+};
+
+// Handle edit notice
+const handleEditNotice = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!editNotice) return;
+  if (!formData.title || !formData.noticeDate || !formData.publishOn || !formData.message || !formData.sessionId || !formData.classId) {
+    toast.error("All fields are required");
+    return;
+  }
+  try {
+    setIsFormLoading(true);
+    const payload = {
+      title: formData.title,
+      noticeDate: new Date(formData.noticeDate).toISOString(),
+      publishOn: new Date(formData.publishOn).toISOString(),
+      message: formData.message,
+      messageTo: formData.messageTo === "Both" ? ["Parent", "Teacher"] : [formData.messageTo],
+      sessionId: formData.sessionId,
+      classIds: formData.classId === "all" ? classes.map(cls => cls._id) : [formData.classId],
+    };
+    await axios.put(`${API_URL}/api/notices/${editNotice._id}`, payload, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    toast.success("Notice updated successfully");
+    setFormData({
+      title: "",
+      noticeDate: "",
+      publishOn: "",
+      message: "",
+      messageTo: "Parent",
+      sessionId: "",
+      classId: "",
+    });
+    setClasses([]);
+    setEditNotice(null);
+    fetchNoticesByRole();
+    const modal = document.getElementById("edit_notice");
+    if (modal) {
+      const modalInstance = Modal.getInstance(modal) || new Modal(modal);
+      modalInstance.hide();
+    }
+  } catch (error) {
+    console.error("Error updating notice:", error);
+    toast.error("Failed to update notice");
+  } finally {
+    setIsFormLoading(false);
+  }
+};
+
+  // Handle edit click
+  const handleEditClick = (notice: Notice) => {
+  setEditNotice(notice);
+  const sessionId = typeof notice.sessionId === "string" ? notice.sessionId : notice.sessionId?._id || "";
+  setFormData({
+    title: notice.title,
+    noticeDate: new Date(notice.noticeDate).toISOString().split("T")[0],
+    publishOn: new Date(notice.publishOn).toISOString().split("T")[0],
+    message: notice.message,
+    messageTo: notice.messageTo.includes("Parent") && notice.messageTo.includes("Teacher") ? "Both" : notice.messageTo[0] || "Parent",
+    sessionId,
+    classId: Array.isArray(notice.classIds) && notice.classIds.length > 0 
+      ? (typeof notice.classIds[0] === "string" ? notice.classIds[0] : notice.classIds[0]._id) 
+      : "all",
+  });
+  if (sessionId) {
+    fetchClasses(sessionId);
+  }
+};
+
+  // Handle edit notice
+  // const handleEditNotice = async (e: React.FormEvent) => {
+  //   e.preventDefault();
+  //   if (!editNotice) return;
+  //   if (!formData.title || !formData.noticeDate || !formData.publishOn || !formData.message || !formData.sessionId || !formData.classId) {
+  //     toast.error("All fields are required");
+  //     return;
+  //   }
+  //   try {
+  //     setIsFormLoading(true);
+  //     const payload = {
+  //       title: formData.title,
+  //       noticeDate: new Date(formData.noticeDate).toISOString(),
+  //       publishOn: new Date(formData.publishOn).toISOString(),
+  //       message: formData.message,
+  //       messageTo: formData.messageTo === "Both" ? ["Parent", "Teacher"] : [formData.messageTo],
+  //       sessionId: formData.sessionId,
+  //       classIds: formData.classId === "all" ? [] : [formData.classId],
+  //     };
+  //     await axios.put(`${API_URL}/api/notices/${editNotice._id}`, payload, {
+  //       headers: { Authorization: `Bearer ${token}` },
+  //     });
+  //     toast.success("Notice updated successfully");
+  //     setFormData({
+  //       title: "",
+  //       noticeDate: "",
+  //       publishOn: "",
+  //       message: "",
+  //       messageTo: "Parent",
+  //       sessionId: "",
+  //       classId: "",
+  //     });
+  //     setClasses([]);
+  //     setEditNotice(null);
+  //     fetchNoticesByRole();
+  //     const modal = document.getElementById("edit_notice");
+  //     if (modal) {
+  //       const modalInstance = Modal.getInstance(modal) || new Modal(modal);
+  //       modalInstance.hide();
+  //     }
+  //   } catch (error) {
+  //     console.error("Error updating notice:", error);
+  //     toast.error("Failed to update notice");
+  //   } finally {
+  //     setIsFormLoading(false);
+  //   }
+  // };
+
+  // Handle delete click
+  const handleDeleteClick = async (notice: Notice) => {
+    setNoticeToDelete(notice);
     try {
-      await axios.delete(`${API_URL}/api/notices/${id}`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
+      setIsFormLoading(true);
+      await axios.delete(`${API_URL}/api/notices/${notice._id}`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
       toast.success("Notice deleted successfully");
-      fetchNoticesByRole(); // Refresh the notice list
+      setNotices((prev) => prev.filter((n) => n._id !== notice._id));
+      setNoticeToDelete(null);
     } catch (error) {
       console.error("Error deleting notice:", error);
       toast.error("Failed to delete notice");
+    } finally {
+      setIsFormLoading(false);
     }
   };
 
+  // Handle search
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+  };
+
+  // Handle filter apply
+  const handleApplyClick = () => {
+    if (dropdownMenuRef.current) {
+      dropdownMenuRef.current.classList.remove("show");
+    }
+  };
+
+  const filteredNotices = notices
+    .filter((notice) => {
+      if (filterRole !== "all") {
+        return notice.messageTo.includes(filterRole);
+      }
+      return true;
+    })
+    .filter((notice) =>
+      notice.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      notice.message.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+  const columns = [
+    {
+      title: "",
+      key: "status-dot",
+      width: 20,
+      render: () => (
+        <span
+          style={{
+            display: "inline-block",
+            width: 10,
+            height: 10,
+            borderRadius: "50%",
+            backgroundColor: "#ffff",
+            marginLeft: 15,
+          }}
+        />
+      ),
+    },
+    {
+      title: "Title",
+      dataIndex: "title",
+      sorter: (a: Notice, b: Notice) => a.title.localeCompare(b.title),
+    },
+    {
+      title: "Added On",
+      dataIndex: "createdAt",
+      render: (text: string) => new Date(text).toLocaleDateString(),
+      sorter: (a: Notice, b: Notice) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    },
+    {
+      title: "Action",
+      dataIndex: "action",
+      render: (_: any, record: Notice) => (
+        <div className="dropdown">
+          <Link
+            to="#"
+            className="btn btn-white btn-icon btn-sm d-flex align-items-center justify-content-center rounded-circle p-0"
+            data-bs-toggle="dropdown"
+            aria-expanded="false"
+          >
+            <i className="ti ti-dots-vertical fs-14" />
+          </Link>
+          <ul className="dropdown-menu dropdown-menu-right p-3">
+            <li>
+              <Link
+                className="dropdown-item rounded-1"
+                to="#"
+                data-bs-toggle="modal"
+                data-bs-target="#view_notice"
+                onClick={() => setEditNotice(record)}
+              >
+                <i className="ti ti-eye me-2" />
+                View Details
+              </Link>
+            </li>
+            {["admin", "superadmin", "teacher"].includes(userRole.toLowerCase()) && (
+              <>
+                <li>
+                  <Link
+                    className="dropdown-item rounded-1"
+                    to="#"
+                    data-bs-toggle="modal"
+                    data-bs-target="#edit_notice"
+                    onClick={() => handleEditClick(record)}
+                  >
+                    <i className="ti ti-edit-circle me-2" />
+                    Edit
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    className="dropdown-item rounded-1"
+                    to="#"
+                    onClick={() => handleDeleteClick(record)}
+                  >
+                    <i className="ti ti-trash-x me-2" />
+                    Delete
+                  </Link>
+                </li>
+              </>
+            )}
+          </ul>
+        </div>
+      ),
+    },
+  ];
+
   return (
-    <>
-      {/* Page Wrapper */}
+    <div>
+      <Toaster position="top-right" reverseOrder={false} />
+
       <div className="page-wrapper">
-        <div className="content content-two">
-          {/* Page Header */}
+        <div className="content">
           <div className="d-md-flex d-block align-items-center justify-content-between mb-3">
             <div className="my-auto mb-2">
               <h3 className="page-title mb-1">Communication Board</h3>
@@ -241,220 +491,232 @@ const NoticeBoard: React.FC = () => {
             </div>
             <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">
               <TooltipOption />
-              {["admin", "super admin"].includes(userRole.toLowerCase()) && (
+              {["admin", "superadmin", "teacher"].includes(userRole.toLowerCase()) && (
                 <div className="mb-2">
                   <Link
                     to="#"
+                    className="btn btn-primary"
                     data-bs-toggle="modal"
-                    data-bs-target="#add_message"
-                    className="btn btn-primary d-flex align-items-center"
-                    onClick={() => setIsAddModalOpen(true)}
+                    data-bs-target="#add_notice"
                   >
-                    <i className="ti ti-square-rounded-plus me-2" />
+                    <i className="ti ti-square-rounded-plus-filled me-2" />
                     Add Message
                   </Link>
                 </div>
               )}
             </div>
           </div>
-          {/* Notice Board List */}
-          {notices.map((notice) => (
-            <div key={notice._id} className="card board-hover mb-3">
-              <div className="card-body d-md-flex align-items-center justify-content-between pb-1">
-                <div className="d-flex align-items-center mb-3">
-                  <div className="form-check form-check-md me-2">
-                    <input className="form-check-input" type="checkbox" />
-                  </div>
-                  <span className="bg-soft-primary text-primary avatar avatar-md me-2 br-5 flex-shrink-0">
-                    <i className="ti ti-notification fs-16" />
-                  </span>
-                  <div>
-                    <h6 className="mb-1 fw-semibold">
-                      <Link
-                        to="#"
-                        data-bs-toggle="modal"
-                        data-bs-target={`#view_details_${notice._id}`}
-                      >
-                        {notice.title}
-                      </Link>
-                    </h6>
-                    <p>
-                      <i className="ti ti-calendar me-1" />
-                      Added on: {new Date(notice.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
+
+          <div className="card">
+            <div className="card-header d-flex align-items-center justify-content-between flex-wrap pb-0">
+              <h4 className="mb-3">Notices</h4>
+              <div className="d-flex align-items-center gap-2 flex-wrap">
+                <div className="mb-3">
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Search"
+                    value={searchTerm}
+                    onChange={handleSearch}
+                  />
                 </div>
-                {["admin", "super admin"].includes(userRole.toLowerCase()) && (
-                  <div className="d-flex align-items-center board-action mb-3">
-                    <Link
-                      to="#"
-                      data-bs-toggle="modal"
-                      data-bs-target="#edit_message"
-                      className="text-primary border rounded p-1 badge me-1 primary-btn-hover"
-                      onClick={() => handleEditClick(notice._id)}
-                    >
-                      <i className="ti ti-edit-circle fs-16" />
-                    </Link>
-                    <Link
-                      to="#"
-                      data-bs-toggle="modal"
-                      data-bs-target={`#delete-modal-${notice._id}`}
-                      className="text-danger border rounded p-1 badge danger-btn-hover"
-                    >
-                      <i className="ti ti-trash-x fs-16" />
-                    </Link>
-                  </div>
-                )}
+                <div className="mb-3">
+                  <CommonSelect
+                    className="select"
+                    options={roleOptions}
+                    defaultValue={roleOptions.find((option) => option.value === filterRole)}
+                    onChange={(option) => handleSelectChange(option, "filterRole")}
+                  />
+                </div>
               </div>
             </div>
-          ))}
-          {/* /Notice Board List */}
-          <div className="text-center">
-            <Link to="#" className="btn btn-primary">
-              <i className="ti ti-loader-3 me-2" />
-              Load More
-            </Link>
+            <div className="card-body p-0 py-3">
+              {isLoading ? (
+                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "200px" }}>
+                  <Spin size="large" />
+                </div>
+              ) : notices.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "20px" }}>
+                  <p>No notices found for your role.</p>
+                </div>
+              ) : (
+                <Table columns={columns} dataSource={filteredNotices} />
+              )}
+            </div>
           </div>
         </div>
       </div>
-      {/* /Page Wrapper */}
 
-      {/* Add Message */}
-      {["admin", "super admin"].includes(userRole.toLowerCase()) && (
-        <div className="modal fade" id="add_message" tabIndex={-1}>
-          <div className="modal-dialog modal-dialog-centered">
+      {/* Add Notice Modal */}
+      {["admin", "superadmin", "teacher"].includes(userRole.toLowerCase()) && (
+        <div className="modal fade" id="add_notice">
+          <div className="modal-dialog modal-dialog-centered modal-lg">
             <div className="modal-content">
               <div className="modal-header">
-                <h4 className="modal-title">New Message</h4>
+                <h4 className="modal-title">Add Message</h4>
                 <button
                   type="button"
                   className="btn-close custom-btn-close"
                   data-bs-dismiss="modal"
                   aria-label="Close"
-                  onClick={() => setIsAddModalOpen(false)}
+                  onClick={() => {
+                    setFormData({
+                      title: "",
+                      noticeDate: "",
+                      publishOn: "",
+                      message: "",
+                      messageTo: "Parent",
+                      sessionId: "",
+                      classId: "",
+                    });
+                    setClasses([]);
+                    setIsFormLoading(false);
+                  }}
                 >
                   <i className="ti ti-x" />
                 </button>
               </div>
-              <form onSubmit={handleSubmit}>
+              <form onSubmit={handleAddNotice}>
                 <div className="modal-body">
-                  <div className="row">
-                    <div className="col-md-12">
-                      <div className="mb-3">
-                        <label className="form-label">Title</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          name="title"
-                          value={formData.title}
-                          onChange={handleInputChange}
-                        />
+                  {isFormLoading ? (
+                    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "200px" }}>
+                      <Spin size="large" />
+                    </div>
+                  ) : (
+                    <div className="row">
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Session</label>
+                          <CommonSelect
+                            className="select"
+                            options={sessions.map((session) => ({
+                              label: session.name,
+                              value: session._id,
+                            }))}
+                            defaultValue={
+                              formData.sessionId
+                                ? {
+                                    label: sessions.find((s) => s._id === formData.sessionId)?.name || "",
+                                    value: formData.sessionId,
+                                  }
+                                : undefined
+                            }
+                            onChange={(option) => handleSelectChange(option, "sessionId")}
+                          />
+                        </div>
                       </div>
-                      <div className="mb-3">
-                        <label className="form-label">Notice Date</label>
-                        <div className="date-pic">
-                          <DatePicker
-                            className="form-control datetimepicker"
-                            placeholder="Select Date"
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Class</label>
+                          <CommonSelect
+                            className="select"
+                            options={[
+                              { label: "All Classes", value: "all" },
+                              ...classes.map((cls) => ({
+                                label: cls.name,
+                                value: cls._id,
+                              })),
+                            ]}
+                            defaultValue={
+                              formData.classId
+                                ? {
+                                    label: classes.find((c) => c._id === formData.classId)?.name || "All Classes",
+                                    value: formData.classId,
+                                  }
+                                : { label: "All Classes", value: "all" }
+                            }
+                            onChange={(option) => handleSelectChange(option, "classId")}
+                          />
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Visibility</label>
+                          <CommonSelect
+                            className="select"
+                            options={messageToOptions}
+                            defaultValue={messageToOptions.find((option) => option.value === formData.messageTo)}
+                            onChange={(option) => handleSelectChange(option, "messageTo")}
+                          />
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Title</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            name="title"
+                            value={formData.title}
+                            onChange={handleInputChange}
+                            required
+                          />
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Notice Date</label>
+                          <input
+                            type="date"
+                            className="form-control"
+                            name="noticeDate"
                             value={formData.noticeDate}
-                            onChange={(date) => handleDateChange("noticeDate", date)}
+                            onChange={handleInputChange}
+                            required
                           />
-                          <span className="cal-icon">
-                            <i className="ti ti-calendar" />
-                          </span>
                         </div>
                       </div>
-                      <div className="mb-3">
-                        <label className="form-label">Publish On</label>
-                        <div className="date-pic">
-                          <DatePicker
-                            className="form-control datetimepicker"
-                            placeholder="Select Date"
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Publish On</label>
+                          <input
+                            type="date"
+                            className="form-control"
+                            name="publishOn"
                             value={formData.publishOn}
-                            onChange={(date) => handleDateChange("publishOn", date)}
+                            onChange={handleInputChange}
+                            required
                           />
-                          <span className="cal-icon">
-                            <i className="ti ti-calendar" />
-                          </span>
                         </div>
                       </div>
-                      <div className="mb-3">
-                        <div className="bg-light p-3 pb-2 rounded">
-                          <div className="mb-3">
-                            <label className="form-label">Attachment</label>
+                      <div className="col-md-12">
+                        <div className="mb-3">
+                          <label className="form-label">Attachment</label>
+                          <div className="bg-light p-3 rounded">
                             <p>Upload size of 4MB, Accepted Format PDF</p>
-                          </div>
-                          <div className="d-flex align-items-center flex-wrap">
-                            <div className="btn btn-primary drag-upload-btn mb-2 me-2">
-                              <i className="ti ti-file-upload me-1" />
+                            <button type="button" className="btn btn-primary">
+                              <i className="ti ti-file-upload me-2" />
                               Upload
-                              <input
-                                type="file"
-                                className="form-control image_sign"
-                                multiple
-                                disabled
-                              />
-                            </div>
+                            </button>
                           </div>
                         </div>
                       </div>
-                      <div className="mb-3">
-                        <label className="form-label">Message</label>
-                        <textarea
-                          className="form-control"
-                          rows={4}
-                          name="message"
-                          value={formData.message}
-                          onChange={handleInputChange}
-                        />
-                      </div>
-                      <div className="mb-0">
-                        <label className="form-label">Message To</label>
-                        <div className="row">
-                          <div className="col-md-6">
-                            {["Student", "Parent", "Admin", "Teacher"].map((role) => (
-                              <label className="checkboxs mb-1" key={role}>
-                                <input
-                                  type="checkbox"
-                                  value={role}
-                                  checked={formData.messageTo.includes(role)}
-                                  onChange={handleCheckboxChange}
-                                />
-                                <span className="checkmarks" />
-                                {role}
-                              </label>
-                            ))}
-                          </div>
-                          <div className="col-md-6">
-                            {["Accountant", "Librarian", "Receptionist", "Super Admin"].map((role) => (
-                              <label className="checkboxs mb-1" key={role}>
-                                <input
-                                  type="checkbox"
-                                  value={role}
-                                  checked={formData.messageTo.includes(role)}
-                                  onChange={handleCheckboxChange}
-                                />
-                                <span className="checkmarks" />
-                                {role}
-                              </label>
-                            ))}
-                          </div>
+                      <div className="col-md-12">
+                        <div className="mb-3">
+                          <label className="form-label">Details</label>
+                          <textarea
+                            className="form-control"
+                            name="message"
+                            value={formData.message}
+                            onChange={handleInputChange}
+                            rows={4}
+                            required
+                          />
                         </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
                 <div className="modal-footer">
                   <Link
                     to="#"
                     className="btn btn-light me-2"
                     data-bs-dismiss="modal"
-                    onClick={() => setIsAddModalOpen(false)}
                   >
                     Cancel
                   </Link>
-                  <button type="submit" className="btn btn-primary">
-                    Add New Message
+                  <button type="submit" className="btn btn-primary" disabled={isFormLoading}>
+                    Send Message
                   </button>
                 </div>
               </form>
@@ -462,12 +724,11 @@ const NoticeBoard: React.FC = () => {
           </div>
         </div>
       )}
-      {/* /Add Message */}
 
-      {/* Edit Message */}
-      {["admin", "super admin"].includes(userRole.toLowerCase()) && (
-        <div className="modal fade" id="edit_message" tabIndex={-1}>
-          <div className="modal-dialog modal-dialog-centered">
+      {/* Edit Notice Modal */}
+      {["admin", "superadmin", "teacher"].includes(userRole.toLowerCase()) && (
+        <div className="modal fade" id="edit_notice">
+          <div className="modal-dialog modal-dialog-centered modal-lg">
             <div className="modal-content">
               <div className="modal-header">
                 <h4 className="modal-title">Edit Message</h4>
@@ -477,148 +738,163 @@ const NoticeBoard: React.FC = () => {
                   data-bs-dismiss="modal"
                   aria-label="Close"
                   onClick={() => {
-                    setIsEditModalOpen(false);
                     setFormData({
                       title: "",
-                      noticeDate: null,
-                      publishOn: null,
+                      noticeDate: "",
+                      publishOn: "",
                       message: "",
-                      messageTo: [],
+                      messageTo: "Parent",
+                      sessionId: "",
+                      classId: "",
                     });
-                    setSelectedNoticeId(null);
+                    setClasses([]);
+                    setEditNotice(null);
+                    setIsFormLoading(false);
                   }}
                 >
                   <i className="ti ti-x" />
                 </button>
               </div>
-              <form onSubmit={handleUpdate}>
+              <form onSubmit={handleEditNotice}>
                 <div className="modal-body">
-                  <div className="row">
-                    <div className="col-md-12">
-                      <div className="mb-3">
-                        <label className="form-label">Title</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          name="title"
-                          value={formData.title}
-                          onChange={handleInputChange}
-                        />
+                  {isFormLoading ? (
+                    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "200px" }}>
+                      <Spin size="large" />
+                    </div>
+                  ) : (
+                    <div className="row">
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Session</label>
+                          <CommonSelect
+                            className="select"
+                            options={sessions.map((session) => ({
+                              label: session.name,
+                              value: session._id,
+                            }))}
+                            defaultValue={
+                              formData.sessionId
+                                ? {
+                                    label: sessions.find((s) => s._id === formData.sessionId)?.name || "",
+                                    value: formData.sessionId,
+                                  }
+                                : undefined
+                            }
+                            onChange={(option) => handleSelectChange(option, "sessionId")}
+                          />
+                        </div>
                       </div>
-                      <div className="mb-3">
-                        <label className="form-label">Notice Date</label>
-                        <div className="date-pic">
-                          <DatePicker
-                            className="form-control datetimepicker"
-                            placeholder="Select Date"
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Class</label>
+                          <CommonSelect
+                            className="select"
+                            options={[
+                              { label: "All Classes", value: "all" },
+                              ...classes.map((cls) => ({
+                                label: cls.name,
+                                value: cls._id,
+                              })),
+                            ]}
+                            defaultValue={
+                              formData.classId
+                                ? {
+                                    label: classes.find((c) => c._id === formData.classId)?.name || "All Classes",
+                                    value: formData.classId,
+                                  }
+                                : { label: "All Classes", value: "all" }
+                            }
+                            onChange={(option) => handleSelectChange(option, "classId")}
+                          />
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Visibility</label>
+                          <CommonSelect
+                            className="select"
+                            options={messageToOptions}
+                            defaultValue={messageToOptions.find((option) => option.value === formData.messageTo)}
+                            onChange={(option) => handleSelectChange(option, "messageTo")}
+                          />
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Title</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            name="title"
+                            value={formData.title}
+                            onChange={handleInputChange}
+                            required
+                          />
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Notice Date</label>
+                          <input
+                            type="date"
+                            className="form-control"
+                            name="noticeDate"
                             value={formData.noticeDate}
-                            onChange={(date) => handleDateChange("noticeDate", date)}
+                            onChange={handleInputChange}
+                            required
                           />
-                          <span className="cal-icon">
-                            <i className="ti ti-calendar" />
-                          </span>
                         </div>
                       </div>
-                      <div className="mb-3">
-                        <label className="form-label">Publish On</label>
-                        <div className="date-pic">
-                          <DatePicker
-                            className="form-control datetimepicker"
-                            placeholder="Select Date"
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label">Publish On</label>
+                          <input
+                            type="date"
+                            className="form-control"
+                            name="publishOn"
                             value={formData.publishOn}
-                            onChange={(date) => handleDateChange("publishOn", date)}
+                            onChange={handleInputChange}
+                            required
                           />
-                          <span className="cal-icon">
-                            <i className="ti ti-calendar" />
-                          </span>
                         </div>
                       </div>
-                      <div className="mb-3">
-                        <div className="bg-light p-3 pb-2 rounded">
-                          <div className="mb-3">
-                            <label className="form-label">Attachment</label>
+                      <div className="col-md-12">
+                        <div className="mb-3">
+                          <label className="form-label">Attachment</label>
+                          <div className="bg-light p-3 rounded">
                             <p>Upload size of 4MB, Accepted Format PDF</p>
-                          </div>
-                          <div className="d-flex align-items-center flex-wrap">
-                            <div className="btn btn-primary drag-upload-btn mb-2 me-2">
-                              <i className="ti ti-file-upload me-1" />
+                            <button type="button" className="btn btn-primary" disabled>
+                              <i className="ti ti-file-upload me-2" />
                               Upload
-                              <input
-                                type="file"
-                                className="form-control image_sign"
-                                multiple
-                                disabled
-                              />
-                            </div>
+                            </button>
                           </div>
                         </div>
                       </div>
-                      <div className="mb-3">
-                        <label className="form-label">Message</label>
-                        <textarea
-                          className="form-control"
-                          rows={4}
-                          name="message"
-                          value={formData.message}
-                          onChange={handleInputChange}
-                        />
-                      </div>
-                      <div className="mb-0">
-                        <label className="form-label">Message To</label>
-                        <div className="row">
-                          <div className="col-md-6">
-                            {["Student", "Parent", "Admin", "Teacher"].map((role) => (
-                              <label className="checkboxs mb-1" key={role}>
-                                <input
-                                  type="checkbox"
-                                  value={role}
-                                  checked={formData.messageTo.includes(role)}
-                                  onChange={handleCheckboxChange}
-                                />
-                                <span className="checkmarks" />
-                                {role}
-                              </label>
-                            ))}
-                          </div>
-                          <div className="col-md-6">
-                            {["Accountant", "Librarian", "Receptionist", "Super Admin"].map((role) => (
-                              <label className="checkboxs mb-1" key={role}>
-                                <input
-                                  type="checkbox"
-                                  value={role}
-                                  checked={formData.messageTo.includes(role)}
-                                  onChange={handleCheckboxChange}
-                                />
-                                <span className="checkmarks" />
-                                {role}
-                              </label>
-                            ))}
-                          </div>
+                      <div className="col-md-12">
+                        <div className="mb-3">
+                          <label className="form-label">Details</label>
+                          <textarea
+                            className="form-control"
+                            name="message"
+                            value={formData.message}
+                            onChange={handleInputChange}
+                            rows={4}
+                            required
+                          />
                         </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
                 <div className="modal-footer">
                   <Link
                     to="#"
                     className="btn btn-light me-2"
                     data-bs-dismiss="modal"
-                    onClick={() => {
-                      setIsEditModalOpen(false);
-                      setFormData({
-                        title: "",
-                        noticeDate: null,
-                        publishOn: null,
-                        message: "",
-                        messageTo: [],
-                      });
-                      setSelectedNoticeId(null);
-                    }}
                   >
                     Cancel
                   </Link>
-                  <button type="submit" className="btn btn-primary">
+                  <button type="submit" className="btn btn-primary" disabled={isFormLoading}>
                     Save Changes
                   </button>
                 </div>
@@ -627,128 +903,82 @@ const NoticeBoard: React.FC = () => {
           </div>
         </div>
       )}
-      {/* /Edit Message */}
 
-      {/* View Details Modals (Dynamic per notice) */}
-      {notices.map((notice) => (
-        <div className="modal fade" id={`view_details_${notice._id}`} key={notice._id}>
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h4 className="modal-title">{notice.title}</h4>
-                <button
-                  type="button"
-                  className="btn-close custom-btn-close"
-                  data-bs-dismiss="modal"
-                  aria-label="Close"
-                >
-                  <i className="ti ti-x" />
-                </button>
-              </div>
-              <div className="modal-body pb-0">
-                <div className="mb-3">
-                  <p>{notice.message}</p>
-                </div>
-                <div className="row">
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">Notice Date</label>
-                      <p className="d-flex align-items-center">
-                        <i className="ti ti-calendar me-1" />
-                        {new Date(notice.noticeDate).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">Publish On</label>
-                      <p className="d-flex align-items-center">
-                        <i className="ti ti-calendar me-1" />
-                        {new Date(notice.publishOn).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="mb-3">
-                  <div className="bg-light p-3 pb-2 rounded">
-                    <div className="mb-0">
-                      <label className="form-label">Attachment</label>
-                      <p className="text-primary">
-                        {notice.attachment || "No attachment"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="mb-3">
-                  <label className="form-label d-block">Message To</label>
-                  {notice.messageTo.map((role) => (
-                    <span key={role} className="badge badge-soft-primary me-2">
+      {/* View Notice Modal */}
+      <div className="modal fade" id="view_notice">
+        <div className="modal-dialog modal-dialog-centered modal-lg">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h4 className="modal-title">Notice Details</h4>
+              <button
+                type="button"
+                className="btn-close custom-btn-close"
+                data-bs-dismiss="modal"
+                aria-label="Close"
+                onClick={() => setEditNotice(null)}
+              >
+                <i className="ti ti-x" />
+              </button>
+            </div>
+            <div className="modal-body">
+              <Descriptions bordered column={1}>
+                <Descriptions.Item label="Title">{editNotice?.title}</Descriptions.Item>
+                <Descriptions.Item label="Message">{editNotice?.message}</Descriptions.Item>
+                <Descriptions.Item label="Notice Date">
+                  {editNotice && new Date(editNotice.noticeDate).toLocaleDateString()}
+                </Descriptions.Item>
+                <Descriptions.Item label="Publish On">
+                  {editNotice && new Date(editNotice.publishOn).toLocaleDateString()}
+                </Descriptions.Item>
+                <Descriptions.Item label="Session">
+                  {editNotice?.sessionId
+                    ? typeof editNotice.sessionId === "string"
+                      ? editNotice.sessionId
+                      : editNotice.sessionId.name
+                    : "N/A"}
+                </Descriptions.Item>
+                <Descriptions.Item label="Classes">
+                  {editNotice?.classIds && editNotice.classIds.length > 0
+                    ? editNotice.classIds
+                        .map((cls) => (typeof cls === "string" ? cls : cls.name))
+                        .join(", ")
+                    : "All Classes"}
+                </Descriptions.Item>
+                <Descriptions.Item label="Message To">
+                  {editNotice?.messageTo.map((role) => (
+                    <span key={role} className="badge badge-soft-info me-2">
                       {role}
                     </span>
                   ))}
-                </div>
-                <div className="border-top pt-3">
-                  <div className="d-flex align-items-center flex-wrap">
-                    <div className="d-flex align-items-center me-4 mb-3">
-                      <span className="avatar avatar-sm bg-light me-1">
-                        <i className="ti ti-calendar text-default fs-14" />
-                      </span>
-                      Added on: {new Date(notice.createdAt).toLocaleDateString()}
-                    </div>
-                  </div>
-                </div>
-              </div>
+                </Descriptions.Item>
+                <Descriptions.Item label="Attachment">
+                  {editNotice?.attachment ? (
+                    <a href={editNotice.attachment} target="_blank" rel="noopener noreferrer">
+                      View Attachment
+                    </a>
+                  ) : (
+                    "No attachment"
+                  )}
+                </Descriptions.Item>
+                <Descriptions.Item label="Added On">
+                  {editNotice && new Date(editNotice.createdAt).toLocaleDateString()}
+                </Descriptions.Item>
+              </Descriptions>
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-light"
+                data-bs-dismiss="modal"
+                onClick={() => setEditNotice(null)}
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
-      ))}
-      {/* /View Details Modals */}
-
-      {/* Delete Modals (Dynamic per notice) */}
-      {["admin", "super admin"].includes(userRole.toLowerCase()) &&
-        notices.map((notice) => (
-          <div className="modal fade" id={`delete-modal-${notice._id}`} key={notice._id}>
-            <div className="modal-dialog modal-dialog-centered">
-              <div className="modal-content">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleDelete(notice._id);
-                    const modal = document.getElementById(`delete-modal-${notice._id}`);
-                    if (modal) {
-                      const modalInstance = bootstrap.Modal.getInstance(modal);
-                      modalInstance?.hide();
-                    }
-                  }}
-                >
-                  <div className="modal-body text-center">
-                    <span className="delete-icon">
-                      <i className="ti ti-trash-x" />
-                    </span>
-                    <h4>Confirm Deletion</h4>
-                    <p>
-                      Are you sure you want to delete "{notice.title}"? This can't be undone.
-                    </p>
-                    <div className="d-flex justify-content-center">
-                      <Link
-                        to="#"
-                        className="btn btn-light me-3"
-                        data-bs-dismiss="modal"
-                      >
-                        Cancel
-                      </Link>
-                      <button type="submit" className="btn btn-danger">
-                        Yes, Delete
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              </div>
-            </div>
-          </div>
-        ))}
-      {/* /Delete Modals */}
-    </>
+      </div>
+    </div>
   );
 };
 

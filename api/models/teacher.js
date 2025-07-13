@@ -123,10 +123,14 @@ const teacherSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  branchId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "Branch", 
+      required: true 
+    },
   id: {
     type: String,
     required: true,
-    unique: true,
   },
   name: {
     type: String,

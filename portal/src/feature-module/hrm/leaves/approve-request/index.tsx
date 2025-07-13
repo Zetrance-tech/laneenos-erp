@@ -12,7 +12,7 @@ import { format } from "date-fns";
 import { toast, Toaster } from "react-hot-toast";
 import { Spin } from "antd";
 import { useAuth } from "../../../../context/AuthContext";
-
+import { Descriptions } from "antd";
 // Interfaces
 interface Leave {
   _id: string;
@@ -308,6 +308,23 @@ const ApproveRequest: React.FC = () => {
 
   const columns = [
     {
+      title: "",
+      key: "status-dot",
+      width: 20,
+      render: (record: any) => (
+        <span
+          style={{
+            display: "inline-block",
+            width: 10,
+            height: 10,
+            borderRadius: "50%",
+            backgroundColor: "ffff",
+            marginLeft: 15,
+          }}
+        />
+      ),
+    },
+    {
       title: "Submitted By",
       dataIndex: "submittedBy",
       sorter: (a: TableData, b: TableData) => a.submittedBy.localeCompare(b.submittedBy),
@@ -517,7 +534,7 @@ const ApproveRequest: React.FC = () => {
                   </p>
                 </div>
               ) : (
-                <Table dataSource={filteredLeaves} columns={columns} Selection={true} />
+                <Table dataSource={filteredLeaves} columns={columns}/>
               )}
             </div>
           </div>
@@ -539,79 +556,60 @@ const ApproveRequest: React.FC = () => {
               </button>
             </div>
             <form>
-              <div className="modal-body">
-                {selectedLeave ? (
-                  <div className="student-leave-info">
-                    <ul>
-                      <li>
-                        <span>Submitted By</span>
-                        <h6>{selectedLeave.studentId?.name || "Unknown Student"}</h6>
-                      </li>
-                      <li>
-                        <span>Role</span>
-                        <h6>Student</h6>
-                      </li>
-                      <li>
-                        <span>Leave Type</span>
-                        <h6>{selectedLeave.reason.title || "N/A"}</h6>
-                      </li>
-                      <li>
-                        <span>No of Days</span>
-                        <h6>
-                          {selectedLeave
-                            ? Math.ceil(
-                                (new Date(selectedLeave.endDate).getTime() -
-                                  new Date(selectedLeave.startDate).getTime()) /
-                                  (1000 * 60 * 60 * 24)
-                              )
-                            : "N/A"}
-                        </h6>
-                      </li>
-                      <li>
-                        <span>Applied On</span>
-                        <h6>
-                          {selectedLeave
-                            ? format(new Date(selectedLeave.appliedAt), "MM/dd/yyyy")
-                            : "N/A"}
-                        </h6>
-                      </li>
-                      <li>
-                        <span>Authority</span>
-                        <h6>{selectedLeave.approvedBy?.name || "N/A"}</h6>
-                      </li>
-                      <li>
-                        <span>Leave</span>
-                        <h6>
-                          {selectedLeave
-                            ? `${format(new Date(selectedLeave.startDate), "MM/dd/yyyy")} - ${format(
-                                new Date(selectedLeave.endDate),
-                                "MM/dd/yyyy"
-                              )}`
-                            : "N/A"}
-                        </h6>
-                      </li>
-                    </ul>
-                  </div>
-                ) : (
-                  <div className="text-center">
-                    <p>Leave request data not available.</p>
-                  </div>
-                )}
-                <div className="mb-3 leave-reason">
-                  <h6 className="mb-1">Reason</h6>
-                  <span>{selectedLeave?.reason.message || "Not provided"}</span>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <Link
-                  to="#"
-                  className="btn btn-light me-2"
-                  data-bs-dismiss="modal"
-                >
-                  Cancel
-                </Link>
-              </div>
-            </form>
+  <div className="modal-body">
+    {selectedLeave ? (
+      <>
+        <Descriptions
+          title="Leave Details"
+          bordered
+          column={1}
+          size="middle"
+          labelStyle={{ fontWeight: 600 }}
+        >
+          <Descriptions.Item label="Submitted By">
+            {selectedLeave.studentId?.name || "Unknown Student"}
+          </Descriptions.Item>
+          <Descriptions.Item label="Role">Student</Descriptions.Item>
+          <Descriptions.Item label="Leave Type">
+            {selectedLeave.reason?.title || "N/A"}
+          </Descriptions.Item>
+          <Descriptions.Item label="No of Days">
+            {Math.ceil(
+              (new Date(selectedLeave.endDate).getTime() -
+                new Date(selectedLeave.startDate).getTime()) /
+                (1000 * 60 * 60 * 24)
+            )}
+          </Descriptions.Item>
+          <Descriptions.Item label="Applied On">
+            {format(new Date(selectedLeave.appliedAt), "MM/dd/yyyy")}
+          </Descriptions.Item>
+          <Descriptions.Item label="Authority">
+            {selectedLeave.approvedBy?.name || "N/A"}
+          </Descriptions.Item>
+          <Descriptions.Item label="Leave Duration">
+            {`${format(new Date(selectedLeave.startDate), "MM/dd/yyyy")} - ${format(
+              new Date(selectedLeave.endDate),
+              "MM/dd/yyyy"
+            )}`}
+          </Descriptions.Item>
+          <Descriptions.Item label="Reason">
+            {selectedLeave.reason?.message || "Not provided"}
+          </Descriptions.Item>
+        </Descriptions>
+      </>
+    ) : (
+      <div className="text-center">
+        <p>Leave request data not available.</p>
+      </div>
+    )}
+  </div>
+
+  <div className="modal-footer">
+    <Link to="#" className="btn btn-light me-2" data-bs-dismiss="modal">
+      Cancel
+    </Link>
+  </div>
+</form>
           </div>
         </div>
       </div>
