@@ -26,6 +26,7 @@ import leaveRoute from './routes/leaveRouter.js'
 import feePaymentRoute from './routes/studentFeeRouter.js'
 import timetableRoute from './routes/timetableRouter.js'
 import attendanceRoute from './routes/attendanceRouter.js';
+import cctvRoute from "./routes/cctvRouter.js"
 dotenv.config();
 const app = express();
 const MongoURL = process.env.MONGODB_URI;
@@ -56,8 +57,9 @@ app.use("/api/consent", consentRoute);
 app.use("/api/meals", mealRoute);
 app.use("/api/leaves", leaveRoute);
 app.use("/api/feesPayment", feePaymentRoute);
+app.use("/api/cctv", cctvRoute);
 app.get("/", (req, res) => {
-  res.send("App Backend");
+  res.send("hehehehe");
 });
 
 const generateStudent = () => ({
