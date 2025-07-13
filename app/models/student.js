@@ -2,7 +2,12 @@ import mongoose from "mongoose"
 import User from "./user.js"
 
 const studentSchema = new mongoose.Schema({
-  admissionNumber: { type: String, required: true, unique: true },
+  branchId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "Branch", 
+      required: true 
+    },
+  admissionNumber: { type: String, required: true },
   admissionDate: { type: Date, required: true },
   status: { type: String, enum: ["active", "inactive"], default: "active" },
   sessionId: {
@@ -108,7 +113,8 @@ studentSchema.pre("save", async function(next) {
           email: info.email,
           password: hashedPassword,
           phone: phone,
-          status: "active"
+          status: "active",
+          branchId: student.branchId 
         })
         await newUser.save()
         console.log(`Created user for ${role}: ${info.email}`)

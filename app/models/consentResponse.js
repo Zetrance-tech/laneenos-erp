@@ -1,6 +1,11 @@
 import mongoose from "mongoose";
 
 const consentResponseSchema = new mongoose.Schema({
+  branchId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "Branch", 
+      required: true 
+    },
   consentId: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: "Consent", 
@@ -25,7 +30,7 @@ const consentResponseSchema = new mongoose.Schema({
   respondedBy: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: "User" 
-  }
+  },
 }, { timestamps: true });
 
 consentResponseSchema.index({ consentId: 1, studentId: 1 }, { unique: false });

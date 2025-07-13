@@ -5,7 +5,7 @@ const router = express.Router();
 
 router.post("/", authMiddleware(["admin", "parent", "teacher"]), addNotice);
 router.get("/", getNotices);
-router.get("/role/:role", authMiddleware(["admin", "parent", "teacher"]), getNoticesByRole);
+router.get("/role", authMiddleware(["admin", "parent", "teacher"]), getNoticesByRole);
 router.put("/:id", authMiddleware(["admin", "parent", "teacher"]), updateNotice);
 router.delete("/:id", authMiddleware(["admin", "parent", "teacher"]), deleteNotice);
 

@@ -1,6 +1,13 @@
+// EventModel.js
 import mongoose from 'mongoose';
 
+// Define the schema for the event
 const eventSchema = new mongoose.Schema({
+  branchId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "Branch", 
+      required: true 
+    },
   eventFor: {
     type: String,
     enum: ['All', 'Students', 'Staffs'],
@@ -43,11 +50,11 @@ const eventSchema = new mongoose.Schema({
     },
     fileSize: {
       type: Number,
-      max: 4 * 1024 * 1024,
+      max: 4 * 1024 * 1024, // 4MB limit
     },
     fileFormat: {
       type: String,
-      enum: ['pdf'], 
+      enum: ['pdf'], // Only PDF format is accepted
     },
   },
 });

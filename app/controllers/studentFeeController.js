@@ -3,8 +3,9 @@ import StudentFee from "../models/studentFee.js";
 import mongoose from "mongoose";
 
 // Helper function to get student IDs for the logged-in parent
-const getStudentIdsForParent = async (parentEmail) => {
+const getStudentIdsForParent = async (parentEmail,branchId) => {
   const students = await Student.find({
+    branchId,
     $or: [
       { "fatherInfo.email": parentEmail },
       { "motherInfo.email": parentEmail },
@@ -17,13 +18,14 @@ const getStudentIdsForParent = async (parentEmail) => {
 // Get upcoming fees (due date in future, status "pending" or "partially_paid")
 export const getUpcomingFees = async (req, res) => {
   try {
+    const {branchId} = req.user;
     const { userId, role, email } = req.user;
 
     if (role !== "parent") {
       return res.status(403).json({ message: "Only parents can access this endpoint" });
     }
 
-    const studentIds = await getStudentIdsForParent(email);
+    const studentIds = await getStudentIdsForParent(email, branchId);
     if (!studentIds.length) {
       return res.status(404).json({ message: "No active students found for this parent" });
     }
@@ -32,6 +34,7 @@ export const getUpcomingFees = async (req, res) => {
     const fees = await StudentFee.find({
       studentId: { $in: studentIds },
       dueDate: { $gt: currentDate },
+      branchId,
       status: { $in: ["pending", "partially_paid"] },
     })
     	    
@@ -56,18 +59,21 @@ export const getUpcomingFees = async (req, res) => {
 // Get pending fees (partially paid or due date passed)
 export const getPendingFees = async (req, res) => {
   try {
+    const {branchId} = req.user;
     const { userId, role, email } = req.user;
+    
     if (role !== "parent") {
       return res.status(403).json({ message: "Only parents can access this endpoint" });
     }
 
-    const studentIds = await getStudentIdsForParent(email);
+    const studentIds = await getStudentIdsForParent(email, branchId);
     if (!studentIds.length) {
       return res.status(404).json({ message: "No active students found for this parent" });
     }
 
     const currentDate = new Date();
     const fees = await StudentFee.find({
+      branchId,
       studentId: { $in: studentIds },
       $or: [
         { status: "partially_paid" },
@@ -94,17 +100,19 @@ export const getPendingFees = async (req, res) => {
 // Get payment history (status "paid" or "partially_paid")
 export const getPaymentHistory = async (req, res) => {
   try {
+    const {branchId} = req.user;
     const { userId, role, email } = req.user;
     if (role !== "parent") {
       return res.status(403).json({ message: "Only parents can access this endpoint" });
     }
 
-    const studentIds = await getStudentIdsForParent(email);
+    const studentIds = await getStudentIdsForParent(email, branchId);
     if (!studentIds.length) {
       return res.status(404).json({ message: "No active students found for this parent" });
     }
 
     const fees = await StudentFee.find({
+      branchId,
       studentId: { $in: studentIds },
       status: { $in: ["paid", "partially_paid"] },
     })
@@ -129,17 +137,19 @@ export const getPaymentHistory = async (req, res) => {
 // Get fee summary (total, paid, pending, overdue, discounts)
 export const getFeeSummary = async (req, res) => {
   try {
+    const {branchId} = req.user;
     const { userId, role, email } = req.user;
     if (role !== "parent") {
       return res.status(403).json({ message: "Only parents can access this endpoint" });
     }
 
-    const studentIds = await getStudentIdsForParent(email);
+    const studentIds = await getStudentIdsForParent(email, branchId);
     if (!studentIds.length) {
       return res.status(404).json({ message: "No active students found for this parent" });
     }
 
     const fees = await StudentFee.find({
+      branchId,
       studentId: { $in: studentIds },
     })
       .populate([

@@ -4,7 +4,7 @@ import User from "../models/user.js";
 
 export const applyLeave = async (req, res) => {
   try {
-    const { userId, role, email } = req.user;
+    const { userId, role, email, branchId } = req.user;
     const { reason, startDate, endDate } = req.body;
 
     if (role !== "parent") {
@@ -24,6 +24,7 @@ export const applyLeave = async (req, res) => {
     // Find student where either father or mother has the matching email
     const student = await Student.findOne({
       $or: [{ "fatherInfo.email": email }, { "motherInfo.email": email }],
+      branchId
     });
 
     if (!student) {
@@ -39,6 +40,7 @@ export const applyLeave = async (req, res) => {
       },
       startDate,
       endDate,
+      branchId
     });
 
     await leave.save();
@@ -50,12 +52,13 @@ export const applyLeave = async (req, res) => {
 
 export const getLeaves = async (req, res) => {
   try {
-    const { userId, role, email } = req.user;
+    const { userId, role, email, branchId } = req.user;
     let leaves;
 
     if (role === "parent") {
       // Find the student related to the parent
       const student = await Student.findOne({
+        branchId,
         $or: [{ "fatherInfo.email": email }, { "motherInfo.email": email }],
       });
 
@@ -63,12 +66,12 @@ export const getLeaves = async (req, res) => {
         return res.status(404).json({ message: "No student found for this parent." });
       }
 
-      leaves = await Leave.find({ studentId: student._id })
+      leaves = await Leave.find({ studentId: student._id, branchId })
         .populate("studentId", "name")
         .populate("approvedBy", "name");
     } else if (role === "admin") {
       // Admin sees all leave requests
-      leaves = await Leave.find()
+      leaves = await Leave.find({branchId})
         .populate("studentId", "name")
         .populate("parentId", "name email")
         .populate("approvedBy", "name");
@@ -84,7 +87,7 @@ export const getLeaves = async (req, res) => {
 
 export const updateLeaveStatus = async (req, res) => {
   try {
-    const { userId, role } = req.user;
+    const { userId, role, branchId } = req.user;
     const { leaveId, status } = req.body;
 
     if (role !== "teacher" && role !== "admin") {
@@ -95,7 +98,7 @@ export const updateLeaveStatus = async (req, res) => {
       return res.status(400).json({ message: "Invalid status update." });
     }
 
-    const leave = await Leave.findById(leaveId);
+    const leave = await Leave.findOne({ _id: leaveId, branchId });
     if (!leave) {
       return res.status(404).json({ message: "Leave request not found." });
     }

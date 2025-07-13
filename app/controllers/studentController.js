@@ -1,11 +1,7 @@
-import Student from "../models/student.js";
-import Class from "../models/class.js"; 
-import Session from "../models/session.js"; 
-
-// Get all students
 export const getAllStudents = async (req, res) => {
   try {
-    const students = await Student.find()
+    const { branchId } = req.user;
+    const students = await Student.find({ branchId })
       .select("name admissionNumber admissionDate status sessionId classId rollNumber profileImage dateOfBirth gender bloodGroup religion category motherTongue languagesKnown fatherInfo motherInfo guardianInfo currentAddress permanentAddress transportInfo documents medicalHistory previousSchool")
       .populate("sessionId", "name sessionId")
       .populate("classId", "name id");
@@ -18,11 +14,11 @@ export const getAllStudents = async (req, res) => {
   }
 };
 
-// Get student by admissionNumber
 export const getStudentById = async (req, res) => {
   try {
     const { admissionNumber } = req.params;
-    const student = await Student.findOne({ admissionNumber })
+    const { branchId } = req.user;
+    const student = await Student.findOne({ admissionNumber, branchId })
       .populate("sessionId", "name sessionId")
       .populate("classId", "name id");
 
@@ -34,10 +30,10 @@ export const getStudentById = async (req, res) => {
   }
 };
 
-// Get students by filter
 export const getStudentByFilter = async (req, res) => {
   try {
-    const students = await Student.find(req.body)
+    const { branchId } = req.user;
+    const students = await Student.find({ ...req.body, branchId })
       .select("name admissionNumber academicYear dateOfBirth gender status sessionId classId rollNumber")
       .populate("sessionId", "name sessionId")
       .populate("classId", "name id");
@@ -49,7 +45,6 @@ export const getStudentByFilter = async (req, res) => {
   }
 };
 
-// Create a new student (Admin only)
 export const createStudent = async (req, res) => {
   const {
     academicYear,
@@ -76,33 +71,31 @@ export const createStudent = async (req, res) => {
     medicalHistory,
     previousSchool,
   } = req.body;
+  const { branchId } = req.user;
 
   try {
-    const existingStudent = await Student.findOne({ admissionNumber });
-    if (existingStudent) {
-      return res.status(400).json({ message: "Admission number already exists" });
-    }
-    const session = await Session.findById(sessionId);
-    if (!session) {
-      return res.status(400).json({ message: "Invalid session ID" });
-    }
+    const existingStudent = await Student.findOne({ admissionNumber, branchId });
+    if (existingStudent) return res.status(400).json({ message: "Admission number already exists" });
+
+    const session = await Session.findOne({ _id: sessionId, branchId });
+    if (!session) return res.status(400).json({ message: "Invalid session ID" });
+
     if (classId) {
-      const classExists = await Class.findById(classId);
-      if (!classExists) {
-        return res.status(400).json({ message: "Invalid class ID" });
-      }
+      const classExists = await Class.findOne({ _id: classId, branchId });
+      if (!classExists) return res.status(400).json({ message: "Invalid class ID" });
+
       if (classExists.sessionId.toString() !== sessionId.toString()) {
         return res.status(400).json({ message: "Class does not belong to the specified session" });
       }
+
       if (rollNumber) {
-        const rollNumberTaken = await Student.findOne({ classId, rollNumber });
-        if (rollNumberTaken) {
-          return res.status(400).json({ message: "Roll number already taken in this class" });
-        }
+        const rollNumberTaken = await Student.findOne({ branchId, classId, rollNumber });
+        if (rollNumberTaken) return res.status(400).json({ message: "Roll number already taken in this class" });
       }
     }
 
     const newStudent = new Student({
+      branchId,
       admissionNumber,
       admissionDate,
       status: status || "active",
@@ -136,7 +129,6 @@ export const createStudent = async (req, res) => {
   }
 };
 
-// Update student (Admin only)
 export const updateStudent = async (req, res) => {
   try {
     const { admissionNumber } = req.params;
@@ -147,28 +139,34 @@ export const updateStudent = async (req, res) => {
       rollNumber,
       ...updateData
     } = req.body;
+    const { branchId } = req.user;
+
+    const student = await Student.findOne({ admissionNumber, branchId });
+    if (!student) return res.status(404).json({ message: "Student not found" });
+
     if (newAdmissionNumber && newAdmissionNumber !== admissionNumber) {
-      const existingStudent = await Student.findOne({ admissionNumber: newAdmissionNumber });
+      const existingStudent = await Student.findOne({ admissionNumber: newAdmissionNumber, branchId });
       if (existingStudent) {
         return res.status(400).json({ message: "Admission number already exists" });
       }
     }
+
     if (sessionId) {
-      const session = await Session.findById(sessionId);
-      if (!session) {
-        return res.status(400).json({ message: "Invalid session ID" });
-      }
+      const session = await Session.findOne({ _id: sessionId, branchId });
+      if (!session) return res.status(400).json({ message: "Invalid session ID" });
     }
+
     if (classId) {
-      const classExists = await Class.findById(classId);
-      if (!classExists) {
-        return res.status(400).json({ message: "Invalid class ID" });
-      }
+      const classExists = await Class.findOne({ _id: classId, branchId });
+      if (!classExists) return res.status(400).json({ message: "Invalid class ID" });
+
       if (sessionId && classExists.sessionId.toString() !== sessionId.toString()) {
         return res.status(400).json({ message: "Class does not belong to the specified session" });
       }
+
       if (rollNumber) {
         const rollNumberTaken = await Student.findOne({
+          branchId,
           classId,
           rollNumber,
           admissionNumber: { $ne: admissionNumber },
@@ -180,13 +178,13 @@ export const updateStudent = async (req, res) => {
     }
 
     const updatedStudent = await Student.findOneAndUpdate(
-      { admissionNumber },
-      { 
-        ...updateData, 
-        admissionNumber: newAdmissionNumber || admissionNumber, 
-        sessionId, 
-        classId, 
-        rollNumber 
+      { admissionNumber, branchId },
+      {
+        ...updateData,
+        admissionNumber: newAdmissionNumber || admissionNumber,
+        sessionId,
+        classId,
+        rollNumber
       },
       { new: true }
     )
@@ -194,6 +192,7 @@ export const updateStudent = async (req, res) => {
       .populate("classId", "name id");
 
     if (!updatedStudent) return res.status(404).json({ message: "Student not found" });
+
     console.log("Updated student");
     res.status(200).json(updatedStudent);
   } catch (error) {
@@ -202,11 +201,12 @@ export const updateStudent = async (req, res) => {
   }
 };
 
-// Delete student by admissionNumber (Admin only)
 export const deleteStudent = async (req, res) => {
   try {
     const { admissionNumber } = req.params;
-    const deletedStudent = await Student.findOneAndDelete({ admissionNumber });
+    const { branchId } = req.user;
+
+    const deletedStudent = await Student.findOneAndDelete({ admissionNumber, branchId });
     if (!deletedStudent) {
       return res.status(404).json({ message: "Student not found" });
     }

@@ -2,62 +2,44 @@ import Teacher from "../models/teacher.js";
 import User from "../models/user.js";
 import bcrypt from "bcryptjs";
 
-// Create a new teacher (admin-only)
+// ✅ Create a new teacher (admin-only)
 export const createTeacher = async (req, res) => {
   const {
-    id,
-    email,
-    password,
-    name,
-    dateOfBirth,
-    gender,
-    phoneNumber,
-    address,
-    joiningDate,
-    qualifications,
-    experienceYears,
-    subjects,
-    payroll,
-    contractType,
-    workShift,
-    workLocation,
-    languagesSpoken,
-    emergencyContact,
-    bio,
+    id, email, password, name, dateOfBirth, gender, phoneNumber,
+    address, joiningDate, qualifications, experienceYears, subjects,
+    payroll, contractType, workShift, workLocation, languagesSpoken,
+    emergencyContact, bio,
   } = req.body;
 
-  if (!email || email === null) {
-    return res.status(400).json({ message: "Email is required" });
-  }
-  if (!password) {
-    return res.status(400).json({ message: "Password is required" });
-  }
-  if (!name) {
-    return res.status(400).json({ message: "Name is required" });
+  const { branchId } = req.user;
+
+  if (!email || !password || !name) {
+    return res.status(400).json({ message: "Name, email, and password are required" });
   }
 
   try {
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ message: "Email already registered" });
-    }
-    const existingTeacher = await Teacher.findOne({ id });
-    if (existingTeacher) {
-      return res.status(400).json({ message: "Teacher ID already exists" });
-    }
+    const existingUser = await User.findOne({ email, branchId });
+    if (existingUser) return res.status(400).json({ message: "Email already registered" });
+
+    const existingTeacher = await Teacher.findOne({ id, branchId });
+    if (existingTeacher) return res.status(400).json({ message: "Teacher ID already exists" });
+
     const hashedPassword = await bcrypt.hash(password, 10);
+
     const newUser = new User({
       name,
       email,
       password: hashedPassword,
-      phone: phoneNumber, 
+      phone: phoneNumber,
       role: "teacher",
       status: "active",
+      branchId,
     });
     await newUser.save();
 
     const newTeacher = new Teacher({
       userId: newUser._id,
+      branchId,
       id,
       name,
       email,
@@ -86,10 +68,11 @@ export const createTeacher = async (req, res) => {
   }
 };
 
-// Get all teachers
+// ✅ Get all teachers
 export const getAllTeachers = async (req, res) => {
   try {
-    const teachers = await Teacher.find().populate("userId", "name email phoneNumber");
+    const { branchId } = req.user;
+    const teachers = await Teacher.find({ branchId }).populate("userId", "name email phone");
     res.status(200).json(teachers);
   } catch (error) {
     console.error("Error fetching teachers:", error.message);
@@ -97,13 +80,12 @@ export const getAllTeachers = async (req, res) => {
   }
 };
 
-// Get a single teacher by ID (MongoDB _id)
+// ✅ Get teacher by MongoDB _id
 export const getTeacherById = async (req, res) => {
   try {
-    const teacher = await Teacher.findById(req.params.id).populate("userId", "name email phoneNumber");
-    if (!teacher) {
-      return res.status(404).json({ message: "Teacher not found" });
-    }
+    const { branchId } = req.user;
+    const teacher = await Teacher.findOne({ _id: req.params.id, branchId }).populate("userId", "name email phone");
+    if (!teacher) return res.status(404).json({ message: "Teacher not found" });
     res.status(200).json(teacher);
   } catch (error) {
     console.error("Error fetching teacher:", error.message);
@@ -111,13 +93,12 @@ export const getTeacherById = async (req, res) => {
   }
 };
 
-// Get a single teacher by custom ID (id field)
+// ✅ Get teacher by custom `id` field
 export const getTeacherByCustomId = async (req, res) => {
   try {
-    const teacher = await Teacher.findOne({ id: req.params.id }).populate("userId", "name email phoneNumber");
-    if (!teacher) {
-      return res.status(404).json({ message: "Teacher not found" });
-    }
+    const { branchId } = req.user;
+    const teacher = await Teacher.findOne({ id: req.params.id, branchId }).populate("userId", "name email phone");
+    if (!teacher) return res.status(404).json({ message: "Teacher not found" });
     res.status(200).json(teacher);
   } catch (error) {
     console.error("Error fetching teacher by custom ID:", error.message);
@@ -125,65 +106,53 @@ export const getTeacherByCustomId = async (req, res) => {
   }
 };
 
-// Update a teacher (admin-only)
+// ✅ Update teacher
 export const updateTeacher = async (req, res) => {
   const {
-    id, 
-    name,
-    dateOfBirth,
-    gender,
-    phoneNumber,
-    address,
-    joiningDate,
-    qualifications,
-    experienceYears,
-    subjects,
-    payroll,
-    contractType,
-    workShift,
-    workLocation,
-    dateOfLeaving,
-    languagesSpoken,
-    emergencyContact,
-    bio,
-    email, 
+    id, name, dateOfBirth, gender, phoneNumber, address,
+    joiningDate, qualifications, experienceYears, subjects,
+    payroll, contractType, workShift, workLocation, dateOfLeaving,
+    languagesSpoken, emergencyContact, bio, email,
   } = req.body;
 
   try {
-    const teacher = await Teacher.findOne({ id: req.params.id });
-    if (!teacher) {
-      return res.status(404).json({ message: "Teacher not found" });
-    }
+    const { branchId } = req.user;
+    const teacher = await Teacher.findOne({ id: req.params.id, branchId });
+    if (!teacher) return res.status(404).json({ message: "Teacher not found" });
+
     if (id && id !== teacher.id) {
-      const existingTeacher = await Teacher.findOne({ id });
-      if (existingTeacher) {
-        return res.status(400).json({ message: "Teacher ID already exists" });
-      }
+      const existingTeacher = await Teacher.findOne({ id, branchId });
+      if (existingTeacher) return res.status(400).json({ message: "Teacher ID already exists" });
       teacher.id = id;
     }
-    teacher.name = name || teacher.name;
-    teacher.dateOfBirth = dateOfBirth || teacher.dateOfBirth;
-    teacher.gender = gender || teacher.gender;
-    teacher.phoneNumber = phoneNumber || teacher.phoneNumber;
-    teacher.address = address || teacher.address;
-    teacher.joiningDate = joiningDate || teacher.joiningDate;
-    teacher.qualifications = qualifications || teacher.qualifications;
-    teacher.experienceYears = experienceYears !== undefined ? experienceYears : teacher.experienceYears;
-    teacher.subjects = subjects || teacher.subjects;
-    teacher.payroll = payroll || teacher.payroll;
-    teacher.contractType = contractType || teacher.contractType;
-    teacher.workShift = workShift || teacher.workShift;
-    teacher.workLocation = workLocation || teacher.workLocation;
-    teacher.dateOfLeaving = dateOfLeaving !== undefined ? dateOfLeaving : teacher.dateOfLeaving;
-    teacher.languagesSpoken = languagesSpoken || teacher.languagesSpoken;
-    teacher.emergencyContact = emergencyContact || teacher.emergencyContact;
-    teacher.bio = bio || teacher.bio;
+
+    // Update fields
+    Object.assign(teacher, {
+      name: name ?? teacher.name,
+      dateOfBirth: dateOfBirth ?? teacher.dateOfBirth,
+      gender: gender ?? teacher.gender,
+      phoneNumber: phoneNumber ?? teacher.phoneNumber,
+      address: address ?? teacher.address,
+      joiningDate: joiningDate ?? teacher.joiningDate,
+      qualifications: qualifications ?? teacher.qualifications,
+      experienceYears: experienceYears ?? teacher.experienceYears,
+      subjects: subjects ?? teacher.subjects,
+      payroll: payroll ?? teacher.payroll,
+      contractType: contractType ?? teacher.contractType,
+      workShift: workShift ?? teacher.workShift,
+      workLocation: workLocation ?? teacher.workLocation,
+      dateOfLeaving: dateOfLeaving ?? teacher.dateOfLeaving,
+      languagesSpoken: languagesSpoken ?? teacher.languagesSpoken,
+      emergencyContact: emergencyContact ?? teacher.emergencyContact,
+      bio: bio ?? teacher.bio,
+    });
+
     if (email && teacher.userId) {
-      await User.findByIdAndUpdate(teacher.userId, { email });
+      await User.findOneAndUpdate({ _id: teacher.userId, branchId }, { email });
     }
 
     const updatedTeacher = await teacher.save();
-    await updatedTeacher.populate("userId", "name email phoneNumber");
+    await updatedTeacher.populate("userId", "name email phone");
     res.status(200).json({ message: "Teacher updated successfully", teacher: updatedTeacher });
   } catch (error) {
     console.error("Error updating teacher:", error.message);
@@ -191,15 +160,14 @@ export const updateTeacher = async (req, res) => {
   }
 };
 
-
+// ✅ Delete teacher
 export const deleteTeacher = async (req, res) => {
   try {
-    const teacher = await Teacher.findByIdAndDelete(req.params.id);
-    if (!teacher) {
-      return res.status(404).json({ message: "Teacher not found" });
-    }
+    const { branchId } = req.user;
+    const teacher = await Teacher.findOneAndDelete({ _id: req.params.id, branchId });
+    if (!teacher) return res.status(404).json({ message: "Teacher not found" });
 
-    await User.findByIdAndDelete(teacher.userId);
+    await User.findOneAndDelete({ _id: teacher.userId, branchId });
 
     res.status(200).json({ message: "Teacher deleted successfully" });
   } catch (error) {

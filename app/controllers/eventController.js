@@ -3,8 +3,7 @@ import Event from "../models/event.js";
 // Add a new event
 export const addEvent = async (req, res) => {
   try {
-    console.log('Incoming request body:', req.body);
-
+    const { branchId } = req.user;
     const {
       eventFor,
       eventTitle,
@@ -16,16 +15,18 @@ export const addEvent = async (req, res) => {
       attachment,
       message
     } = req.body;
+
     if (!eventFor || !eventTitle || !eventCategory || !startDate || !endDate || !startTime || !endTime || !message) {
       return res.status(400).json({
         success: false,
         message: 'All required fields must be provided',
       });
     }
-    const parsedStartDate = startDate ? new Date(startDate) : null;
-    const parsedEndDate = endDate ? new Date(endDate) : null;
 
-    if (isNaN(parsedStartDate?.getTime()) || isNaN(parsedEndDate?.getTime())) {
+    const parsedStartDate = new Date(startDate);
+    const parsedEndDate = new Date(endDate);
+
+    if (isNaN(parsedStartDate.getTime()) || isNaN(parsedEndDate.getTime())) {
       return res.status(400).json({
         success: false,
         message: 'Invalid date format',
@@ -33,6 +34,7 @@ export const addEvent = async (req, res) => {
     }
 
     const newEvent = new Event({
+      branchId,
       eventFor,
       eventTitle,
       eventCategory,
@@ -41,7 +43,7 @@ export const addEvent = async (req, res) => {
       startTime,
       endTime,
       message,
-      attachment: attachment || undefined,
+      attachment: attachment || undefined
     });
 
     await newEvent.save();
@@ -60,14 +62,17 @@ export const addEvent = async (req, res) => {
     });
   }
 };
+
+// Get all events
 export const getAllEvents = async (req, res) => {
+  const { branchId } = req.user;
   try {
-    const events = await Event.find().sort({ startDate: 1 }); 
-    
+    const events = await Event.find({ branchId }).sort({ startDate: 1 });
+
     res.status(200).json({
       message: 'Events retrieved successfully',
       count: events.length,
-      events: events,
+      events,
     });
   } catch (error) {
     res.status(500).json({
@@ -77,19 +82,20 @@ export const getAllEvents = async (req, res) => {
   }
 };
 
+// Get event by ID
 export const getEventById = async (req, res) => {
+  const { branchId } = req.user;
   try {
     const eventId = req.params.id;
-    
-    const event = await Event.findById(eventId);
-    
+    const event = await Event.findOne({ _id: eventId, branchId });
+
     if (!event) {
       return res.status(404).json({ message: 'Event not found' });
     }
-    
+
     res.status(200).json({
       message: 'Event retrieved successfully',
-      event: event,
+      event,
     });
   } catch (error) {
     res.status(500).json({
@@ -99,16 +105,17 @@ export const getEventById = async (req, res) => {
   }
 };
 
+// Get events by category
 export const getEventsByCategory = async (req, res) => {
+  const { branchId } = req.user;
   try {
     const category = req.params.category;
-    
-    const events = await Event.find({ eventCategory: category }).sort({ startDate: 1 });
-    
+    const events = await Event.find({ eventCategory: category, branchId }).sort({ startDate: 1 });
+
     res.status(200).json({
       message: 'Events retrieved successfully',
       count: events.length,
-      events: events,
+      events,
     });
   } catch (error) {
     res.status(500).json({
@@ -118,7 +125,9 @@ export const getEventsByCategory = async (req, res) => {
   }
 };
 
+// Update an event
 export const updateEvent = async (req, res) => {
+  const { branchId } = req.user;
   try {
     const eventId = req.params.id;
     const {
@@ -132,23 +141,26 @@ export const updateEvent = async (req, res) => {
       attachment,
       message,
     } = req.body;
+
     if (!eventFor || !eventTitle || !eventCategory || !startDate || !endDate || !startTime || !endTime) {
       return res.status(400).json({
         success: false,
         message: 'All required fields must be provided',
       });
     }
-    const parsedStartDate = startDate ? new Date(startDate) : null;
-    const parsedEndDate = endDate ? new Date(endDate) : null;
 
-    if (isNaN(parsedStartDate?.getTime()) || isNaN(parsedEndDate?.getTime())) {
+    const parsedStartDate = new Date(startDate);
+    const parsedEndDate = new Date(endDate);
+
+    if (isNaN(parsedStartDate.getTime()) || isNaN(parsedEndDate.getTime())) {
       return res.status(400).json({
         success: false,
         message: 'Invalid date format',
       });
     }
-    const updatedEvent = await Event.findByIdAndUpdate(
-      eventId,
+
+    const updatedEvent = await Event.findOneAndUpdate(
+      { _id: eventId, branchId },
       {
         eventFor,
         eventTitle,
@@ -185,12 +197,12 @@ export const updateEvent = async (req, res) => {
   }
 };
 
-
 // Delete an event
 export const deleteEvent = async (req, res) => {
+  const { branchId } = req.user;
   try {
     const eventId = req.params.id;
-    const deletedEvent = await Event.findByIdAndDelete(eventId);
+    const deletedEvent = await Event.findOneAndDelete({ _id: eventId, branchId });
 
     if (!deletedEvent) {
       return res.status(404).json({

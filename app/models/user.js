@@ -5,7 +5,7 @@ const userSchema = new mongoose.Schema(
     role: {
       type: String,
       required: true,
-      // enum: ["parent", "teacher", "admin"],
+      // enum: ["parent", "teacher", "admin", "student"],
     },
     name: {
       type: String,
@@ -31,6 +31,13 @@ const userSchema = new mongoose.Schema(
     lastLogin: {
       type: Date,
     },
+    branchId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Branch",
+    required: function () {
+      return this.role !== "superadmin" && this.role !== "admin";
+    },
+  },
   },
   { timestamps: true }
 );

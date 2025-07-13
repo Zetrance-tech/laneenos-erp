@@ -97,6 +97,7 @@ export const sendMessage = async (req, res) => {
   const { recipients, subject, body, attachment } = req.body;
   const senderId = req.user.userId;
   const senderRole = req.user.role;
+  const { branchId } = req.user;
 
   try {
     if (!recipients || !subject || !body) {
@@ -106,9 +107,9 @@ export const sendMessage = async (req, res) => {
     let validRecipients = { users: [], classes: [] }; // Removed students for teachers
 
     if (senderRole === "admin") {
-      const allTeachers = await User.find({ role: "teacher" }).select("_id");
-      const allParents = await User.find({ role: "parent" }).select("_id");
-      const allClasses = await Class.find().select("_id");
+      const allTeachers = await User.find({ role: "teacher", branchId }).select("_id");
+      const allParents = await User.find({ role: "parent", branchId }).select("_id");
+      const allClasses = await Class.find({branchId}).select("_id");
 
       validRecipients.users = (recipients.users || []).filter(id =>
         [...allTeachers.map(t => t._id.toString()), ...allParents.map(p => p._id.toString())].includes(id.toString())
@@ -119,8 +120,9 @@ export const sendMessage = async (req, res) => {
 
       // Expand classes to include all parents
       if (validRecipients.classes.length > 0) {
-        const classStudents = await Student.find({ classId: { $in: validRecipients.classes } });
+        const classStudents = await Student.find({ classId: { $in: validRecipients.classes }, branchId });
         const parentIds = await User.find({
+          branchId,
           $or: [
             { email: { $in: classStudents.map(s => s.fatherInfo.email) } },
             { email: { $in: classStudents.map(s => s.motherInfo.email) } },
@@ -133,16 +135,17 @@ export const sendMessage = async (req, res) => {
         return res.status(400).json({ error: "No valid recipients provided" });
       }
     } else if (senderRole === "teacher") {
-      const teacherClasses = await Class.find({ teacherId: senderId });
+      const teacherClasses = await Class.find({ teacherId: senderId, branchId });
       const allowedClassIds = teacherClasses.map(c => c._id);
-      const classStudents = await Student.find({ classId: { $in: allowedClassIds } });
+      const classStudents = await Student.find({ classId: { $in: allowedClassIds }, branchId });
       const allowedParents = await User.find({
+        branchId,
         $or: [
           { email: { $in: classStudents.map(s => s.fatherInfo.email) } },
           { email: { $in: classStudents.map(s => s.motherInfo.email) } },
         ],
       }).select("_id");
-      const allowedAdmins = await User.find({ role: "admin" }).select("_id");
+      const allowedAdmins = await User.find({ role: "admin", branchId }).select("_id");
 
       validRecipients.users = (recipients.users || []).filter(id =>
         [...allowedParents.map(p => p._id.toString()), ...allowedAdmins.map(a => a._id.toString())].includes(id.toString())
@@ -156,6 +159,7 @@ export const sendMessage = async (req, res) => {
         const classStudents = await Student.find({ classId
 : { $in: validRecipients.classes } });
         const parentIds = await User.find({
+          branchId,
           $or: [
             { email: { $in: classStudents.map(s => s.fatherInfo.email) } },
             { email: { $in: classStudents.map(s => s.motherInfo.email) } },
@@ -169,6 +173,7 @@ export const sendMessage = async (req, res) => {
       }
     } else if (senderRole === "parent") {
       const student = await Student.findOne({
+        branchId,
         $or: [
           { "fatherInfo.email": req.user.email },
           { "motherInfo.email": req.user.email },
@@ -176,11 +181,11 @@ export const sendMessage = async (req, res) => {
       });
       if (!student) return res.status(404).json({ error: "Student not found" });
 
-      const classData = await Class.findById(student.classId).populate("teacherId");
+      const classData = await Class.findOne({_id:student.classId, branchId}).populate("teacherId");
       if (!classData) return res.status(404).json({ error: "Class not found" });
 
       const allowedTeachers = classData.teacherId.map(t => t._id.toString());
-      const allowedAdmins = (await User.find({ role: "admin" }).select("_id")).map(a => a._id.toString());
+      const allowedAdmins = (await User.find({ role: "admin" , branchId}).select("_id")).map(a => a._id.toString());
 
       validRecipients.users = (recipients.users || []).filter(id =>
         [...allowedTeachers, ...allowedAdmins].includes(id.toString())
@@ -197,8 +202,9 @@ export const sendMessage = async (req, res) => {
       sender: senderId,
       recipients: validRecipients,
       subject,
-      body,
+      message:body,
       attachment,
+      branchId
     });
     await newMessage.save();
 
@@ -212,24 +218,41 @@ export const sendMessage = async (req, res) => {
 export const getInbox = async (req, res) => {
   const userId = req.user.userId;
   const userRole = req.user.role;
-
+  const { branchId } = req.user;
+  
   try {
     let query = { sender: { $ne: userId } };
 
     if (userRole === "admin") {
       query["recipients.users"] = userId; 
     } else if (userRole === "teacher") {
-      const teacherClasses = await Class.find({ teacherId: userId }); // Changed: Use User._id directly
+      const teacherClasses = await Class.find({ teacherId: userId, branchId }); // Changed: Use User._id directly
       const teacherClassIds = teacherClasses.map(c => c._id);
       query.$or = [
         { "recipients.users": userId }, 
         { "recipients.classes": { $in: teacherClassIds } },
       ];
     } else if (userRole === "parent") {
-      query["recipients.users"] = userId; 
-    }
+  const parentEmail = req.user.email;
 
-    const messages = await Message.find(query)
+  const children = await Student.find({
+    branchId,
+    $or: [
+      { "fatherInfo.email": parentEmail },
+      { "motherInfo.email": parentEmail }
+    ]
+  }).select("_id classId");
+
+  const childIds = children.map(c => c._id);
+  const classIds = children.map(c => c.classId).filter(Boolean);
+
+  query.$or = [
+    { "recipients.students": { $in: childIds } },
+    { "recipients.classes": { $in: classIds } }
+  ];
+}
+
+    const messages = await Message.find({...query, branchId})
       .populate("sender", "name role")
       .populate("recipients.users", "name role")
       .populate("recipients.students", "name")
@@ -244,9 +267,10 @@ export const getInbox = async (req, res) => {
 
 export const getSentMessages = async (req, res) => {
   const userId = req.user.userId;
+  const { branchId } = req.user;
 
   try {
-    const messages = await Message.find({ sender: userId })
+    const messages = await Message.find({ sender: userId, branchId })
       .populate("recipients.users", "name role")
       .populate("recipients.students", "name")
       .populate("recipients.classes", "name")
@@ -261,9 +285,10 @@ export const getSentMessages = async (req, res) => {
 export const markMessageRead = async (req, res) => {
   const { messageId } = req.params;
   const userId = req.user.userId;
+  const { branchId } = req.user;
 
   try {
-    const message = await Message.findById(messageId);
+    const message = await Message.findOne({_id:messageId, branchId});
     if (!message) return res.status(404).json({ error: "Message not found" });
 
     if (!message.readBy.some(rb => rb.user.toString() === userId.toString())) {
@@ -280,15 +305,17 @@ export const markMessageRead = async (req, res) => {
 export const getMessageRecipients = async (req, res) => {
   const userId = req.user.userId;
   const userRole = req.user.role;
+  const { branchId } = req.user;
 
   try {
     let recipients = { users: [], classes: [] }; // Removed students
 
     if (userRole === "admin") {
-      recipients.users = await User.find({ role: { $in: ["teacher", "parent"] } }).select("name _id");
-      recipients.classes = await Class.find().select("name _id");
+      recipients.users = await User.find({ role: { $in: ["teacher", "parent"] } , branchId}).select("name _id");
+      recipients.classes = await Class.find({branchId}).select("name _id");
     } else if (userRole === "parent") {
       const student = await Student.findOne({
+        branchId,
         $or: [
           { "fatherInfo.email": req.user.email },
           { "motherInfo.email": req.user.email },
@@ -296,16 +323,17 @@ export const getMessageRecipients = async (req, res) => {
       });
       if (!student) return res.status(404).json({ error: "Student not found" });
 
-      const classData = await Class.findById(student.classId).populate("teacherId");
+      const classData = await Class.findOne({_id:student.classId, branchId}).populate("teacherId");
       recipients.users = [
-        ...(await User.find({ role: "admin" }).select("name _id")),
+        ...(await User.find({ role: "admin", branchId }).select("name _id")),
         ...(classData.teacherId.map(t => ({ name: t.name, _id: t._id }))),
       ];
     } else if (userRole === "teacher") {
-      const teacherClasses = await Class.find({ teacherId: userId });
+      const teacherClasses = await Class.find({ teacherId: userId , branchId});
       recipients.classes = teacherClasses.map(c => ({ name: c.name, _id: c._id }));
-      const classStudents = await Student.find({ classId: { $in: teacherClasses.map(c => c._id) } });
+      const classStudents = await Student.find({ classId: { $in: teacherClasses.map(c => c._id) } , branchId});
       const allowedParents = await User.find({
+        branchId,
         $or: [
           { email: { $in: classStudents.map(s => s.fatherInfo.email) } },
           { email: { $in: classStudents.map(s => s.motherInfo.email) } },

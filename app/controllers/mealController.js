@@ -5,6 +5,7 @@ export const addMeal = async (req, res) => {
   try {
     const { month, dayOfWeek, name, description, mealType } = req.body;
     const userRole = req.user.role;
+    const branchId = req.user.branchId;
 
     // Validate required fields
     if (!month || !dayOfWeek || !name || !description || !mealType) {
@@ -41,7 +42,7 @@ export const addMeal = async (req, res) => {
     const servedOn = new Date(year, monthNum - 1, 1 + dayOffset);
 
     // Check for existing meal
-    const existingMeal = await Meal.findOne({ month, dayOfWeek, mealType });
+    const existingMeal = await Meal.findOne({ month, dayOfWeek, mealType, branchId });
     if (existingMeal) {
       console.log("Validation failed: Duplicate meal", { month, dayOfWeek, mealType });
       return res.status(400).json({
@@ -58,6 +59,7 @@ export const addMeal = async (req, res) => {
       mealType,
       servedOn,
       picture: null,
+      branchId
     });
 
     console.log("Inserting meal:", meal);
@@ -75,6 +77,7 @@ export const addMeal = async (req, res) => {
 export const getMealPlan = async (req, res) => {
   try {
     const { month } = req.query;
+    const branchId = req.user.branchId;
 
     if (!month) {
       console.log("Validation failed: Missing month");
@@ -87,7 +90,7 @@ export const getMealPlan = async (req, res) => {
     }
 
     console.log("Fetching meals for month:", month);
-    const meals = await Meal.find({ month })
+    const meals = await Meal.find({ month , branchId})
       .sort({ dayOfWeek: 1, mealType: 1 })
       .lean();
 

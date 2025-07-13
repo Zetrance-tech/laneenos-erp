@@ -1,6 +1,11 @@
 import mongoose from "mongoose";
 
 const feedbackSchema = new mongoose.Schema({
+  branchId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "Branch", 
+      required: true 
+    },
   parentId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",

@@ -1,6 +1,11 @@
 import mongoose from "mongoose";
 
 const homeworkSchema = new mongoose.Schema({
+  branchId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "Branch", 
+      required: true 
+    },
   title: {
     type: String,
     required: true,

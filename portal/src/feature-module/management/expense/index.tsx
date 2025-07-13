@@ -20,13 +20,16 @@ const EXPENSE_CATEGORIES = [
   "Meal",
   "House Keeping",
   "Conveyance",
+  "Maintainance",
 ];
 
 // Payment modes array
 const PAYMENT_MODES = [
   "Cash",
+  "UPI",
   "Cheque",
   "Online Payment",
+  "Other",
 ];
 
 // Interfaces

@@ -5,7 +5,7 @@ import mongoose from "mongoose";
 
 // Mark attendance for students in a class
 export const markAttendance = async (req, res) => {
-
+  const {branchId} = req.user;
   const { classId, date, attendanceRecords, timetableId } = req.body; // Array of { studentId, status }
   const teacherId = req.user.userId;
 
@@ -15,7 +15,7 @@ export const markAttendance = async (req, res) => {
     }
 
     // Validate teacher’s access to class
-    const classData = await Class.findById(classId);
+    const classData = await Class.findOne({_id:classId, branchId});
     if (!classData || !classData.teacherId.some(id => id.toString() === teacherId)) {
       return res.status(403).json({ message: "You are not authorized to mark attendance for this class" });
     }
@@ -25,7 +25,7 @@ export const markAttendance = async (req, res) => {
     for (const record of attendanceRecords) {
       const { studentId, status } = record;
 
-      const student = await Student.findById(studentId);
+      const student = await Student.findOne({_id:studentId, branchId});
       if (!student || student.classId.toString() !== classId) {
         results.push({ studentId, error: "Student not found or not in this class" });
         continue;
@@ -36,14 +36,15 @@ export const markAttendance = async (req, res) => {
         continue;
       }
 
-      let attendance = await Attendance.findOne({ studentId, date: new Date(date) });
+      let attendance = await Attendance.findOne({ studentId, date: new Date(date), branchId });
       if (!attendance) {
         attendance = new Attendance({
           studentId,
           classId,
           date: new Date(date),
           markedBy: teacherId,
-          timetableId: timetableId || null
+          timetableId: timetableId || null,
+          branchId
         });
       }
 
@@ -64,6 +65,7 @@ export const getStudentAttendance = async (req, res) => {
   const { studentId, date } = req.params;
   const parentId = req.user.userId;
   const role = req.user.role;
+  const {branchId} = req.user;
 
   try {
     if (!studentId || !date) {
@@ -91,7 +93,7 @@ export const getStudentAttendance = async (req, res) => {
     parsedDate.setUTCHours(0, 0, 0, 0);
 
     // Validate student exists
-    const student = await Student.findById(studentId);
+    const student = await Student.findOne({_id:studentId,branchId});
     if (!student) {
       return res.status(404).json({ message: "Student not found" });
     }
@@ -106,7 +108,8 @@ export const getStudentAttendance = async (req, res) => {
 
     const attendance = await Attendance.findOne({
       studentId: new mongoose.Types.ObjectId(studentId),
-      date: parsedDate
+      date: parsedDate,
+      branchId
     });
 
     if (!attendance) {
@@ -131,28 +134,28 @@ export const getStudentAttendance = async (req, res) => {
 
 // Get all students in a class for attendance marking (for teachers)
 export const getClassStudentsForAttendance = async (req, res) => {
-
   const { classId, date } = req.params;
   const teacherId = req.user.userId;
+  const { branchId } = req.user;
 
   try {
     if (!classId || !date) {
       return res.status(400).json({ message: "Class ID and date are required" });
     }
 
-    // Validate teacher’s access
-    const classData = await Class.findById(classId);
+    const classData = await Class.findOne({ _id: classId, branchId });
+    if (!classData || !classData.teacherId.includes(teacherId)) {
+      return res.status(403).json({ message: "Unauthorized access to this class" });
+    }
 
-    // Get all students in the class
-    const students = await Student.find({ classId }).select("admissionNumber name rollNumber");
+    const students = await Student.find({ classId, branchId }).select("admissionNumber name rollNumber");
 
-    // Get attendance records for the date
     const attendanceRecords = await Attendance.find({
       classId,
       date: new Date(date),
+      branchId
     });
 
-    // Map students to include attendance data
     const studentAttendance = students.map(student => {
       const attendance = attendanceRecords.find(a => a.studentId.toString() === student._id.toString());
       return {
@@ -173,30 +176,25 @@ export const getClassStudentsForAttendance = async (req, res) => {
 
 // Get child's attendance history for a parent
 export const getChildAttendanceHistory = async (req, res) => {
-
   const { studentId } = req.params;
-  const { startDate, endDate } = req.query; // Optional date range
-  const parentId = req.user.userId;
-  const parentEmail = req.user.email;
+  const { startDate, endDate } = req.query;
+  const { userId: parentId, email: parentEmail, branchId } = req.user;
 
   try {
     if (!studentId) {
       return res.status(400).json({ message: "Student ID is required" });
     }
 
-    // Validate student exists
-    const student = await Student.findById(studentId);
+    const student = await Student.findOne({ _id: studentId, branchId });
     if (!student) {
       return res.status(404).json({ message: "Student not found" });
     }
 
-    // Check if parent is linked to student
     if (!parentEmail || !["fatherInfo.email", "motherInfo.email", "guardianInfo.email"].some(field => student[field.split(".")[0]].email === parentEmail)) {
       return res.status(403).json({ message: "You are not authorized to view this student’s data" });
     }
 
-    // Build query for attendance records
-    const query = { studentId };
+    const query = { studentId, branchId };
     if (startDate && endDate) {
       query.date = {
         $gte: new Date(startDate),
@@ -204,11 +202,9 @@ export const getChildAttendanceHistory = async (req, res) => {
       };
     }
 
-    // Get attendance history
     const attendanceHistory = await Attendance.find(query)
       .select("date status timetableId")
-      .sort({ date: -1 }); // Sort by date descending
-
+      .sort({ date: -1 });
 
     const formattedHistory = attendanceHistory.map(record => ({
       date: record.date,

@@ -8,18 +8,27 @@
 //     required: true,
 //     unique: true, 
 //   },
+//   role: {
+//     type: String,
+//     required: true,
+//   },
 //   id:{
 //     type: String,
-//     required: true
+//     required: true,
+//     unique: true,
+//   },
+//   name: {
+//     type: String,
+//     required: true, 
 //   },
 //   email:{
 //     type: String,
 //     required:true,
 //     unique: true
 //   },
-//   name: {
+//   phoneNumber: {
 //     type: String,
-//     required: true, 
+//     required: true,
 //   },
 //   dateOfBirth: {
 //     type: Date,
@@ -30,48 +39,52 @@
 //     enum: ["male", "female", "other"],
 //     required: true,
 //   },
-//   phoneNumber: {
-//     type: String,
-//     required: true,
-//   },
+  
 //   address: {
 //     street: { type: String, required: true },
 //     city: { type: String, required: true },
 //     state: { type: String, required: true },
 //     postalCode: { type: String, required: true },
-//     country: { type: String, required: true, default: "USA" },
 //   },
-
+//   emergencyContact:{
+//     type: String, 
+//     required: true
+//   },
 //   joiningDate: {
 //     type: Date,
 //     required: true,
 //   },
-//   qualifications: [{
-//     degree: { type: String, required: true },
-//     institution: { type: String, required: true },
-//     completionYear: { type: Number, required: true }, 
-//   }],
 //   experienceYears: {
 //     type: Number,
 //     required: true,
 //     min: 0,
 //   },
-//   subjects: [{
-//     type: String, 
-//   }],
-
+//   class:{
+//     type:String,
+//     required:true
+//   },
+//   documents: [
+//     {
+//       name: { type: String, required: true },
+//       url: { type: String, default: null }
+//     }
+//   ],
+//   // qualifications: [{
+//   //   degree: { type: String, required: true },
+//   //   institution: { type: String, required: true },
+//   //   completionYear: { type: Number, required: true }, 
+//   // }],
+  
 //   payroll: {
 //     epfNo: { type: String},
 //     basicSalary: { type: Number, required: true, min: 0 },
 //   },
 //   contractType: {
 //     type: String,
-//     enum: ["permanent", "temporary", "part-time", "contract"],
 //     required: true,
 //   },
 //   workShift: {
 //     type: String,
-//     enum: ["Morning", "Afternoon", "full-day", "flexible"],
 //     required: true,
 //   },
 //   workLocation: {
@@ -81,18 +94,6 @@
 //   dateOfLeaving: {
 //     type: Date,
 //   },
-//   languagesSpoken: [{
-//     type: String, 
-//   }],
-//   emergencyContact:{
-//     type: String, 
-//     required: true
-//   },
-//   bio: {
-//     type: String, 
-//     maxlength: 500,
-//   },
-
 //   createdAt: {
 //     type: Date,
 //     default: Date.now,
@@ -109,7 +110,6 @@
 
 // export default mongoose.model("Teacher", teacherSchema);
 
-// models/teacher.js
 import mongoose from "mongoose";
 
 const teacherSchema = new mongoose.Schema({
@@ -117,25 +117,29 @@ const teacherSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
     required: true,
-    unique: true, 
+    unique: true,
   },
   role: {
     type: String,
     required: true,
   },
-  id:{
+  branchId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "Branch", 
+      required: true 
+    },
+  id: {
     type: String,
     required: true,
-    unique: true,
   },
   name: {
     type: String,
-    required: true, 
+    required: true,
   },
-  email:{
+  email: {
     type: String,
-    required:true,
-    unique: true
+    required: true,
+    unique: true,
   },
   phoneNumber: {
     type: String,
@@ -143,23 +147,19 @@ const teacherSchema = new mongoose.Schema({
   },
   dateOfBirth: {
     type: Date,
-    required: true, 
+    required: true,
   },
   gender: {
     type: String,
     enum: ["male", "female", "other"],
     required: true,
   },
-  
   address: {
-    street: { type: String, required: true },
-    city: { type: String, required: true },
-    state: { type: String, required: true },
-    postalCode: { type: String, required: true },
+    type: String,
+    required: true,
   },
-  emergencyContact:{
-    type: String, 
-    required: true
+  emergencyContact: {
+    type: String,
   },
   joiningDate: {
     type: Date,
@@ -170,25 +170,15 @@ const teacherSchema = new mongoose.Schema({
     required: true,
     min: 0,
   },
-  class:{
-    type:String,
-    required:true
-  },
   documents: [
     {
       name: { type: String, required: true },
-      url: { type: String, default: null }
-    }
+      url: { type: String, default: null },
+    },
   ],
-  // qualifications: [{
-  //   degree: { type: String, required: true },
-  //   institution: { type: String, required: true },
-  //   completionYear: { type: Number, required: true }, 
-  // }],
-  
   payroll: {
-    epfNo: { type: String},
-    basicSalary: { type: Number, required: true, min: 0 },
+    epfNo: { type: String },
+    basicSalary: { type: Number, min: 0 },
   },
   contractType: {
     type: String,
@@ -200,7 +190,6 @@ const teacherSchema = new mongoose.Schema({
   },
   workLocation: {
     type: String,
-    required: true, 
   },
   dateOfLeaving: {
     type: Date,
@@ -214,6 +203,7 @@ const teacherSchema = new mongoose.Schema({
     default: Date.now,
   },
 });
+
 teacherSchema.pre("save", function (next) {
   this.updatedAt = new Date();
   next();

@@ -1,176 +1,3 @@
-// import FeesTemplate from '../models/feesTemplate.js';
-// import Class from "../models/class.js";
-// import FeesGroup from '../models/feesGroup.js';
-// import FeesType from '../models/feesType.js';
-// import Session from "../models/session.js";
-
-// // Create a new fee template
-// export const createFeeTemplate = async (req, res) => {
-//   try {
-//     const { templateId, name, sessionId, fees, status } = req.body;
-//     const session = await Session.findById(sessionId);
-//     if (!session) return res.status(404).json({ message: 'Session not found' });
-//     for (const fee of fees) {
-//       const feesGroup = await FeesGroup.findById(fee.feesGroup);
-//       if (!feesGroup) return res.status(404).json({ message: `Fees Group ${fee.feesGroup} not found` });
-
-//       for (const feeType of fee.feeTypes) {
-//         const feesTypeDoc = await FeesType.findOne({ _id: feeType.feesType, feesGroup: fee.feesGroup });
-//         if (!feesTypeDoc) return res.status(404).json({ message: `Fees Type ${feeType.feesType} not found or not associated with Fees Group ${fee.feesGroup}` });
-//       }
-//     }
-
-//     const newFeeTemplate = new FeesTemplate({
-//       templateId,
-//       name,
-//       sessionId,
-//       classIds: [], 
-//       fees,
-//       status,
-//     });
-
-//     const savedFeeTemplate = await newFeeTemplate.save();
-//     await savedFeeTemplate.populate([
-//       { path: 'sessionId', select: 'name sessionId' },
-//       { path: 'classIds', select: 'id name' },
-//       { path: 'fees.feesGroup', select: 'name' },
-//       { path: 'fees.feeTypes.feesType', select: 'name' },
-//     ]);
-
-//     res.status(201).json(savedFeeTemplate);
-//   } catch (error) {
-//     res.status(400).json({ message: error.message });
-//   }
-// };
-
-// // Get all fee templates
-// export const getAllFeeTemplates = async (req, res) => {
-//   try {
-//     const feeTemplates = await FeesTemplate.find().populate([
-//       { path: 'sessionId', select: 'name sessionId' },
-//       { path: 'classIds', select: 'id name' },
-//       { path: 'fees.feesGroup', select: 'name' },
-//       { path: 'fees.feeTypes.feesType', select: 'name' },
-//     ]);
-//     res.json(feeTemplates);
-//   } catch (error) {
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
-// // Get fee template by ID
-// export const getFeeTemplateById = async (req, res) => {
-//   try {
-//     const feeTemplate = await FeesTemplate.findById(req.params.id).populate([
-//       { path: 'sessionId', select: 'name sessionId' },
-//       { path: 'classIds', select: 'id name' },
-//       { path: 'fees.feesGroup', select: 'name' },
-//       { path: 'fees.feeTypes.feesType', select: 'name' },
-//     ]);
-//     if (!feeTemplate) return res.status(404).json({ message: 'Fee Template not found' });
-//     res.json(feeTemplate);
-//   } catch (error) {
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
-// // Update a fee template
-// export const updateFeeTemplate = async (req, res) => {
-//   try {
-//     const { templateId, name, sessionId, classIds, fees, status } = req.body;
-//     if (sessionId) {
-//       const session = await Session.findById(sessionId);
-//       if (!session) return res.status(404).json({ message: 'Session not found' });
-//     }
-//     if (classIds && classIds.length > 0) {
-//       const classes = await Class.find({ _id: { $in: classIds }, sessionId });
-//       if (classes.length !== classIds.length) {
-//         return res.status(404).json({ message: 'One or more classes not found or not associated with this session' });
-//       }
-//     }
-//     if (fees) {
-//       for (const fee of fees) {
-//         const feesGroup = await FeesGroup.findById(fee.feesGroup);
-//         if (!feesGroup) return res.status(404).json({ message: `Fees Group ${fee.feesGroup} not found` });
-
-//         for (const feeType of fee.feeTypes) {
-//           const feesTypeDoc = await FeesType.findOne({ _id: feeType.feesType, feesGroup: fee.feesGroup });
-//           if (!feesTypeDoc) return res.status(404).json({ message: `Fees Type ${feeType.feesType} not found or not associated with Fees Group ${fee.feesGroup}` });
-//         }
-//       }
-//     }
-
-//     const updatedFeeTemplate = await FeesTemplate.findByIdAndUpdate(
-//       req.params.id,
-//       { templateId, name, sessionId, classIds, fees, status, updatedAt: Date.now() },
-//       { new: true }
-//     ).populate([
-//       { path: 'sessionId', select: 'name sessionId' },
-//       { path: 'classIds', select: 'id name' },
-//       { path: 'fees.feesGroup', select: 'name' },
-//       { path: 'fees.feeTypes.feesType', select: 'name' },
-//     ]);
-
-//     if (!updatedFeeTemplate) return res.status(404).json({ message: 'Fee Template not found' });
-//     res.json(updatedFeeTemplate);
-//   } catch (error) {
-//     res.status(400).json({ message: error.message });
-//   }
-// };
-
-// // Delete a fee template
-// export const deleteFeeTemplate = async (req, res) => {
-//   try {
-//     const deletedFeeTemplate = await FeesTemplate.findByIdAndDelete(req.params.id);
-//     if (!deletedFeeTemplate) return res.status(404).json({ message: 'Fee Template not found' });
-//     res.json({ message: 'Fee Template deleted successfully' });
-//   } catch (error) {
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
-// // Get classes by session ID with their templates
-// export const getClassesBySession = async (req, res) => {
-//   try {
-//     const { sessionId } = req.params;
-//     const classes = await Class.find({ sessionId }).populate('sessionId', 'name sessionId');
-//     const classIds = classes.map((c) => c._id);
-
-//     const templates = await FeesTemplate.find({ classIds: { $in: classIds } }).populate([
-//       { path: 'sessionId', select: 'name sessionId' },
-//       { path: 'classIds', select: 'id name' },
-//       { path: 'fees.feesGroup', select: 'name' },
-//       { path: 'fees.feeTypes.feesType', select: 'name' },
-//     ]);
-
-//     const result = classes.map((classDoc) => ({
-//       ...classDoc.toObject(),
-//       templates: templates.filter((t) => t.classIds.some((id) => id.toString() === classDoc._id.toString())),
-//     }));
-
-//     res.json(result);
-//   } catch (error) {
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
-// // Get fee templates for a class
-// export const getFeeTemplatesForClass = async (req, res) => {
-//   try {
-//     const { classId } = req.params;
-//     const feeTemplates = await FeesTemplate.find({ classIds: classId }).populate([
-//       { path: 'sessionId', select: 'name sessionId' },
-//       { path: 'classIds', select: 'id name' },
-//       { path: 'fees.feesGroup', select: 'name' },
-//       { path: 'fees.feeTypes.feesType', select: 'name' },
-//     ]);
-//     if (!feeTemplates.length) return res.status(404).json({ message: 'No templates assigned to this class' });
-//     res.json(feeTemplates);
-//   } catch (error) {
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
 import FeesTemplate from '../models/feesTemplate.js';
 import Class from "../models/class.js";
 import FeesGroup from '../models/feesGroup.js';
@@ -183,19 +10,15 @@ import FeePayments from "../models/feePayments.js";
 export const createFeeTemplate = async (req, res) => {
   try {
     const { templateId, name, sessionId, fees, status } = req.body;
-
-    // Validate session
-    const session = await Session.findById(sessionId);
+    const branchId = req.user.branchId;
+    const session = await Session.findOne({_id:sessionId, branchId});
     if (!session) return res.status(404).json({ message: 'Session not found' });
 
-    // Validate fees (feesGroups and feeTypes)
     for (const fee of fees) {
-      const feesGroup = await FeesGroup.findById(fee.feesGroup);
+      const feesGroup = await FeesGroup.findOne({ _id: fee.feesGroup, branchId });
       if (!feesGroup) return res.status(404).json({ message: `Fees Group ${fee.feesGroup} not found` });
-
-      for (const feeType of fee.feeTypes) {
-        const feesTypeDoc = await FeesType.findOne({ _id: feeType.feesType, feesGroup: fee.feesGroup });
-        if (!feesTypeDoc) return res.status(404).json({ message: `Fees Type ${feeType.feesType} not found or not associated with Fees Group ${fee.feesGroup}` });
+      if (typeof fee.amount !== 'number' || fee.amount < 0) {
+        return res.status(400).json({ message: `Invalid amount for Fees Group ${fee.feesGroup}` });
       }
     }
 
@@ -203,9 +26,10 @@ export const createFeeTemplate = async (req, res) => {
       templateId,
       name,
       sessionId,
-      classIds: [], // Initialize with empty array
+      classIds: [],
       fees,
       status,
+      branchId
     });
 
     const savedFeeTemplate = await newFeeTemplate.save();
@@ -213,7 +37,6 @@ export const createFeeTemplate = async (req, res) => {
       { path: 'sessionId', select: 'name sessionId' },
       { path: 'classIds', select: 'id name' },
       { path: 'fees.feesGroup', select: 'name' },
-      { path: 'fees.feeTypes.feesType', select: 'name' },
     ]);
 
     res.status(201).json(savedFeeTemplate);
@@ -225,11 +48,11 @@ export const createFeeTemplate = async (req, res) => {
 // Get all fee templates
 export const getAllFeeTemplates = async (req, res) => {
   try {
-    const feeTemplates = await FeesTemplate.find().populate([
+    const branchId = req.user.branchId;
+    const feeTemplates = await FeesTemplate.find({branchId}).populate([
       { path: 'sessionId', select: 'name sessionId' },
       { path: 'classIds', select: 'id name' },
       { path: 'fees.feesGroup', select: 'name' },
-      { path: 'fees.feeTypes.feesType', select: 'name' },
     ]);
     res.json(feeTemplates);
   } catch (error) {
@@ -240,11 +63,11 @@ export const getAllFeeTemplates = async (req, res) => {
 // Get fee template by ID
 export const getFeeTemplateById = async (req, res) => {
   try {
-    const feeTemplate = await FeesTemplate.findById(req.params.id).populate([
+    const branchId = req.user.branchId;
+    const feeTemplate = await FeesTemplate.findOne({ _id: req.params.id, branchId }).populate([
       { path: 'sessionId', select: 'name sessionId' },
       { path: 'classIds', select: 'id name' },
       { path: 'fees.feesGroup', select: 'name' },
-      { path: 'fees.feeTypes.feesType', select: 'name' },
     ]);
     if (!feeTemplate) return res.status(404).json({ message: 'Fee Template not found' });
     res.json(feeTemplate);
@@ -253,47 +76,44 @@ export const getFeeTemplateById = async (req, res) => {
   }
 };
 
+
 // Update a fee template
 export const updateFeeTemplate = async (req, res) => {
   try {
     const { templateId, name, sessionId, classIds, fees, status } = req.body;
-
+    const branchId = req.user.branchId;
     // Validate session if provided
     if (sessionId) {
-      const session = await Session.findById(sessionId);
+      const session = await Session.findOne({_id:sessionId, branchId});
       if (!session) return res.status(404).json({ message: 'Session not found' });
     }
 
     // Validate classIds and session association if provided
     if (classIds && classIds.length > 0) {
-      const classes = await Class.find({ _id: { $in: classIds }, sessionId });
+      const classes = await Class.find({ _id: { $in: classIds }, sessionId, branchId });
       if (classes.length !== classIds.length) {
         return res.status(404).json({ message: 'One or more classes not found or not associated with this session' });
       }
     }
 
-    // Validate fees if provided
     if (fees) {
       for (const fee of fees) {
-        const feesGroup = await FeesGroup.findById(fee.feesGroup);
+        const feesGroup = await FeesGroup.findOne({_id:fee.feesGroup, branchId});
         if (!feesGroup) return res.status(404).json({ message: `Fees Group ${fee.feesGroup} not found` });
-
-        for (const feeType of fee.feeTypes) {
-          const feesTypeDoc = await FeesType.findOne({ _id: feeType.feesType, feesGroup: fee.feesGroup });
-          if (!feesTypeDoc) return res.status(404).json({ message: `Fees Type ${feeType.feesType} not found or not associated with Fees Group ${fee.feesGroup}` });
+        if (typeof fee.amount !== 'number' || fee.amount < 0) {
+          return res.status(400).json({ message: `Invalid amount for Fees Group ${fee.feesGroup}` });
         }
       }
     }
 
     const updatedFeeTemplate = await FeesTemplate.findByIdAndUpdate(
-      req.params.id,
+      {_id:req.params.id, branchId},
       { templateId, name, sessionId, classIds, fees, status, updatedAt: Date.now() },
       { new: true }
     ).populate([
       { path: 'sessionId', select: 'name sessionId' },
       { path: 'classIds', select: 'id name' },
       { path: 'fees.feesGroup', select: 'name' },
-      { path: 'fees.feeTypes.feesType', select: 'name' },
     ]);
 
     if (!updatedFeeTemplate) return res.status(404).json({ message: 'Fee Template not found' });
@@ -303,251 +123,224 @@ export const updateFeeTemplate = async (req, res) => {
   }
 };
 
-// // controllers/feesTemplateController.js
-// export const assignFeesToStudents = async (req, res) => {
-//   const { templateId, sessionId, studentIds, customFees = null } = req.body;
-
-//   try {
-//     console.log("Request Body:", JSON.stringify(req.body, null, 2));
-
-//     const feeTemplate = await FeesTemplate.findById(templateId).populate("classIds");
-//     if (!feeTemplate) return res.status(404).json({ message: "Fee Template not found" });
-
-//     if (sessionId !== feeTemplate.sessionId.toString()) {
-//       return res.status(400).json({ message: "Session ID does not match the template's session" });
-//     }
-
-//     if (!feeTemplate.classIds || feeTemplate.classIds.length === 0) {
-//       return res.status(400).json({ message: "No classes assigned to this template" });
-//     }
-
-//     if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0) {
-//       return res.status(400).json({ message: "No students selected for assignment" });
-//     }
-
-//     const students = await Student.find({
-//       _id: { $in: studentIds },
-//       sessionId,
-//       classId: { $in: feeTemplate.classIds.map((c) => c._id) },
-//     });
-
-//     if (students.length === 0) {
-//       return res.status(404).json({ message: "No valid students found for assignment" });
-//     }
-
-//     const studentFeePromises = students.map(async (student) => {
-//       let studentFee = await StudentFee.findOne({ studentId: student._id, sessionId });
-//       const defaultFees = feeTemplate.fees.map((group) => ({
-//         feesGroup: group.feesGroup,
-//         feeTypes: group.feeTypes.map((type) => ({
-//           feesType: type.feesType,
-//           amount: type.amount,
-//           originalAmount: type.amount,
-//           discount: 0,
-//           discountType: "fixed",
-//         })),
-//       }));
-
-//       const feesToAssign = customFees
-//         ? customFees.filter((group) =>
-//             feeTemplate.fees.some((tGroup) => tGroup.feesGroup.toString() === group.feesGroup)
-//           )
-//         : defaultFees;
-
-//       console.log(`Fees to Assign for ${student._id}:`, JSON.stringify(feesToAssign, null, 2));
-
-//       if (!studentFee) {
-//         studentFee = new StudentFee({
-//           studentId: student._id,
-//           sessionId,
-//           classId: student.classId,
-//           feeTemplateId: feeTemplate._id,
-//           customFees: feesToAssign,
-//         });
-//         await studentFee.save();
-//         console.log(`Created StudentFee for ${student._id}:`, studentFee);
-//       } else {
-//         const existingFeeGroupIds = studentFee.customFees.map((g) => g.feesGroup.toString());
-//         studentFee.customFees = [
-//           ...studentFee.customFees,
-//           ...feesToAssign.filter((g) => !existingFeeGroupIds.includes(g.feesGroup)),
-//         ];
-//         await studentFee.save();
-//         console.log(`Updated StudentFee for ${student._id}:`, studentFee);
-//       }
-
-//       const paymentPromises = feesToAssign.flatMap((feeGroup) =>
-//         feeGroup.feeTypes.map(async (feeType) => {
-//           console.log(`Processing FeeType for ${student._id}:`, feeType);
-//           const existingPayment = await FeePayments.findOne({
-//             studentId: student._id,
-//             sessionId,
-//             feesGroupId: feeGroup.feesGroup,
-//             feesTypeId: feeType.feesType,
-//           });
-//           if (!existingPayment) {
-//             const feePayment = new FeePayments({
-//               studentId: student._id,
-//               sessionId,
-//               feesGroupId: feeGroup.feesGroup,
-//               feesTypeId: feeType.feesType,
-//               amountDue: feeType.amount,
-//               dueDate: new Date(),
-//             });
-//             await feePayment.save();
-//             console.log(`Created FeePayment for ${student._id}:`, feePayment);
-//           } else {
-//             console.log(`FeePayment already exists for ${student._id}:`, existingPayment);
-//           }
-//         })
-//       );
-//       await Promise.all(paymentPromises);
-//     });
-
-//     await Promise.all(studentFeePromises);
-
-//     res.status(200).json({ success: true, message: "Fees assigned to selected students successfully" });
-//   } catch (error) {
-//     console.error("Error in assignFeesToStudents:", error);
-//     res.status(500).json({ message: error.message });
-//   }
-// };
 // controllers/feesTemplateController.js
 export const assignFeesToStudents = async (req, res) => {
-  const { templateId, sessionId, studentIds, customFees = null } = req.body;
+  const { templateId, sessionId, studentIds, classIds, customFees = null } = req.body;
+  const branchId = req.user.branchId;
+
+  console.log("➡️ assignFeesToStudents called with:");
+  console.log("templateId:", templateId);
+  console.log("sessionId:", sessionId);
+  console.log("studentIds:", studentIds);
+  console.log("classIds:", classIds);
+  console.log("branchId:", branchId);
 
   try {
-    console.log("Request Body:", JSON.stringify(req.body, null, 2));
+    if (!templateId || !sessionId || (!studentIds && !classIds)) {
+      return res.status(400).json({ message: "Missing required fields: templateId, sessionId, and either studentIds or classIds" });
+    }
 
-    const feeTemplate = await FeesTemplate.findById(templateId).populate("classIds");
-    if (!feeTemplate) return res.status(404).json({ message: "Fee Template not found" });
+    if (studentIds && (!Array.isArray(studentIds) || studentIds.length === 0)) {
+      return res.status(400).json({ message: "studentIds must be a non-empty array" });
+    }
+
+    if (classIds && (!Array.isArray(classIds) || classIds.length === 0)) {
+      return res.status(400).json({ message: "classIds must be a non-empty array" });
+    }
+
+    console.log("🔄 Fetching feeTemplate, students, classes...");
+    const [feeTemplate, students, classes] = await Promise.all([
+      FeesTemplate.findOne({ _id: templateId, branchId }).populate("classIds fees.feesGroup").lean(),
+      Student.find({
+        $or: [
+          { _id: { $in: studentIds || [] }, sessionId, status: 'active', branchId },
+          { classId: { $in: classIds || [] }, sessionId, status: 'active', branchId },
+        ],
+      }).lean(),
+      Class.find({ _id: { $in: classIds || [] }, sessionId, branchId }).lean(),
+    ]);
+
+    console.log("✅ feeTemplate:", feeTemplate);
+    console.log("✅ students.length:", students.length);
+    console.log("✅ classes.length:", classes.length);
+
+    if (!feeTemplate) {
+      return res.status(404).json({ message: "Fee Template not found" });
+    }
 
     if (sessionId !== feeTemplate.sessionId.toString()) {
       return res.status(400).json({ message: "Session ID does not match the template's session" });
     }
 
-    if (!feeTemplate.classIds || feeTemplate.classIds.length === 0) {
-      return res.status(400).json({ message: "No classes assigned to this template" });
+    if (classIds && classes.length !== classIds.length) {
+      return res.status(404).json({ message: "One or more classes not found or not associated with this session" });
     }
 
-    if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0) {
-      return res.status(400).json({ message: "No students selected for assignment" });
-    }
+    feeTemplate.classIds = Array.isArray(feeTemplate.classIds) ? feeTemplate.classIds : [];
 
-    const students = await Student.find({
-      _id: { $in: studentIds },
-      sessionId,
-      classId: { $in: feeTemplate.classIds.map((c) => c._id) },
-    });
+    const studentIdSet = new Set(students.map(s => s._id.toString()));
+    const uniqueStudents = Array.from(studentIdSet).map(id => students.find(s => s._id.toString() === id));
 
-    if (students.length === 0) {
+    console.log("✅ uniqueStudents.length:", uniqueStudents.length);
+
+    if (uniqueStudents.length === 0) {
       return res.status(404).json({ message: "No valid students found for assignment" });
     }
 
-    const studentFeePromises = students.map(async (student) => {
-      let studentFee = await StudentFee.findOne({ studentId: student._id, sessionId });
-      const defaultFees = feeTemplate.fees.map((group) => ({
-        feesGroup: group.feesGroup,
-        feeTypes: group.feeTypes.map((type) => ({
-          feesType: type.feesType,
-          amount: type.amount,
-          originalAmount: type.amount,
-          discount: 0,
-          discountType: "fixed",
-          dueDate: new Date(), // Default due date (you can override this with customFees)
-        })),
-      }));
+    let addedClassIds = [];
+    let removedClassIds = [];
+    if (classIds) {
+      const oldClassIds = feeTemplate.classIds.map(id => id.toString());
+      const newClassIds = classIds.map(id => id.toString());
+      addedClassIds = newClassIds.filter(id => !oldClassIds.includes(id));
+      removedClassIds = oldClassIds.filter(id => !newClassIds.includes(id));
+      await FeesTemplate.findOneAndUpdate({ _id: templateId, branchId }, { classIds }, { new: true });
+    }
 
-      // If customFees are provided, use them and ensure dueDate is included
-      const feesToAssign = customFees
-        ? customFees.map((group) => ({
-            feesGroup: group.feesGroup,
-            feeTypes: group.feeTypes.map((type) => ({
-              feesType: type.feesType,
-              amount: type.amount,
-              originalAmount: type.amount || type.amount,
-              discount: type.discount || 0,
-              discountType: type.discountType || "fixed",
-              dueDate: type.dueDate ? new Date(type.dueDate) : new Date(), // Use provided dueDate or default
-            })),
-          })).filter((group) =>
-            feeTemplate.fees.some((tGroup) => tGroup.feesGroup.toString() === group.feesGroup)
-          )
-        : defaultFees;
+    const feesGroupIds = new Set(feeTemplate.fees.map(fee => fee.feesGroup._id.toString()));
+    const feesGroups = await FeesGroup.find({ _id: { $in: Array.from(feesGroupIds) }, branchId }).lean();
+    const feesGroupMap = new Map(feesGroups.map(fg => [fg._id.toString(), fg]));
 
-      console.log(`Fees to Assign for ${student._id}:`, JSON.stringify(feesToAssign, null, 2));
+    let feesToAssign = [];
 
-      if (!studentFee) {
-        studentFee = new StudentFee({
-          studentId: student._id,
-          sessionId,
-          classId: student.classId,
-          feeTemplateId: feeTemplate._id,
-          customFees: feesToAssign,
+    if (customFees && Array.isArray(customFees)) {
+      feesToAssign = customFees
+        .filter(fee => {
+          const groupId = fee.feesGroup._id ? fee.feesGroup._id.toString() : fee.feesGroup.toString();
+          return mongoose.Types.ObjectId.isValid(groupId) && feesGroupMap.has(groupId);
+        })
+        .map(fee => {
+          const groupId = fee.feesGroup._id ? fee.feesGroup._id.toString() : fee.feesGroup.toString();
+          const templateFee = feeTemplate.fees.find(tFee => tFee.feesGroup._id.toString() === groupId);
+          const amount = typeof fee.amount === 'number' && fee.amount >= 0 ? fee.amount : 
+                         (templateFee ? templateFee.amount : 0);
+          return {
+            feesGroup: groupId,
+            amount,
+            originalAmount: fee.originalAmount || amount,
+            discount: fee.discount || 0,
+          };
         });
-        await studentFee.save();
-        console.log(`Created StudentFee for ${student._id}:`, studentFee);
-      } else {
-        const existingFeeGroupIds = studentFee.customFees.map((g) => g.feesGroup.toString());
-        studentFee.customFees = [
-          ...studentFee.customFees,
-          ...feesToAssign.filter((g) => !existingFeeGroupIds.includes(g.feesGroup)),
-        ];
-        await studentFee.save();
-        console.log(`Updated StudentFee for ${student._id}:`, studentFee);
-      }
+    } else {
+      feesToAssign = feeTemplate.fees
+        .filter(fee => fee.feesGroup && typeof fee.amount === 'number' && fee.amount >= 0)
+        .map(fee => ({
+          feesGroup: fee.feesGroup._id.toString(),
+          amount: fee.amount,
+          originalAmount: fee.amount,
+          discount: 0,
+        }));
+    }
 
-      // Create or update FeePayment entries with due dates
-      const paymentPromises = feesToAssign.flatMap((feeGroup) =>
-        feeGroup.feeTypes.map(async (feeType) => {
-          console.log(`Processing FeeType for ${student._id}:`, feeType);
-          const existingPayment = await FeePayments.findOne({
-            studentId: student._id,
-            sessionId,
-            feesGroupId: feeGroup.feesGroup,
-            feesTypeId: feeType.feesType,
-          });
-          if (!existingPayment) {
-            const feePayment = new FeePayments({
+    console.log("✅ feesToAssign:", feesToAssign);
+
+    if (feesToAssign.length === 0) {
+      return res.status(400).json({ message: "No valid fees to assign" });
+    }
+
+    const feesByMonth = {};
+    for (const fee of feesToAssign) {
+      const feesGroup = feesGroupMap.get(fee.feesGroup);
+      const applicableMonths = feesGroup.periodicity === 'Monthly' ? months :
+                              feesGroup.periodicity === 'Quarterly' ? quarterlyMonths :
+                              ['Apr'];
+      for (const month of applicableMonths) {
+        if (!feesByMonth[month]) feesByMonth[month] = [];
+        feesByMonth[month].push(fee);
+      }
+    }
+
+    const bulkOps = [];
+    for (const student of uniqueStudents) {
+      for (const month of months) {
+        const validFees = feesByMonth[month] || [];
+        if (validFees.length === 0) continue;
+
+        const totalAmount = validFees.reduce((sum, fee) => sum + fee.amount, 0);
+        const totalOriginalAmount = validFees.reduce((sum, fee) => sum + fee.originalAmount, 0);
+        const totalDiscount = validFees.reduce((sum, fee) => sum + fee.discount, 0);
+
+        console.log("💾 Preparing bulk write for student:", student._id.toString(), "classId:", student.classId);
+
+        bulkOps.push({
+          updateOne: {
+            filter: {
               studentId: student._id,
               sessionId,
-              feesGroupId: feeGroup.feesGroup,
-              feesTypeId: feeType.feesType,
-              amountDue: feeType.amount,
-              dueDate: feeType.dueDate, // Use the due date from feeType
-            });
-            await feePayment.save();
-            console.log(`Created FeePayment for ${student._id}:`, feePayment);
-          } else {
-            // Update dueDate if it changes
-            await FeePayments.updateOne(
-              {
+              month,
+              branchId
+            },
+            update: {
+              $set: {
                 studentId: student._id,
                 sessionId,
-                feesGroupId: feeGroup.feesGroup,
-                feesTypeId: feeType.feesType,
+                classId: new mongoose.Types.ObjectId(
+  student.classId && student.classId._id ? student.classId._id : student.classId
+),
+
+
+                fees: validFees,
+                amount: totalAmount,
+                originalAmount: totalOriginalAmount,
+                discount: totalDiscount,
+                month,
+                status: 'pending',
+                isCustom: !!customFees,
+                updatedAt: new Date(),
+                branchId
               },
-              { dueDate: feeType.dueDate }
-            );
-            console.log(`Updated FeePayment for ${student._id}:`, existingPayment);
-          }
-        })
-      );
-      await Promise.all(paymentPromises);
+              $setOnInsert: {
+                createdAt: new Date(),
+              },
+            },
+            upsert: true,
+          },
+        });
+      }
+    }
+
+    console.log("🧾 bulkOps.length:", bulkOps.length);
+
+    const chunkSize = 1000;
+    for (let i = 0; i < bulkOps.length; i += chunkSize) {
+      await StudentFee.bulkWrite(bulkOps.slice(i, i + chunkSize));
+    }
+
+    if (removedClassIds.length > 0) {
+      await StudentFee.deleteMany({
+        sessionId,
+        classId: { $in: removedClassIds },
+        feeTemplateId: feeTemplate._id,
+        branchId
+      });
+    }
+
+    res.status(200).json({ 
+      success: true, 
+      message: "Fees assigned successfully",
+      stats: {
+        studentsProcessed: uniqueStudents.length,
+        feesAssigned: bulkOps.length,
+        classesAdded: addedClassIds.length,
+        classesRemoved: removedClassIds.length,
+      },
     });
 
-    await Promise.all(studentFeePromises);
-
-    res.status(200).json({ success: true, message: "Fees assigned to selected students successfully" });
   } catch (error) {
-    console.error("Error in assignFeesToStudents:", error);
-    res.status(500).json({ message: error.message });
+    console.error("❌ Error in assignFeesToStudents:");
+    console.error(error);
+    res.status(500).json({ 
+      message: error.message || "Failed to assign fees",
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+    });
   }
 };
+
 // Delete a fee template
 export const deleteFeeTemplate = async (req, res) => {
   try {
-    const deletedFeeTemplate = await FeesTemplate.findByIdAndDelete(req.params.id);
+    const branchId = req.user.branchId;
+    const deletedFeeTemplate = await FeesTemplate.findOneAndDelete({ _id: req.params.id, branchId });
     if (!deletedFeeTemplate) return res.status(404).json({ message: 'Fee Template not found' });
     res.json({ message: 'Fee Template deleted successfully' });
   } catch (error) {
@@ -558,15 +351,15 @@ export const deleteFeeTemplate = async (req, res) => {
 // Get classes by session ID with their templates
 export const getClassesBySession = async (req, res) => {
   try {
+    const branchId = req.user.branchId;
     const { sessionId } = req.params;
-    const classes = await Class.find({ sessionId }).populate('sessionId', 'name sessionId');
+    const classes = await Class.find({ _id:sessionId,branchId }).populate('sessionId', 'name sessionId');
     const classIds = classes.map((c) => c._id);
 
-    const templates = await FeesTemplate.find({ classIds: { $in: classIds } }).populate([
+    const templates = await FeesTemplate.find({ classIds: { $in: classIds } ,branchId}).populate([
       { path: 'sessionId', select: 'name sessionId' },
       { path: 'classIds', select: 'id name' },
       { path: 'fees.feesGroup', select: 'name' },
-      { path: 'fees.feeTypes.feesType', select: 'name' },
     ]);
 
     const result = classes.map((classDoc) => ({
@@ -578,17 +371,17 @@ export const getClassesBySession = async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
-};
+}
 
 // Get fee templates for a class
 export const getFeeTemplatesForClass = async (req, res) => {
   try {
+    const branchId = req.user.branchId;
     const { classId } = req.params;
-    const feeTemplates = await FeesTemplate.find({ classIds: classId }).populate([
+    const feeTemplates = await FeesTemplate.find({ classIds: classId , branchId}).populate([
       { path: 'sessionId', select: 'name sessionId' },
       { path: 'classIds', select: 'id name' },
       { path: 'fees.feesGroup', select: 'name' },
-      { path: 'fees.feeTypes.feesType', select: 'name' },
     ]);
     if (!feeTemplates.length) return res.status(404).json({ message: 'No templates assigned to this class' });
     res.json(feeTemplates);
@@ -596,27 +389,27 @@ export const getFeeTemplatesForClass = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 // Get all classes with their templates for a specific session
 export const getClassesWithTemplatesBySession = async (req, res) => {
   try {
     const { sessionId } = req.params;
-
+    const {branchId} = req.user;
     // Validate session exists
-    const session = await Session.findById(sessionId);
+    const session = await Session.findOne({_id:sessionId, branchId});
     if (!session) {
       return res.status(404).json({ message: 'Session not found' });
     }
 
     // Get all classes for this session
-    const classes = await Class.find({ sessionId })
+    const classes = await Class.find({ _id:sessionId , branchId})
       .populate('sessionId', 'name sessionId')
       .lean();
 
     // Get all templates that have any of these classes assigned
     const templates = await FeesTemplate.find({ 
       sessionId,
-      classIds: { $exists: true, $not: { $size: 0 } }
+      classIds: { $exists: true, $not: { $size: 0 } },
+      branchId
     })
     .populate([
       { path: 'sessionId', select: 'name sessionId' },
@@ -673,9 +466,9 @@ export const getClassesWithTemplatesBySession = async (req, res) => {
 export const getAssignedStudents = async (req, res) => {
   try {
     const { templateId, sessionId } = req.params;
-    
+    const {branchId} = req.user;
     // First, get the template to access its fees groups
-    const template = await FeesTemplate.findById(templateId)
+    const template = await FeesTemplate.findOne({_id:templateId, branchId})
       .populate('fees.feesGroup');
     
     if (!template) {
@@ -691,12 +484,14 @@ export const getAssignedStudents = async (req, res) => {
     // Find all student fees that reference this template
     const assignedStudents = await StudentFee.find({
       sessionId,
-      feeTemplateId: templateId
+      feeTemplateId: templateId,
+      branchId
     }).distinct('studentId');
     
     // If you want to include student details, you can populate them
     const students = await Student.find({
-      _id: { $in: assignedStudents }
+      _id: { $in: assignedStudents },
+      branchId
     }).select('name admissionNumber');
 
     res.status(200).json({
@@ -715,9 +510,9 @@ export const getAssignedStudents = async (req, res) => {
 
 export const getStudentFees = async (req, res) => {
   const { studentId, sessionId } = req.params;
-
+  const {branchId} = req.user;
   try {
-    const studentFee = await StudentFee.findOne({ studentId, sessionId }).populate([
+    const studentFee = await StudentFee.findOne({ studentId, sessionId , branchId}).populate([
       { path: "customFees.feesGroup", select: "name" }, // Populate nested feesGroup
       { path: "customFees.feeTypes.feesType", select: "name" }, // Populate nested feesType
     ]);

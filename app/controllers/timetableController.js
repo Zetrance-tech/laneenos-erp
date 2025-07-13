@@ -8,20 +8,20 @@ import Student from '../models/student.js'
 export const createOrUpdateTimetable = async (req, res) => {
   try {
     const { sessionId, classId, weekStartDate, weekEndDate, days } = req.body;
-    const userId = req.user._id;
-
+    const userId = req.user.userId;
+    const branchId = req.user.branchId;
     // Validate required fields
     if (!sessionId || !classId || !weekStartDate || !weekEndDate || !days) {
       return res.status(400).json({ message: "All required fields must be provided" });
     }
 
     // Validate session and class
-    const session = await Session.findById(sessionId);
+    const session = await Session.findOne({_id:sessionId, branchId});
     if (!session) {
       return res.status(404).json({ message: "Session not found" });
     }
 
-    const classData = await Class.findById(classId);
+    const classData = await Class.findById({_id:classId, branchId});
     if (!classData) {
       return res.status(404).json({ message: "Class not found" });
     }
@@ -41,7 +41,8 @@ export const createOrUpdateTimetable = async (req, res) => {
       sessionId,
       classId,
       weekStartDate: new Date(weekStartDate),
-      weekEndDate: new Date(weekEndDate)
+      weekEndDate: new Date(weekEndDate),
+      branchId
     });
 
     let timetable;
@@ -58,7 +59,8 @@ export const createOrUpdateTimetable = async (req, res) => {
         weekStartDate: new Date(weekStartDate),
         weekEndDate: new Date(weekEndDate),
         days,
-        createdBy: userId
+        createdBy: userId,
+        branchId
       });
       await timetable.save();
     }
@@ -93,6 +95,7 @@ export const getTimetable = async (req, res) => {
   try {
     const { year, month } = req.params;
     const { email, role } = req.user;
+    const branchId = req.user.branchId;
 
     // Verify user is a parent
     if (role !== "parent") {
@@ -108,6 +111,7 @@ export const getTimetable = async (req, res) => {
 
     // Find students associated with the parent's email
     const students = await Student.find({
+      branchId,
       $or: [
         { "fatherInfo.email": email },
         { "motherInfo.email": email },
@@ -139,6 +143,7 @@ export const getTimetable = async (req, res) => {
           $gte: startOfMonth,
           $lte: endOfMonth,
         },
+        branchId
       }).populate("days.slots.teacherId", "name");
 
       // Format timetables for parent view
@@ -214,6 +219,7 @@ export const updateActivityStatus = async (req, res) => {
 export const getStudentTimetable1 = async (req, res) => {
   const { weekStartDate } = req.params;
   const parentId = req.user.userId;
+    const branchId = req.user.branchId;
 
   try {
     // Validate weekStartDate format
@@ -224,6 +230,7 @@ export const getStudentTimetable1 = async (req, res) => {
 
     // Find student by parent reference
     const student = await Student.findOne({
+      branchId,
       $or: [
         { 'fatherInfo.email': req.user.email },
         { 'motherInfo.email': req.user.email },
@@ -259,6 +266,7 @@ export const getStudentTimetable1 = async (req, res) => {
 
     // Get timetable with populated teacher info
     const timetable = await Timetable.findOne({
+      branchId,
       classId: student.classId,
       weekStartDate: startDate
     })
