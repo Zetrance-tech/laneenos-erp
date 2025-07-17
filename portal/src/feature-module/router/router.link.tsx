@@ -268,6 +268,9 @@ import StudentFeeData from "../management/feescollection/feesDetails";
 import ExpenseManager from "../management/expense";
 import AddAdmin from "../superadmin/addAdmin";
 import AssignAdmin from "../superadmin/assignAdmin";
+import StudentListForSuperadmin from "../superadmin/student";
+import StaffListForSuperadmin from "../superadmin/staff";
+import IncomeManager from "../management/income";
 const routes = all_routes;
 interface StudentLeaves {
   admissionNumber: string; // Updated prop name to match API field
@@ -1046,6 +1049,14 @@ export const protectedPublicRoutes = [
     element: <AssignAdmin />,
   },
   {
+    path: routes.students,
+    element: <StudentListForSuperadmin />,
+  },
+  {
+    path: routes.staffs,
+    element: <StaffListForSuperadmin />,
+  },
+  {
     path: routes.studentTimeTable,
     element: <StudentTimeTable/>,
   },
@@ -1269,6 +1280,10 @@ export const protectedPublicRoutes = [
   {
     path: routes.expenses,
     element: <ExpenseManager/>,
+  },
+  {
+    path: routes.income,
+    element: <IncomeManager/>,
   },
   {
     path: routes.cctvList,

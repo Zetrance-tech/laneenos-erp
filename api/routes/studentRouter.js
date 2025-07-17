@@ -11,6 +11,7 @@ import {
   getParentsCCTVAccess,
   toggleParentCCTVAccess,
   getNextStudentId,
+  getAllStudentsWithBranch,
   updateCCTVTimes,
 } from "../controllers/studentController.js";
 import authMiddleware from "../middleware/auth.js";
@@ -24,19 +25,20 @@ const router = express.Router();
 // });
 
 // CCTV routes (admin-only)
-router.get("/cctv-access", authMiddleware(["admin"]), getParentsCCTVAccess);
-router.put("/cctv-access/:studentId", authMiddleware(["admin"]), toggleParentCCTVAccess);
-router.put("/cctv-times/:studentId", authMiddleware(["admin", "parent", "teacher"]), updateCCTVTimes);
+router.get("/cctv-access", authMiddleware(["admin","superadmin"]), getParentsCCTVAccess);
+router.put("/cctv-access/:studentId", authMiddleware(["admin","superadmin"]), toggleParentCCTVAccess);
+router.put("/cctv-times/:studentId", authMiddleware(["admin", "superadmin", "parent", "teacher"]), updateCCTVTimes);
 
-router.get("/next-id", authMiddleware(["admin"]), getNextStudentId);
+router.get("/next-id", authMiddleware(["admin","superadmin"]), getNextStudentId);
 // Public routes (admin, parent, teacher)
-router.get("/", authMiddleware(["admin", "parent", "teacher"]), getAllStudents);
-router.get("/admission/:admissionNumber", authMiddleware(["admin", "parent", "teacher"]), getStudentByAdmissionNumber);
-router.get("/by-class-session/:classId/:sessionId", authMiddleware(["admin", "parent", "teacher"]), getStudentsByClassAndSession);
-router.post("/filter", authMiddleware(["admin", "parent", "teacher"]), getStudentByFilter);
+router.get("/", authMiddleware(["admin", "parent", "superadmin", "teacher"]), getAllStudents);
+router.get("/branch", authMiddleware(["admin", "parent", "superadmin","teacher"]), getAllStudentsWithBranch);
+router.get("/admission/:admissionNumber", authMiddleware(["admin", "superadmin", "parent", "teacher"]), getStudentByAdmissionNumber);
+router.get("/by-class-session/:classId/:sessionId", authMiddleware(["admin","superadmin",  "parent", "teacher"]), getStudentsByClassAndSession);
+router.post("/filter", authMiddleware(["admin", "parent","superadmin",  "teacher"]), getStudentByFilter);
 
 // Must be after specific routes to avoid catching unintended paths
-router.get("/:admissionNumber", authMiddleware(["admin", "parent", "teacher"]), getStudentById);
+router.get("/:admissionNumber", authMiddleware(["admin", "parent", "superadmin", "teacher"]), getStudentById);
 
 // Admin-only routes
 router.post("/create", authMiddleware(["admin"]), createStudent);

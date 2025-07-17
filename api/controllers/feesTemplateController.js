@@ -320,12 +320,6 @@ export const assignFeesToStudents = async (req, res) => {
   const { templateId, sessionId, studentIds, classIds, customFees = null } = req.body;
   const branchId = req.user.branchId;
 
-  console.log("➡️ assignFeesToStudents called with:");
-  console.log("templateId:", templateId);
-  console.log("sessionId:", sessionId);
-  console.log("studentIds:", studentIds);
-  console.log("classIds:", classIds);
-  console.log("branchId:", branchId);
 
   try {
     if (!templateId || !sessionId || (!studentIds && !classIds)) {
@@ -352,9 +346,6 @@ export const assignFeesToStudents = async (req, res) => {
       Class.find({ _id: { $in: classIds || [] }, sessionId, branchId }).lean(),
     ]);
 
-    console.log("✅ feeTemplate:", feeTemplate);
-    console.log("✅ students.length:", students.length);
-    console.log("✅ classes.length:", classes.length);
 
     if (!feeTemplate) {
       return res.status(404).json({ message: "Fee Template not found" });
@@ -423,8 +414,6 @@ export const assignFeesToStudents = async (req, res) => {
           discount: 0,
         }));
     }
-
-    console.log("✅ feesToAssign:", feesToAssign);
 
     if (feesToAssign.length === 0) {
       return res.status(400).json({ message: "No valid fees to assign" });
@@ -818,5 +807,246 @@ export const getAssignedStudents = async (req, res) => {
       success: false,
       message: error.message || 'Failed to fetch assigned students',
     });
+  }
+};
+
+
+export const getTemplatesForStudent = async (req, res) => {
+  const { studentId } = req.params;
+  const { branchId } = req.user;
+
+  try {
+    if (!mongoose.Types.ObjectId.isValid(studentId)) {
+      return res.status(400).json({ message: "Invalid student ID format" });
+    }
+
+    // Find the student with their class and session
+    const student = await Student.findOne({ _id: studentId, branchId })
+      .select("sessionId classId")
+      .populate("sessionId")
+      .populate("classId");
+
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    // Find all fee templates for the student's session and class
+    const feeTemplates = await FeesTemplate.find({
+      sessionId: student.sessionId,
+      classIds: student.classId,
+      branchId
+    }).populate("fees.feesGroup", "name periodicity");
+
+    if (feeTemplates.length === 0) {
+      return res.status(404).json({ 
+        message: "No fee templates found for this student's class and session" 
+      });
+    }
+
+    // Format the response
+    const formattedTemplates = feeTemplates.map(template => ({
+      _id: template._id,
+      name: template.name,
+      description: template.description || "",
+      fees: template.fees.map(fee => ({
+        feesGroup: {
+          _id: fee.feesGroup._id,
+          name: fee.feesGroup.name,
+          periodicity: fee.feesGroup.periodicity,
+        },
+        amount: fee.amount,
+      })),
+      createdAt: template.createdAt,
+      updatedAt: template.updatedAt,
+    }));
+
+    res.status(200).json({
+      student: {
+        _id: student._id,
+        sessionId: student.sessionId,
+        classId: student.classId,
+      },
+      templates: formattedTemplates,
+    });
+  } catch (error) {
+    console.error("Error fetching templates for student:", error.message);
+    res.status(500).json({ message: error.message || "Failed to fetch templates" });
+  }
+};
+
+export const assignTemplateToStudent = async (req, res) => {
+  const { studentId } = req.params;
+  const { templateId, customFees = null } = req.body;
+  const { branchId } = req.user;
+
+  try {
+    // Input validation
+    if (!mongoose.Types.ObjectId.isValid(studentId) || !mongoose.Types.ObjectId.isValid(templateId)) {
+      return res.status(400).json({ message: "Invalid student ID or template ID format" });
+    }
+
+    // Find the student with their class and session
+    const student = await Student.findOne({ _id: studentId, branchId })
+      .select("sessionId classId name admissionNumber status")
+      .populate("sessionId")
+      .populate("classId");
+
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    if (student.status !== "active") {
+      return res.status(400).json({ message: "Student is not active" });
+    }
+
+    // Find the fee template
+    const feeTemplate = await FeesTemplate.findOne({
+      _id: templateId,
+      sessionId: student.sessionId,
+      classIds: student.classId,
+      branchId
+    }).populate("fees.feesGroup", "name periodicity");
+
+    if (!feeTemplate) {
+      return res.status(404).json({ 
+        message: "Fee template not found or not applicable to this student" 
+      });
+    }
+
+    // Prepare fees data - use custom fees if provided, otherwise use template fees
+    let feesToAssign = [];
+    if (customFees && Array.isArray(customFees)) {
+      feesToAssign = customFees
+        .filter(fee => {
+          const groupId = fee.feesGroup._id ? fee.feesGroup._id.toString() : fee.feesGroup.toString();
+          return mongoose.Types.ObjectId.isValid(groupId) && 
+                 feeTemplate.fees.some(tf => tf.feesGroup._id.toString() === groupId);
+        })
+        .map(fee => {
+          const groupId = fee.feesGroup._id ? fee.feesGroup._id.toString() : fee.feesGroup.toString();
+          const templateFee = feeTemplate.fees.find(tf => tf.feesGroup._id.toString() === groupId);
+          return {
+            feesGroup: groupId,
+            amount: typeof fee.amount === 'number' ? fee.amount : (templateFee ? templateFee.amount : 0),
+            originalAmount: typeof fee.originalAmount === 'number' ? fee.originalAmount : 
+                          (typeof fee.amount === 'number' ? fee.amount : (templateFee ? templateFee.amount : 0)),
+            discount: typeof fee.discount === 'number' ? fee.discount : 0,
+          };
+        });
+    } else {
+      feesToAssign = feeTemplate.fees.map(fee => ({
+        feesGroup: fee.feesGroup._id.toString(),
+        amount: fee.amount,
+        originalAmount: fee.amount,
+        discount: 0,
+      }));
+    }
+
+    if (feesToAssign.length === 0) {
+      return res.status(400).json({ message: "No valid fees to assign" });
+    }
+
+    // Group fees by month based on periodicity
+    const feesByMonth = {};
+    const months = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
+    const quarterlyMonths = ["Apr", "Jul", "Oct", "Jan"];
+
+    for (const fee of feesToAssign) {
+      const feesGroup = feeTemplate.fees.find(f => f.feesGroup._id.toString() === fee.feesGroup).feesGroup;
+      const applicableMonths = feesGroup.periodicity === 'Monthly' ? months :
+                              feesGroup.periodicity === 'Quarterly' ? quarterlyMonths :
+                              feesGroup.periodicity === 'Yearly' || feesGroup.periodicity === 'One Time' ? ['Apr'] : [];
+
+      for (const month of applicableMonths) {
+        if (!feesByMonth[month]) feesByMonth[month] = [];
+        feesByMonth[month].push(fee);
+      }
+    }
+
+    // Create bulk operations for all months
+    const bulkOps = Object.entries(feesByMonth).map(([month, feeComponents]) => {
+      const totalAmount = feeComponents.reduce((sum, f) => sum + f.amount, 0);
+      const totalOriginalAmount = feeComponents.reduce((sum, f) => sum + f.originalAmount, 0);
+      const totalDiscount = feeComponents.reduce((sum, f) => sum + f.discount, 0);
+
+      return {
+        updateOne: {
+          filter: {
+            studentId: student._id,
+            sessionId: student.sessionId,
+            month,
+            branchId
+          },
+          update: {
+            $set: {
+              studentId: student._id,
+              classId: student.classId,
+              sessionId: student.sessionId,
+              fees: feeComponents,
+              amount: totalAmount,
+              originalAmount: totalOriginalAmount,
+              discount: totalDiscount,
+              isCustom: !!customFees,
+              status: 'pending',
+              updatedAt: new Date(),
+              branchId
+            },
+            $setOnInsert: {
+              createdAt: new Date(),
+            },
+          },
+          upsert: true,
+        },
+      };
+    });
+
+    // Execute bulk write operation
+    await StudentFee.bulkWrite(bulkOps);
+
+    // Get the updated fees to return in response
+    const updatedFees = await StudentFee.find({
+      studentId: student._id,
+      sessionId: student.sessionId,
+      branchId
+    }).populate("fees.feesGroup", "name periodicity");
+
+    const responseFees = updatedFees.map((fee) => ({
+      month: fee.month,
+      fees: fee.fees.map(f => ({
+        feesGroup: {
+          _id: f.feesGroup._id,
+          name: f.feesGroup.name,
+          periodicity: f.feesGroup.periodicity,
+        },
+        amount: f.amount,
+        originalAmount: f.originalAmount,
+        discount: f.discount,
+      })),
+      amount: fee.amount,
+      originalAmount: fee.originalAmount,
+      discount: fee.discount,
+      isCustom: fee.isCustom,
+      status: fee.status,
+    }));
+
+    res.status(200).json({
+      success: true,
+      message: "Fees assigned successfully",
+      student: {
+        _id: student._id,
+        name: student.name,
+        admissionNumber: student.admissionNumber,
+        session: student.sessionId,
+        class: student.classId,
+      },
+      fees: responseFees,
+      template: {
+        _id: feeTemplate._id,
+        name: feeTemplate.name,
+      },
+    });
+  } catch (error) {
+    console.error("Error assigning template to student:", error.message);
+    res.status(500).json({ message: error.message || "Failed to assign template" });
   }
 };

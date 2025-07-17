@@ -7,6 +7,14 @@ import { all_routes } from "../../router/all_routes";
 import TooltipOption from "../../../core/common/tooltipOption";
 import { useAuth } from "../../../context/AuthContext";
 
+// --- New Interface for Fee Template ---
+interface FeeTemplate {
+  _id: string;
+  name: string;
+  description?: string;
+  fees: { feesGroup: FeesGroup; amount: number }[];
+}
+
 interface Session {
   _id: string;
   name: string;
@@ -102,6 +110,10 @@ const StudentFeeManager: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [showAdvancedModal, setShowAdvancedModal] = useState<boolean>(false);
+  // --- New State for Fee Assignment ---
+  const [showAssignModal, setShowAssignModal] = useState<boolean>(false);
+  const [feeTemplates, setFeeTemplates] = useState<FeeTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [editFees, setEditFees] = useState<EditFeeDetail[]>([]);
   const [advancedFees, setAdvancedFees] = useState<AdvancedFeeDetail[]>([]);
   const [selectedEditMonth, setSelectedEditMonth] = useState<string>("");
@@ -115,7 +127,12 @@ const StudentFeeManager: React.FC = () => {
     }),
     [token]
   );
-
+  const handleAssignFees = async () => {
+  setLoading(true);
+  await fetchFeeTemplatesForStudent();
+  setShowAssignModal(true);
+  setLoading(false);
+};
   const months = [
     "Apr", "May", "Jun", "Jul", "Aug", "Sep",
     "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"
@@ -210,95 +227,154 @@ const StudentFeeManager: React.FC = () => {
     }
   }, [selectedClass, selectedSession, config]);
 
-  const fetchStudentFees = useCallback(async () => {
-    if (!selectedStudentId) {
-      console.log("No student ID selected, skipping fetchStudentFees");
-      return;
-    }
+  // --- New Function to Fetch Fee Templates for Student ---
+  const fetchFeeTemplatesForStudent = useCallback(async () => {
+    if (!selectedStudentId) return;
     setLoading(true);
     setError(null);
-    console.log("Fetching student fees for ID:", selectedStudentId);
-    console.log("Request URL:", `${API_URL}/api/studentFees/${selectedStudentId}/fees`);
-    console.log("Request config:", config);
-
     try {
-      const response = await axios.get<StudentFee>(
-        `${API_URL}/api/studentFees/${selectedStudentId}/fees`,
-        { ...config, timeout: 5000 }
+      const response = await axios.get<{ student: any; templates: FeeTemplate[] }>(
+        `${API_URL}/api/feesTemplate/student/templates/${selectedStudentId}`,
+        config
       );
-      console.log("Response received:", response.data);
-
-      if (!response.data || !Array.isArray(response.data.fees)) {
-        throw new Error("Invalid response format: fees array is missing or not an array");
-      }
-
-      // Map fees to include month and ensure valid status
-      const updatedFees = response.data.fees.map((monthlyFee) => {
-        if (!monthlyFee.month || !Array.isArray(monthlyFee.fees)) {
-          console.warn("Invalid monthly fee structure:", monthlyFee);
-          return {
-            ...monthlyFee,
-            fees: [],
-            month: monthlyFee.month || "Unknown",
-            status: monthlyFee.status || "pending",
-          };
-        }
-        return {
-          ...monthlyFee,
-          fees: monthlyFee.fees.map((fee) => ({
-            ...fee,
-            month: monthlyFee.month,
-            status: fee.status || "pending",
-            originalAmount: fee.originalAmount || fee.amount,
-          })),
-        };
-      });
-
-      if (updatedFees.length === 0 || updatedFees.every((mf) => mf.fees.length === 0)) {
-        console.warn("No valid fees found after processing");
-        setError("No valid fee details found for the selected student.");
-        toast.error("No valid fee details found for the selected student.");
-        setStudentFees({ student: response.data.student, fees: [] });
-        return;
-      }
-
-      setStudentFees({
-        student: response.data.student,
-        fees: updatedFees,
-      });
-
-      // Set default edit month to the first month with fees
-      const firstMonthWithFees = updatedFees.find((mf) => mf.fees.length > 0)?.month;
-      if (firstMonthWithFees) {
-        setSelectedEditMonth(firstMonthWithFees);
+      setFeeTemplates(response.data.templates);
+      if (response.data.templates.length === 0) {
+        setError("No fee templates available for this student's class and session.");
+        toast.error("No fee templates available for this student's class and session.");
       }
     } catch (err) {
-      let errorMessage = "An unexpected error occurred while fetching student fees";
-      if (axios.isAxiosError(err)) {
-        console.error("Axios error:", {
-          status: err.response?.status,
-          statusText: err.response?.statusText,
-          data: err.response?.data,
-          message: err.message,
-        });
-        if (err.response?.status === 404) {
-          errorMessage = "No fee details found for the selected student.";
-        } else if (err.response?.status === 401) {
-          errorMessage = "Unauthorized access. Please check your credentials.";
-        } else {
-          errorMessage = err.response?.data?.message || err.message || errorMessage;
-        }
-      } else {
-        console.error("Non-Axios error:", err);
-        errorMessage = (err as Error).message || errorMessage;
-      }
+      const errorMessage = axios.isAxiosError(err)
+        ? err.response?.status === 404
+          ? "No fee templates found for this student."
+          : err.response?.data?.message || "Failed to fetch fee templates"
+        : "An unexpected error occurred while fetching fee templates";
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
       setLoading(false);
-      console.log("Finished fetching student fees");
     }
   }, [selectedStudentId, config]);
+
+  const fetchStudentFees = useCallback(async () => {
+  if (!selectedStudentId) {
+    console.log("No student ID selected, skipping fetchStudentFees");
+    return;
+  }
+  setLoading(true);
+  setError(null);
+  console.log("Fetching student fees for ID:", selectedStudentId);
+  console.log("Request URL:", `${API_URL}/api/studentFees/${selectedStudentId}/fees`);
+  console.log("Request config:", config);
+
+  try {
+    const response = await axios.get<StudentFee>(
+      `${API_URL}/api/studentFees/${selectedStudentId}/fees`,
+      { ...config, timeout: 5000 }
+    );
+    console.log("Response received:", response.data);
+
+    if (!response.data || !Array.isArray(response.data.fees)) {
+      throw new Error("Invalid response format: fees array is missing or not an array");
+    }
+
+    // Map fees to include month and ensure valid status
+    const updatedFees = response.data.fees.map((monthlyFee) => {
+      if (!monthlyFee.month || !Array.isArray(monthlyFee.fees)) {
+        console.warn("Invalid monthly fee structure:", monthlyFee);
+        return {
+          ...monthlyFee,
+          fees: [],
+          month: monthlyFee.month || "Unknown",
+          status: monthlyFee.status || "pending",
+        };
+      }
+      return {
+        ...monthlyFee,
+        fees: monthlyFee.fees.map((fee) => ({
+          ...fee,
+          month: monthlyFee.month,
+          status: fee.status || "pending",
+          originalAmount: fee.originalAmount || fee.amount,
+        })),
+      };
+    });
+
+    if (updatedFees.length === 0 || updatedFees.every((mf) => mf.fees.length === 0)) {
+      console.warn("No valid fees found after processing");
+      setError("No valid fee details found for the selected student.");
+      toast.error("No valid fee details found for the selected student.");
+      setStudentFees({ student: response.data.student, fees: [] });
+      return; // Removed setShowAssignModal(true) and fetchFeeTemplatesForStudent()
+    }
+
+    setStudentFees({
+      student: response.data.student,
+      fees: updatedFees,
+    });
+
+    // Set default edit month to the first month with fees
+    const firstMonthWithFees = updatedFees.find((mf) => mf.fees.length > 0)?.month;
+    if (firstMonthWithFees) {
+      setSelectedEditMonth(firstMonthWithFees);
+    }
+  } catch (err) {
+    let errorMessage = "An unexpected error occurred while fetching student fees";
+    if (axios.isAxiosError(err)) {
+      console.error("Axios error:", {
+        status: err.response?.status,
+        statusText: err.response?.statusText,
+        data: err.response?.data,
+        message: err.message,
+      });
+      if (err.response?.status === 404) {
+        errorMessage = "No valid fee details found for the selected student.";
+      } else if (err.response?.status === 401) {
+        errorMessage = "Unauthorized access. Please check your credentials.";
+      } else {
+        errorMessage = err.response?.data?.message || err.message || errorMessage;
+      }
+    } else {
+      console.error("Non-Axios error:", err);
+      errorMessage = (err as Error).message || errorMessage;
+    }
+    setError(errorMessage);
+    toast.error(errorMessage);
+  } finally {
+    setLoading(false);
+    console.log("Finished fetching student fees");
+  }
+}, [selectedStudentId, config]);
+  // --- New Function to Assign Fee Template ---
+  const handleAssignTemplate = async () => {
+    if (!selectedTemplateId) {
+      toast.error("Please select a fee template to assign.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const payload = {
+        templateId: selectedTemplateId,
+        customFees: null, // Optionally allow custom fees in the future
+      };
+      await axios.post(
+        `${API_URL}/api/feesTemplate/student/assign-fees/${selectedStudentId}`,
+        payload,
+        config
+      );
+      toast.success("Fee template assigned successfully");
+      setShowAssignModal(false);
+      setSelectedTemplateId("");
+      fetchStudentFees(); // Refresh fees after assignment
+    } catch (err) {
+      const errorMessage = axios.isAxiosError(err)
+        ? err.response?.data?.message || "Failed to assign fee template"
+        : "An unexpected error occurred";
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchSessions();
@@ -332,6 +408,8 @@ const StudentFeeManager: React.FC = () => {
     } else {
       setStudentFees(null);
       setSelectedEditMonth("");
+      setShowAssignModal(false);
+      setFeeTemplates([]);
     }
   }, [selectedStudentId, fetchStudentFees]);
 
@@ -342,6 +420,8 @@ const StudentFeeManager: React.FC = () => {
     setSelectedStudentId("");
     setStudentFees(null);
     setSelectedEditMonth("");
+    setShowAssignModal(false);
+    setFeeTemplates([]);
   };
 
   const handleClassChange = (value: string) => {
@@ -350,12 +430,16 @@ const StudentFeeManager: React.FC = () => {
     setSelectedStudentId("");
     setStudentFees(null);
     setSelectedEditMonth("");
+    setShowAssignModal(false);
+    setFeeTemplates([]);
   };
 
   const handleStudentSelect = (value: string) => {
     setSelectedStudentId(value);
     setStudentFees(null);
     setSelectedEditMonth("");
+    setShowAssignModal(false);
+    setFeeTemplates([]);
   };
 
   const handleEditFees = () => {
@@ -560,11 +644,6 @@ const StudentFeeManager: React.FC = () => {
         />
       ),
     },
-    // {
-    //   title: "Month",
-    //   dataIndex: "month",
-    //   render: (month: string) => <span>{month || "N/A"}</span>,
-    // },
     {
       title: "Fee Group",
       dataIndex: "feesGroup",
@@ -669,8 +748,6 @@ const StudentFeeManager: React.FC = () => {
         return showField ? (
           <div style={record.feesGroup._id === "total" ? { fontWeight: "bold", color: "blue" } : {}}>
             <div>₹{(record.amounts[month] || 0).toFixed(2)}</div>
-            {/* <div>Disc: ₹{(record.discounts[month] || 0).toFixed(2)}</div> */}
-            {/* <div>Net: ₹{(record.netPayables[month] || 0).toFixed(2)}</div> */}
           </div>
         ) : (
           <div>-</div>
@@ -812,21 +889,31 @@ const StudentFeeManager: React.FC = () => {
                     {error}
                   </p>
                   <div>
-                    <Button
-                      type="primary"
-                      size="small"
-                      onClick={() => {
-                        setError(null);
-                        if (selectedStudentId) fetchStudentFees();
-                        else if (selectedClass && selectedSession) fetchStudentsForClass();
-                        else if (selectedSession) fetchClassesForSession();
-                        else fetchSessions();
-                      }}
-                      className="mt-2"
-                    >
-                      Retry
-                    </Button>
-                  </div>
+      {error === "No valid fee details found for the selected student." && (
+        <Button
+          type="primary"
+          size="small"
+          onClick={handleAssignFees}
+          className="mt-2 me-2"
+        >
+          Assign Fees
+        </Button>
+      )}
+      <Button
+        type="primary"
+        size="small"
+        onClick={() => {
+          setError(null);
+          if (selectedStudentId) fetchStudentFees();
+          else if (selectedClass && selectedSession) fetchStudentsForClass();
+          else if (selectedSession) fetchClassesForSession();
+          else fetchSessions();
+        }}
+        className="mt-2"
+      >
+        Retry
+      </Button>
+    </div>
                 </div>
               ) : selectedStudentId && studentFees ? (
                 <div className="p-3">
@@ -896,18 +983,6 @@ const StudentFeeManager: React.FC = () => {
         width={900}
         style={{ top: 50 }}
       >
-        {/* <Form.Item label="Select Month">
-          <Select
-            value={selectedEditMonth || undefined}
-            onChange={handleMonthChange}
-            style={{ width: 200 }}
-            options={availableMonths.map((month) => ({
-              value: month,
-              label: month,
-            }))}
-            disabled={loading}
-          />
-        </Form.Item> */}
         <Table
           dataSource={editFees}
           columns={editFeeColumns}
@@ -939,6 +1014,43 @@ const StudentFeeManager: React.FC = () => {
             record.feesGroup._id === "total" ? "total-row" : ""
           }
         />
+      </Modal>
+
+      {/* --- New Modal for Assigning Fee Template --- */}
+      <Modal
+        title="Assign Fee Template"
+        open={showAssignModal}
+        onCancel={() => setShowAssignModal(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setShowAssignModal(false)}>
+            Cancel
+          </Button>,
+          <Button key="submit" type="primary" onClick={handleAssignTemplate} loading={loading}>
+            Assign Template
+          </Button>,
+        ]}
+        zIndex={10000}
+        width={600}
+        style={{ top: 50 }}
+      >
+        <Form.Item label="Select Fee Template">
+          <Select
+            placeholder="Select a fee template"
+            value={selectedTemplateId || undefined}
+            onChange={(value) => setSelectedTemplateId(value)}
+            style={{ width: "100%" }}
+            options={feeTemplates.map((template) => ({
+              value: template._id,
+              label: template.name,
+            }))}
+            disabled={loading || feeTemplates.length === 0}
+          />
+        </Form.Item>
+        {feeTemplates.length === 0 && (
+          <p className="alert alert-warning" role="alert">
+            No fee templates available for this student. Please create a suitable template first.
+          </p>
+        )}
       </Modal>
     </div>
   );

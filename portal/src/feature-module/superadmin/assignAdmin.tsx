@@ -20,7 +20,8 @@ interface Branch {
     _id: string;
     name: string;
     email: string;
-  } | null; 
+    status?: "active" | "inactive" | "suspended"; // Made status optional
+  } | null;
   status: "active" | "inactive";
   address?: string;
   email?: string;
@@ -49,7 +50,15 @@ const AssignAdmin = () => {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const [selectedAdminId, setSelectedAdminId] = useState<string | null>(null);
+  const [showEditAssignModal, setShowEditAssignModal] = useState(false);
+  const [editForm] = Form.useForm();
   const { token } = useAuth();
+
+  // Debug data
+  useEffect(() => {
+    console.log("Admins:", admins);
+    console.log("Branches:", branches);
+  }, [admins, branches]);
 
   // Fetch branches and admins
   useEffect(() => {
@@ -59,8 +68,7 @@ const AssignAdmin = () => {
           headers: { Authorization: `Bearer ${token}` },
         });
         setBranches(response.data);
-      console.log("api/branch", response.data)
-
+        console.log("api/branch", response.data);
         setFilteredBranches(response.data);
       } catch (error) {
         console.error("Error fetching branches:", error);
@@ -100,41 +108,56 @@ const AssignAdmin = () => {
     setFilteredBranches(filtered);
   }, [searchTerm, branches]);
 
-  // Handle assign admin
+  // Handle assign/unassign admin
   const handleAssignAdmin = async (values: any) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      // Check if the selected branch already has an admin
-      const selectedBranch = branches.find((branch) => branch._id === values.branchId);
-      if (selectedBranch?.admin) {
-        throw new Error("This branch already has an assigned admin");
-      }
-
-      await axios.put(
-        `${API_URL}/api/branch/assign-admin`,
-        { branchId: values.branchId, adminId: values.adminId },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      toast.success("Admin assigned successfully!");
-      const response = await axios.get(`${API_URL}/api/branch`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      console.log("api/branch", response.data)
-      setBranches(response.data);
-      setFilteredBranches(response.data);
-      setShowAssignModal(false);
-      setSelectedBranchId(null);
-      setSelectedAdminId(null);
-      form.resetFields();
-    } catch (err: any) {
-      setError(err.response?.data?.message || err.message || "Failed to assign admin");
-      toast.error(err.response?.data?.message || err.message || "Failed to assign admin");
-    } finally {
-      setIsLoading(false);
+  setIsLoading(true);
+  setError(null);
+  try {
+    console.log("handleAssignAdmin payload:", values); // Debug payload
+    console.log("Selected Branch ID:", values.branchId); // Debug branchId
+    if (!values.branchId) {
+      throw new Error("Branch ID is required");
     }
-  };
 
+    const selectedBranch = branches.find((branch) => branch._id === values.branchId);
+
+    // Choose endpoint based on whether assigning or unassigning
+    const endpoint = values.adminId
+      ? `${API_URL}/api/branch/assign-admin`
+      : `${API_URL}/api/branch/unassign-admin`;
+    const payload = values.adminId
+      ? { branchId: values.branchId, adminId: values.adminId }
+      : { branchId: values.branchId };
+
+    console.log("Calling endpoint:", endpoint); // Debug endpoint
+    console.log("Payload:", payload); // Debug payload
+
+    await axios.put(endpoint, payload, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    toast.success(values.adminId ? "Admin assigned successfully!" : "Admin unassigned successfully!");
+    const response = await axios.get(`${API_URL}/api/branch`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    console.log("api/branch response after update:", response.data);
+    setBranches(response.data);
+    setFilteredBranches(response.data);
+    setShowAssignModal(false);
+    setShowEditAssignModal(false);
+    setSelectedBranchId(null);
+    setSelectedAdminId(null);
+    form.resetFields();
+    editForm.resetFields();
+  } catch (err: any) {
+    const errorMessage = err.response?.data?.message || err.message || "Failed to update admin assignment";
+    console.error("handleAssignAdmin error:", errorMessage, err.response?.data); // Debug error
+    setError(errorMessage);
+    toast.error(errorMessage);
+  } finally {
+    setIsLoading(false);
+  }
+};
   // Handle branch selection change
   const handleBranchChange = (value: string) => {
     setSelectedBranchId(value);
@@ -147,41 +170,159 @@ const AssignAdmin = () => {
 
   // Get selected branch details
   const selectedBranch = branches.find((branch) => branch._id === selectedBranchId);
-const branchDetails = selectedBranch && (
-  <Descriptions
-    bordered
-    size="small"
-    column={1}
-    style={{ marginTop: 8 }}
-    labelStyle={{ fontWeight: 600 }}
-  >
-    <Descriptions.Item label="Branch ID">{selectedBranch.branchId}</Descriptions.Item>
-    <Descriptions.Item label="Name">{selectedBranch.name}</Descriptions.Item>
-    <Descriptions.Item label="Type">{selectedBranch.branchType}</Descriptions.Item>
-    <Descriptions.Item label="City">{selectedBranch.city}</Descriptions.Item>
-    <Descriptions.Item label="Address">{selectedBranch.address || "N/A"}</Descriptions.Item>
-    <Descriptions.Item label="Email">{selectedBranch.email || "N/A"}</Descriptions.Item>
-    <Descriptions.Item label="Phone">{selectedBranch.phoneNumber || "N/A"}</Descriptions.Item>
-    <Descriptions.Item label="Director">{selectedBranch.directorName || "N/A"}</Descriptions.Item>
-  </Descriptions>
-);
+  const branchDetails = selectedBranch && (
+    <Descriptions
+      bordered
+      size="small"
+      column={1}
+      style={{ marginTop: 8 }}
+      labelStyle={{ fontWeight: 600 }}
+    >
+      <Descriptions.Item label="Branch ID">{selectedBranch.branchId}</Descriptions.Item>
+      <Descriptions.Item label="Name">{selectedBranch.name}</Descriptions.Item>
+      <Descriptions.Item label="Type">{selectedBranch.branchType}</Descriptions.Item>
+      <Descriptions.Item label="City">{selectedBranch.city}</Descriptions.Item>
+      <Descriptions.Item label="Address">{selectedBranch.address || "N/A"}</Descriptions.Item>
+      <Descriptions.Item label="Email">{selectedBranch.email || "N/A"}</Descriptions.Item>
+      <Descriptions.Item label="Phone">{selectedBranch.phoneNumber || "N/A"}</Descriptions.Item>
+      <Descriptions.Item label="Director">{selectedBranch.directorName || "N/A"}</Descriptions.Item>
+    </Descriptions>
+  );
 
   // Get selected admin details
   const selectedAdmin = admins.find((admin) => admin._id === selectedAdminId);
   const adminDetails = selectedAdmin && (
-  <Descriptions
-    bordered
-    size="small"
-    column={1}
-    style={{ marginTop: 8 }}
-    labelStyle={{ fontWeight: 600 }}
-  >
-    <Descriptions.Item label="Name">{selectedAdmin.name}</Descriptions.Item>
-    <Descriptions.Item label="Email">{selectedAdmin.email}</Descriptions.Item>
-    <Descriptions.Item label="Phone">{selectedAdmin.phone || "N/A"}</Descriptions.Item>
-    <Descriptions.Item label="Status">{selectedAdmin.status}</Descriptions.Item>
-  </Descriptions>
-);
+    <Descriptions
+      bordered
+      size="small"
+      column={1}
+      style={{ marginTop: 8 }}
+      labelStyle={{ fontWeight: 600 }}
+    >
+      <Descriptions.Item label="Name">{selectedAdmin.name}</Descriptions.Item>
+      <Descriptions.Item label="Email">{selectedAdmin.email}</Descriptions.Item>
+      <Descriptions.Item label="Phone">{selectedAdmin.phone || "N/A"}</Descriptions.Item>
+      <Descriptions.Item label="Status">{selectedAdmin.status}</Descriptions.Item>
+    </Descriptions>
+  );
+
+  // Unassigned admins
+  const unassignedAdmins = admins.filter(
+    (admin) => !branches.some((branch) => branch.admin?._id === admin._id)
+  );
+
+  // Edit Assign Modal
+  const EditAssignModal: React.FC = () => {
+  const handleSubmit = (values: any) => {
+    if (values.adminId && selectedBranch?.admin && values.adminId !== selectedBranch.admin._id) {
+      Modal.confirm({
+        title: "Override Admin Assignment",
+        content: `This will unassign ${selectedBranch.admin.name} (${selectedBranch.admin.email}) from ${selectedBranch.name} and assign the new admin. Continue?`,
+        onOk: () => handleAssignAdmin(values),
+        onCancel: () => {},
+      });
+    } else {
+      handleAssignAdmin(values);
+    }
+  };
+
+  return (
+    <Modal
+      title="Edit Admin Assignment"
+      visible={showEditAssignModal}
+      onCancel={() => {
+        setShowEditAssignModal(false);
+        setSelectedBranchId(null);
+        setSelectedAdminId(null);
+        editForm.resetFields();
+        setError(null);
+      }}
+      footer={null}
+      width={800}
+      zIndex={10000}
+      style={{ top: 50 }}
+    >
+      <Form form={editForm} onFinish={handleSubmit} layout="vertical">
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item
+              label="Select Branch"
+              name="branchId"
+              rules={[{ required: true, message: "Please select a branch" }]}
+            >
+              <Select
+                placeholder="Select a branch"
+                allowClear
+                onChange={handleBranchChange}
+              >
+                {branches.map((branch) => (
+                  <Select.Option key={branch._id} value={branch._id}>
+                    {`${branch.name} (${branch.branchId}, ${branch.city})`}
+                  </Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+            {branchDetails}
+            {selectedBranch?.admin && (
+              <Alert
+                message={`Current Admin: ${selectedBranch.admin.name} (${selectedBranch.admin.email})`}
+                type="info"
+                showIcon
+                style={{ marginTop: 8 }}
+              />
+            )}
+          </Col>
+          <Col span={12}>
+            <Form.Item
+              label="Select Admin"
+              name="adminId"
+              rules={[{ required: false, message: "Please select an admin" }]}
+            >
+              <Select
+                placeholder="Select an admin"
+                allowClear
+                onChange={handleAdminChange}
+                optionLabelProp="label"
+                disabled={!selectedBranchId}
+              >
+                <Select.Option
+                  key="none"
+                  value=""
+                  label="None (Unassign)"
+                  disabled={!selectedBranch?.admin}
+                >
+                  None (Unassign)
+                </Select.Option>
+                {unassignedAdmins
+                  .concat(
+                    selectedBranch?.admin && "status" in selectedBranch.admin
+                      ? [selectedBranch.admin as Admin]
+                      : []
+                  )
+                  .map((admin) => (
+                    <Select.Option
+                      key={admin._id}
+                      value={admin._id}
+                      label={`${admin.name || "Unknown"} (${admin.email || "No Email"})`}
+                    >
+                      {`${admin.name || "Unknown"} (${admin.email || "No Email"})`}
+                    </Select.Option>
+                  ))}
+              </Select>
+            </Form.Item>
+            {adminDetails}
+          </Col>
+        </Row>
+        <Form.Item>
+          <button type="submit" className="btn btn-primary" disabled={isLoading}>
+            Update Assignment
+          </button>
+          {error && <Alert message={error} type="error" style={{ marginTop: 16 }} />}
+        </Form.Item>
+      </Form>
+    </Modal>
+  );
+};
 
   // Table columns
   const columns = [
@@ -196,7 +337,7 @@ const branchDetails = selectedBranch && (
             width: 10,
             height: 10,
             borderRadius: "50%",
-            backgroundColor: "ffff",
+            backgroundColor: "#ffff",
             marginLeft: 15,
           }}
         />
@@ -222,32 +363,69 @@ const branchDetails = selectedBranch && (
       dataIndex: "city",
       sorter: (a: Branch, b: Branch) => a.city.localeCompare(b.city),
     },
+    {
+      title: "Branch → Admin Mapping",
+      key: "mapping",
+      render: (record: Branch) => {
+        const admin = record.admin;
+        return (
+          <div>
+            <strong>{record.name}</strong>
+            <span> → </span>
+            {admin ? (
+              <span>
+                {admin.name} <small className="text-muted">({admin.email})</small>
+              </span>
+            ) : (
+              <span className="text-danger">Unassigned</span>
+            )}
+          </div>
+        );
+      },
+    },
 {
-  title: "Branch → Admin Mapping",
-  key: "mapping",
-  render: (record: Branch) => {
-    const admin = record.admin;
-    return (
-      <div>
-        <strong>{record.name}</strong>
-        <span> → </span>
-        {admin ? (
-          <span>{admin.name} <small className="text-muted">({admin.email})</small></span>
-        ) : (
-          <span className="text-danger">Unassigned</span>
-        )}
+  title: "Action",
+  key: "action",
+  render: (_: any, record: Branch) => (
+    <div className="d-flex align-items-center">
+      <div className="dropdown">
+        <Link
+          to="#"
+          className="btn btn-white btn-icon btn-sm d-flex align-items-center justify-content-center rounded-circle p-0"
+          data-bs-toggle="dropdown"
+          aria-expanded="false"
+        >
+          <i className="ti ti-dots-vertical fs-14" />
+        </Link>
+        <ul className="dropdown-menu dropdown-menu-right p-3">
+          <li>
+            <Link
+              className="dropdown-item rounded-1"
+              to="#"
+              onClick={() => {
+                setSelectedBranchId(record._id);
+                setSelectedAdminId(null); // Reset admin selection
+                setShowEditAssignModal(true);
+                editForm.setFieldsValue({
+                  branchId: record._id, // Only set branchId
+                  // Do not set adminId
+                });
+              }}
+            >
+              <i className="ti ti-edit-circle me-2" />
+              Edit Assignment
+            </Link>
+          </li>
+        </ul>
       </div>
-    );
-  },
-},
+    </div>
+  ),
+}
   ];
-  const unassignedAdmins = admins.filter((admin) =>
-  !branches.some((branch) => branch.admin?._id === admin._id)
-);
+
   return (
     <div>
       <Toaster position="top-right" reverseOrder={false} />
-
       <div className="page-wrapper">
         <div className="content">
           <div className="d-md-flex d-block align-items-center justify-content-between mb-3">
@@ -294,7 +472,14 @@ const branchDetails = selectedBranch && (
             </div>
             <div className="card-body p-0 py-3">
               {isLoading ? (
-                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "200px" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    minHeight: "200px",
+                  }}
+                >
                   <Spin size="large" />
                 </div>
               ) : error ? (
@@ -302,80 +487,90 @@ const branchDetails = selectedBranch && (
               ) : branches.length === 0 ? (
                 <p>No branches available</p>
               ) : (
-                <Table columns={columns} dataSource={filteredBranches}/>
+                <Table columns={columns} dataSource={filteredBranches} />
               )}
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Assign Admin Modal */}
-      <Modal
-        title="Assign Admin to Branch"
-        visible={showAssignModal}
-        onCancel={() => {
-          setShowAssignModal(false);
-          setSelectedBranchId(null);
-          setSelectedAdminId(null);
-          form.resetFields();
-          setError(null);
-        }}
-        footer={null}
-        width={800}
-        zIndex={10000}
-        style={{ top: 50 }}
-      >
-        <Form form={form} onFinish={handleAssignAdmin} layout="vertical">
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                label="Select Branch"
-                name="branchId"
-                rules={[{ required: true, message: "Please select a branch" }]}
-              >
-                <Select
-                  placeholder="Select a branch"
-                  allowClear
-                  onChange={handleBranchChange}
+        {/* Assign Admin Modal */}
+        <Modal
+          title="Assign Admin to Branch"
+          visible={showAssignModal}
+          onCancel={() => {
+            setShowAssignModal(false);
+            setSelectedBranchId(null);
+            setSelectedAdminId(null);
+            form.resetFields();
+            setError(null);
+          }}
+          footer={null}
+          width={800}
+          zIndex={10000}
+          style={{ top: 50 }}
+        >
+          <Form form={form} onFinish={handleAssignAdmin} layout="vertical">
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  label="Select Branch"
+                  name="branchId"
+                  rules={[{ required: true, message: "Please select a branch" }]}
                 >
-                  {branches.filter((branch) => !branch.admin).map((branch) => (
-                    <Select.Option key={branch._id} value={branch._id}>
-                      {`${branch.name} (${branch.branchId}, ${branch.city})`}
-                    </Select.Option>
-                  ))}
-                </Select>
-              </Form.Item>
-              {branchDetails}
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                label="Select Admin"
-                name="adminId"
-                rules={[{ required: true, message: "Please select an admin" }]}
-              >
-                <Select
-                  placeholder="Select an admin"
-                  allowClear
-                  onChange={handleAdminChange}
+                  <Select
+                    placeholder="Select a branch"
+                    allowClear
+                    onChange={handleBranchChange}
+                  >
+                    {branches
+                      .filter((branch) => !branch.admin)
+                      .map((branch) => (
+                        <Select.Option key={branch._id} value={branch._id}>
+                          {`${branch.name} (${branch.branchId}, ${branch.city})`}
+                        </Select.Option>
+                      ))}
+                  </Select>
+                </Form.Item>
+                {branchDetails}
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  label="Select Admin"
+                  name="adminId"
+                  rules={[{ required: true, message: "Please select an admin" }]}
                 >
-                  {unassignedAdmins.map((admin) => (
-        <Select.Option key={admin._id} value={admin._id}>
-          {`${admin.name} (${admin.email})`}
-        </Select.Option>
-      ))}
-                </Select>
-              </Form.Item>
-              {adminDetails}
-            </Col>
-          </Row>
-          <Form.Item>
-            <button type="submit" className="btn btn-primary" disabled={isLoading}>
-              Assign Admin
-            </button>
-            {error && <Alert message={error} type="error" style={{ marginTop: 16 }} />}
-          </Form.Item>
-        </Form>
-      </Modal>
+                  <Select
+                    placeholder="Select an admin"
+                    allowClear
+                    onChange={handleAdminChange}
+                    optionLabelProp="label"
+                  >
+                    {unassignedAdmins.map((admin) => (
+                      <Select.Option
+                        key={admin._id}
+                        value={admin._id}
+                        label={`${admin.name || "Unknown"} (${admin.email || "No Email"})`}
+                      >
+                        {`${admin.name || "Unknown"} (${admin.email || "No Email"})`}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+                {adminDetails}
+              </Col>
+            </Row>
+            <Form.Item>
+              <button type="submit" className="btn btn-primary" disabled={isLoading}>
+                Assign Admin
+              </button>
+              {error && <Alert message={error} type="error" style={{ marginTop: 16 }} />}
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        {/* Edit Assign Modal */}
+        <EditAssignModal />
+      </div>
     </div>
   );
 };

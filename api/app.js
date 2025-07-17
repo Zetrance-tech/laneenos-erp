@@ -30,6 +30,7 @@ import concessionRoute from './routes/concessionRouter.js';
 import expenseRoute from './routes/expenseRouter.js';
 import branchRoute from './routes/branchRouter.js';
 import cctvRoute from './routes/cctvRouter.js'
+import incomeRoute from './routes/incomeRouter.js'
 dotenv.config();
 const app = express();
 const MongoURL = process.env.MONGODB_URI;
@@ -63,6 +64,7 @@ app.use("/api/enquiry", enquiryRoute);
 app.use("/api/expenses", expenseRoute);
 app.use("/api/concession", concessionRoute);
 app.use("/api/cctv", cctvRoute);
+app.use("/api/income", incomeRoute);
 
 app.get("/", (req, res) => {
   res.send("hehehehe");

@@ -146,3 +146,15 @@ export const getCCTVsByBranchId = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+export const getCCTVCount = async (req, res) => {
+  try {
+    const { branchId } = req.user;
+    const total = await CCTV.countDocuments({ branchId });
+    const active = await CCTV.countDocuments({ branchId, status: "active" });
+    res.status(200).json({ total, active, inactive:total-active });
+  } catch (error) {
+    console.error("Error counting CCTVs:", error.message);
+    res.status(500).json({ message: error.message });
+  }
+};

@@ -187,19 +187,19 @@ const AddBranch: React.FC = () => {
       render: (admin: Branch["admin"]) => admin?.name || "Unassigned",
       sorter: (a: Branch, b: Branch) => (a.admin?.name || "").localeCompare(b.admin?.name || ""),
     },
-    // {
-    //   title: "Status",
-    //   dataIndex: "status",
-    //   render: (text: string) => (
-    //     <span
-    //       className={`badge badge-soft-${text === "active" ? "success" : "danger"} d-inline-flex align-items-center`}
-    //     >
-    //       <i className="ti ti-circle-filled fs-5 me-1"></i>
-    //       {text}
-    //     </span>
-    //   ),
-    //   sorter: (a: Branch, b: Branch) => a.status.localeCompare(b.status),
-    // },
+    {
+      title: "Status",
+      dataIndex: "status",
+      render: (text: string) => (
+        <span
+          className={`badge badge-soft-${text === "active" ? "success" : "danger"} d-inline-flex align-items-center`}
+        >
+          <i className="ti ti-circle-filled fs-5 me-1"></i>
+          {text}
+        </span>
+      ),
+      sorter: (a: Branch, b: Branch) => a.status.localeCompare(b.status),
+    },
     {
       title: "Action",
       dataIndex: "action",
@@ -575,6 +575,18 @@ const AddBranch: React.FC = () => {
                 <Input placeholder="e.g., 0987654321" />
               </Form.Item>
             </Col>
+            <Col span={12}>
+        <Form.Item
+          label="Status"
+          name="status"
+          rules={[{ required: true, message: "Please select status" }]}
+        >
+          <Select placeholder="Select status">
+            <Select.Option value="active">Active</Select.Option>
+            <Select.Option value="inactive">Inactive</Select.Option>
+          </Select>
+        </Form.Item>
+      </Col>
           </Row>
           <Form.Item>
             <button type="submit" className="btn btn-primary" disabled={isLoading}>

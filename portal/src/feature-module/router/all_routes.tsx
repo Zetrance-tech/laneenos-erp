@@ -225,6 +225,8 @@ export const all_routes = {
   addBranch:"/management/branch",
   addAdmin:"/management/add-admin",
   assignAdmin:"/management/assign-admin",
+  students:"/management/students",
+  staffs:"/management/staff",
   // Management
   feesGroup:"/management/fees-group",
   feesType:"/management/fees-type",
@@ -235,6 +237,7 @@ export const all_routes = {
   collectFees:"/management/collect-fees",
   feedetails:"/management/fee-details",
   expenses:"/management/expenses",
+  income:"/management/income",
   libraryMembers:"/management/library-members",
   libraryIssueBook:"/management/library-issue-book",
   libraryBooks:"/management/library-books",

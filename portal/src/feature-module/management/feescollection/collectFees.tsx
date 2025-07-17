@@ -1102,8 +1102,8 @@ const CollectStudentFees: React.FC = () => {
                                               fontSize: "13px",
                                             }}
                                           >
-                                            (₹{baseAmountPaid.toFixed(2)} + ₹
-                                            {gstAmountPaid.toFixed(2)} GST @18%)
+                                            {/* (₹{baseAmountPaid.toFixed(2)} + ₹
+                                            {gstAmountPaid.toFixed(2)} GST @18%) */}
                                           </span>
                                         </strong>
                                       </div>

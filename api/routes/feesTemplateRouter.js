@@ -10,6 +10,8 @@ import {
   assignFeesToStudents,
   getClassesWithTemplatesBySession,
   getAssignedStudents,
+  assignTemplateToStudent,
+  getTemplatesForStudent
 } from '../controllers/feesTemplateController.js';
 
 const router = express.Router();
@@ -17,6 +19,8 @@ import authMiddleware from '../middleware/auth.js';
 
 router.post('/', authMiddleware(['admin']), createFeeTemplate);
 router.get('/', authMiddleware(['admin', 'parent', 'teacher']), getAllFeeTemplates); 
+router.get('/student/templates/:studentId', authMiddleware(['admin', 'parent', 'teacher']), getTemplatesForStudent); 
+router.post('/student/assign-fees/:studentId', authMiddleware(['admin', 'parent', 'teacher']), assignTemplateToStudent); 
 router.get('/:id', authMiddleware(['admin', 'parent', 'teacher']), getFeeTemplateById);  
 router.put('/:id', authMiddleware(['admin']), updateFeeTemplate);
 router.delete('/:id', authMiddleware(['admin']), deleteFeeTemplate); 

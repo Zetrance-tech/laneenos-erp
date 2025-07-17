@@ -1721,3 +1721,68 @@ export const editFeesForMonth = async (req, res) => {
     res.status(500).json({ message: error.message || "Failed to edit fees" });
   }
 };
+
+
+export const getFeeCollectionByMonth = async (req, res) => {
+  try {
+    const monthOrder = [
+      'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 
+      'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'
+    ];
+    const feeData = await StudentFee.aggregate([
+  {
+    $group: {
+      _id: '$month',
+      totalFee: { $sum: '$amount' },
+      collectedFee: {
+        $sum: {
+          $cond: [
+            { $in: ['$status', ['paid', 'partially_paid']] },
+            '$amountPaid',
+            0
+          ]
+        }
+      }
+    }
+  },
+  {
+    $project: {
+      month: '$_id',
+      totalFee: 1,
+      collectedFee: 1,
+      _id: 0
+    }
+  },
+  {
+    // Add numeric index for sorting
+    $addFields: {
+      sortIndex: { $indexOfArray: [monthOrder, '$month'] }
+    }
+  },
+  {
+    $sort: { sortIndex: 1 }
+  },
+  {
+    $project: {
+      month: 1,
+      totalFee: 1,
+      collectedFee: 1
+    }
+  }
+]);
+
+    const result = monthOrder.map(month => {
+      const found = feeData.find(data => data.month === month);
+      return {
+        month,
+        totalFee: found ? found.totalFee : 0,
+        collectedFee: found ? found.collectedFee : 0
+      };
+    });
+
+    res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    console.error('Error fetching fee collection data:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};

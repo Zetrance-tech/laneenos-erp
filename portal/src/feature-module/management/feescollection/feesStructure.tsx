@@ -1083,12 +1083,9 @@ import TooltipOption from "../../../core/common/tooltipOption";
 import axios from "axios";
 import toast from "react-hot-toast";
 import { Modal, Button } from "react-bootstrap";
+import { useAuth } from "../../../context/AuthContext";
 
-const config = {
-  headers: {
-    Authorization: `Bearer ${localStorage.getItem("token")}`,
-  },
-};
+
 
 interface Session {
   _id: string;
@@ -1150,6 +1147,12 @@ const FeeTemplateManager: React.FC = () => {
   const [showEditTemplateModal, setShowEditTemplateModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
+  const token = useAuth();
+  const config = {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  };
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -1463,6 +1466,12 @@ const AddFeeTemplateModal: React.FC<AddFeeTemplateModalProps> = ({
     fees: [{ feesGroup: "", amount: 0 }] as FeeDetail[],
     status: "Active" as "Active" | "Inactive",
   });
+  const token = useAuth();
+  const config = {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  };
 
   useEffect(() => {
     if (show) {
@@ -1680,8 +1689,16 @@ const EditFeeTemplateModal: React.FC<EditFeeTemplateModalProps> = ({
     fees: [] as FeeDetail[],
     status: "Active" as "Active" | "Inactive",
   });
+  const token = useAuth();
 
+    const config = {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    };
   const handleTemplateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    
+
     const templateId = e.target.value;
     setSelectedTemplateId(templateId);
     const template = templates.find((t) => t?._id === templateId);
@@ -1978,7 +1995,12 @@ const AssignTemplateModal: React.FC<AssignTemplateModalProps> = ({
 }) => {
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
+  const token = useAuth();
+  const config = {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    };
   useEffect(() => {
     if (selectedTemplate) {
       // setSelectedClassIds(selectedTemplate.classIds.map((c) => (typeof c === "string" ? c : c._id)));

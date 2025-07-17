@@ -1,8 +1,9 @@
 import Teacher from "../models/teacher.js";
 import User from "../models/user.js";
 import bcrypt from "bcryptjs";
-
+import mongoose from "mongoose";
 import Counter from "../models/counter.js";
+import Branch from "../models/branch.js";
 
 export const getNextSequence = async (type, branchId) => {
   const counter = await Counter.findOneAndUpdate(
@@ -17,13 +18,13 @@ export const generateId = async (entityType, branchId) => {
   const sequence = await getNextSequence(entityType, branchId);
   switch (entityType) {
     case "class":
-      return `LN-144-C${String(sequence).padStart(3, "0")}`; // LN-144-C001
+      return `LN-C${String(sequence).padStart(3, "0")}`;
     case "session":
-      return `LN-144-S${String(sequence).padStart(3, "0")}`; // LN-144-S001
+      return `LN-S${String(sequence).padStart(3, "0")}`;
     case "student":
-      return `LNS-144-${sequence}`; // LNS-144-1
+      return `LNS-${sequence}`;
     case "teacher":
-      return `LNE-144-${sequence}`; // LNE-144-1
+      return `LNE-${sequence}`;
     default:
       throw new Error("Invalid entity type");
   }
@@ -35,7 +36,7 @@ export const getNextStaffId = async (req, res) => {
     const branchId = req.user.branchId;
     const counter = await Counter.findOne({ type: "teacher_id", branchId });
     const sequence = counter ? counter.sequence + 1 : 1;
-    const id = `LNE-144-${sequence}`;
+    const id = `LNE-${sequence}`;
     res.status(200).json({ id });
   } catch (error) {
     console.error(`Error generating teacher ID: ${error.message}`);
@@ -152,6 +153,44 @@ export const createTeacher = async (req, res) => {
   } catch (error) {
     console.error("Error adding teacher:", error.message);
     res.status(500).json({ message: error.message });
+  }
+};
+
+
+export const getAllStaffForSuperadmin = async (req, res) => {
+  try {
+    const { branchId, sessionId, classId, role } = req.query;
+    const query = {};
+
+    if (branchId) query.branchId = branchId;
+    if (role) query.role = role;
+
+    // Add class filter if needed (assuming teachers might be associated with classes)
+    if (classId) {
+      query['class'] = classId;
+    }
+
+    const staff = await Teacher.find(query)
+      .populate({
+        path: 'branchId',
+        select: 'name',
+        model: Branch
+      })
+      .populate('userId', 'email')
+      .select('-__v -createdAt -updatedAt -documents');
+
+    res.status(200).json({ 
+      success: true, 
+      data: staff,
+      count: staff.length
+    });
+  } catch (error) {
+    console.error('Error fetching staff:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error',
+      error: error.message 
+    });
   }
 };
 
@@ -286,3 +325,30 @@ export const deleteTeacher = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
+export const countTeacher = async (req, res) => {
+  try {
+    const { branchId } = req.user;
+
+    const allTeachers = await mongoose.model("Teacher").find({ branchId }).populate({
+      path: "userId",
+      select: "status",
+    });
+
+    let active = 0, inactive = 0;
+
+    for (const teacher of allTeachers) {
+      if (teacher.userId?.status === "active") active++;
+      else if (teacher.userId?.status === "inactive") inactive++;
+    }
+
+    const total = allTeachers.length;
+
+    res.status(200).json({ total, active, inactive });
+  } catch (error) {
+    console.error("Error counting teachers:", error.message);
+    res.status(500).json({ message: error.message });
+  }
+};
+

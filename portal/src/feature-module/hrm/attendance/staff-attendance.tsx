@@ -4,7 +4,6 @@ import { Spin } from "antd";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
 import Table from "../../../core/common/dataTable/index";
-import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import { all_routes } from "../../router/all_routes";
 import TooltipOption from "../../../core/common/tooltipOption";
 import { Toaster, toast } from "react-hot-toast";
@@ -63,9 +62,12 @@ const StaffAttendance: React.FC = () => {
   const fetchRoles = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(`${API_URL}/api/attendance/staff/roles`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await axios.get(
+        `${API_URL}/api/attendance/staff/roles`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
 
       const filteredRoles = (response.data || []).filter(
         (role: string) => role !== "admin" && role !== "parent"
@@ -101,7 +103,6 @@ const StaffAttendance: React.FC = () => {
       setStaff(fetchedStaff);
     } catch (error) {
       console.error("Error fetching staff:", error);
-      // toast.error("Failed to fetch staff.");
     } finally {
       setLoading(false);
     }
@@ -139,7 +140,9 @@ const StaffAttendance: React.FC = () => {
       return;
     }
     if (status === "Present" && (!inTime || !outTime)) {
-      toast.error("Please provide both In Time and Out Time for Present status.");
+      toast.error(
+        "Please provide both In Time and Out Time for Present status."
+      );
       return;
     }
 
@@ -210,7 +213,9 @@ const StaffAttendance: React.FC = () => {
 
   const handleSaveEdit = async (staffId: string) => {
     if (editStatus === "Present" && (!editInTime || !editOutTime)) {
-      toast.error("Please provide both In Time and Out Time for Present status.");
+      toast.error(
+        "Please provide both In Time and Out Time for Present status."
+      );
       return;
     }
     setLoading(true);
@@ -299,19 +304,21 @@ const StaffAttendance: React.FC = () => {
           </div>
         </div>
       ),
-      sorter: (a: Staff, b: Staff) => (a.name || "").localeCompare(b.name || ""),
+      sorter: (a: Staff, b: Staff) =>
+        (a.name || "").localeCompare(b.name || ""),
     },
     {
       title: "Role",
       dataIndex: "role",
       render: (text: string | null) => text || "N/A",
-      sorter: (a: Staff, b: Staff) => (a.role || "").localeCompare(b.role || ""),
+      sorter: (a: Staff, b: Staff) =>
+        (a.role || "").localeCompare(b.role || ""),
     },
     {
       title: "Status",
       dataIndex: "status",
       render: (text: string | null, record: Staff) => (
-        <div className="d-flex align-items-center" style={{ minWidth: "400px" }}>
+        <div className="d-flex align-items-center">
           {isEditing === record._id ? (
             <>
               <select
@@ -326,26 +333,6 @@ const StaffAttendance: React.FC = () => {
                   </option>
                 ))}
               </select>
-              {editStatus === "Present" && (
-                <>
-                  <input
-                    type="time"
-                    value={editInTime}
-                    onChange={(e) => setEditInTime(e.target.value)}
-                    className="form-control me-2"
-                    style={{ width: "120px" }}
-                    placeholder="In Time"
-                  />
-                  <input
-                    type="time"
-                    value={editOutTime}
-                    onChange={(e) => setEditOutTime(e.target.value)}
-                    className="form-control me-2"
-                    style={{ width: "120px" }}
-                    placeholder="Out Time"
-                  />
-                </>
-              )}
               <button
                 className="btn btn-sm btn-success me-2"
                 onClick={() => handleSaveEdit(record._id || "")}
@@ -362,16 +349,6 @@ const StaffAttendance: React.FC = () => {
           ) : (
             <>
               <span style={{ minWidth: "80px" }}>{text || "Not Marked"}</span>
-              {text === "Present" && (
-                <>
-                  <span style={{ minWidth: "80px" }}>
-                    In: {record.inTime || "N/A"}
-                  </span>
-                  <span style={{ minWidth: "80px" }}>
-                    Out: {record.outTime || "N/A"}
-                  </span>
-                </>
-              )}
               <button
                 className="btn btn-sm btn-outline-primary ms-2"
                 onClick={() =>
@@ -389,13 +366,53 @@ const StaffAttendance: React.FC = () => {
           )}
         </div>
       ),
-      sorter: (a: Staff, b: Staff) => (a.status || "").localeCompare(b.status || ""),
+      sorter: (a: Staff, b: Staff) =>
+        (a.status || "").localeCompare(b.status || ""),
+    },
+    {
+      title: "In Time",
+      dataIndex: "inTime",
+      render: (text: string | null, record: Staff) => (
+        <div className="d-flex align-items-center">
+          {isEditing === record._id && editStatus === "Present" ? (
+            <input
+              type="time"
+              value={editInTime}
+              onChange={(e) => setEditInTime(e.target.value)}
+              className="form-control"
+              style={{ width: "120px" }}
+              placeholder="In Time"
+            />
+          ) : (
+            <span>{record.status === "Present" ? text || "N/A" : "-"}</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: "Out Time",
+      dataIndex: "outTime",
+      render: (text: string | null, record: Staff) => (
+        <div className="d-flex align-items-center">
+          {isEditing === record._id && editStatus === "Present" ? (
+            <input
+              type="time"
+              value={editOutTime}
+              onChange={(e) => setEditOutTime(e.target.value)}
+              className="form-control"
+              style={{ width: "120px" }}
+              placeholder="Out Time"
+            />
+          ) : (
+            <span>{record.status === "Present" ? text || "N/A" : "-"}</span>
+          )}
+        </div>
+      ),
     },
   ];
 
   return (
     <div>
-      {/* <Toaster /> */}
       <div className="page-wrapper">
         <div className="content">
           <div className="d-md-flex d-block align-items-center justify-content-between mb-3">
@@ -439,11 +456,13 @@ const StaffAttendance: React.FC = () => {
                     disabled={roles.length === 1 && role === "teacher"}
                   >
                     <option value="all">All Roles</option>
-                    {roles.filter((r) => r !== "all").map((r) => (
-                      <option key={r} value={r}>
-                        {r}
-                      </option>
-                    ))}
+                    {roles
+                      .filter((r) => r !== "all")
+                      .map((r) => (
+                        <option key={r} value={r}>
+                          {r}
+                        </option>
+                      ))}
                   </select>
                 </div>
                 <div className="mb-3 me-2 w-50">

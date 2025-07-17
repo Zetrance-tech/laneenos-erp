@@ -78,8 +78,8 @@ export const createBranch = async (req, res) => {
   }
 };
 
-export const assignBranch = async(req, res)=>{
-    try {
+export const assignBranch = async (req, res) => {
+  try {
     const { branchId, adminId } = req.body;
 
     // Validate inputs
@@ -96,13 +96,22 @@ export const assignBranch = async(req, res)=>{
     if (!admin || admin.role !== "admin") {
       return res.status(400).json({ message: "Invalid admin user" });
     }
-    await User.findByIdAndUpdate(adminId, { branchId });
 
-    res.json({ message: "Admin assigned to branch successfully" });
+    // Unassign any existing admin for this branch
+    await User.findOneAndUpdate(
+      { role: "admin", branchId },
+      { $unset: { branchId: "" } }
+    );
+
+    // Assign the new admin
+    await User.findByIdAndUpdate(adminId, { branchId }, { new: true });
+
+    res.status(200).json({ message: "Admin assigned to branch successfully" });
   } catch (error) {
+    console.error("assignBranch error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
-}
+};
 
 // export const getAllBranches = async(req, res)=>{
 //   try {
@@ -127,34 +136,11 @@ export const getAllBranches = async (req, res) => {
         };
       })
     );
-
     res.json(branchesWithAdmin);
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
-
-// export const getBranchById = async (req, res) => {
-//   try {
-//     const id = req.user.branchId;
-//     const role = req.user.role;
-
-//     if (role === 'superadmin') {
-//       return res.json({ name: "Branch" });
-//     }
-
-//     const branch = await Branch.findById(id);
-
-//     if (!branch) {
-//       return res.status(404).json({ message: "Branch not found" });
-//     }
-
-//     res.json(branch);
-//   } catch (error) {
-//     res.status(500).json({ message: "Server error", error: error.message });
-//   }
-// };
 
 
 export const getBranchById = async (req, res) => {
@@ -266,6 +252,57 @@ export const editBranch = async (req, res) => {
 
     res.json(branch);
   } catch (error) {
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+
+export const deleteBranch = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const branch = await Branch.findById(id);
+    if (!branch) {
+      return res.status(404).json({ message: "Branch not found" });
+    }
+
+    await User.updateMany({ branchId: id }, { $unset: { branchId: "" } });
+    await Branch.findByIdAndDelete(id);
+
+    res.json({ message: "Branch deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+
+export const unassignBranchAdmin = async (req, res) => {
+  try {
+    const { branchId } = req.body;
+
+    // Validate inputs
+    if (!branchId) {
+      return res.status(400).json({ message: "Branch ID is required" });
+    }
+
+    const branch = await Branch.findById(branchId);
+    if (!branch) {
+      return res.status(404).json({ message: "Branch not found" });
+    }
+
+    // Find and update the admin assigned to this branch
+    const admin = await User.findOneAndUpdate(
+      { role: "admin", branchId },
+      { $unset: { branchId: "" } },
+      { new: true }
+    );
+
+    if (!admin) {
+      return res.status(200).json({ message: "No admin was assigned to this branch" });
+    }
+
+    res.status(200).json({ message: "Admin unassigned from branch successfully" });
+  } catch (error) {
+    console.error("unassignBranchAdmin error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };

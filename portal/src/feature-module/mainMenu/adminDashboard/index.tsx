@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { act, useState } from "react";
 import ReactApexChart from "react-apexcharts";
 import { Link } from "react-router-dom";
 import CountUp from "react-countup";
@@ -6,6 +6,7 @@ import { Calendar } from "primereact/calendar";
 import { Nullable } from "primereact/ts-helpers";
 import "bootstrap-daterangepicker/daterangepicker.css";
 import ImageWithBasePath from "../../../core/common/imageWithBasePath";
+import { ApexOptions } from "apexcharts";
 import { all_routes } from "../../router/all_routes";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
@@ -14,6 +15,43 @@ import AdminDashboardModal from "./adminDashboardModal";
 import { useEffect } from "react";
 import axios from "axios";
 import apiService from "../../../api/main";
+
+interface Consent {
+  _id: string;
+  title: string;
+  description: string;
+  validity: string;
+  sessionId: { _id: string; name?: string };
+  classId: { _id: string; name?: string };
+  branchId: { _id: string; name?: string };
+  createdAt: string;
+  updatedAt: string;
+  __v: number;
+  createdBy?: { _id: string; name: string };
+}
+interface AttendanceRecord {
+  id: string;
+  admissionNo: string;
+  name: string;
+  status: "Present" | "Absent" | "Late" | null;
+}
+interface CCTV {
+  _id?: string;
+  cctvId: string;
+  cctvName: string;
+  cctvLink: string;
+  photoUrl?: string;
+  description?: string;
+  status: "active" | "inactive";
+  createdBy?: {
+    name: string;
+    email: string;
+  };
+  branchId?: {
+    name: string;
+    branchId: string;
+  };
+}
 
 interface Student {
   fatherInfo: {
@@ -53,10 +91,10 @@ interface Student {
   academicYear: string;
   admissionNumber: string;
   admissionDate: string;
-  status: 'active' | 'inactive';
+  status: "active" | "inactive";
   name: string;
   dateOfBirth: string;
-  gender: 'male' | 'female';
+  gender: "male" | "female";
   bloodGroup: string;
   religion: string;
   category: string;
@@ -66,7 +104,7 @@ interface Student {
   permanentAddress: string;
   email: string;
   password: string;
-  role: 'student';
+  role: "student";
   __v: number;
 }
 const API_URL = process.env.REACT_APP_URL;
@@ -86,7 +124,7 @@ interface Event {
     fileFormat: string;
   };
 }
-interface Notice{
+interface Notice {
   _id: string;
   title: string;
   noticeDate: string;
@@ -117,24 +155,47 @@ const AdminDashboard = () => {
   const [inactiveStudents, setInactiveStudents] = useState(0);
   const [inactiveStudentPercentage, setInactiveStudentPercentage] = useState(0);
   const [notices, setNotices] = useState<Notice[]>([]);
+  const [consents, setConsents] = useState<Consent[]>([]);
   const [loading, setLoading] = useState(false);
-
+  const [teacherCount, setTeacherCount] = useState(0);
+  const [cctvCount, setCctvCount] = useState<{
+    total: number;
+    active: number;
+    inactive: number;
+  }>({ total: 0, active: 0, inactive: 0 });
+  const [classCount, setClassCount] = useState(0);
+  const [activeTeachers, setActiveTeachers] = useState(0);
+  const [inactiveTeachers, setInactiveTeachers] = useState(0);
+  const [attendancesummary, setAttendancesummary] = useState({
+    present: 0,
+    absent: 0,
+    notMarked: 0,
+  });
+  const [staffAttendancesummary, setStaffAttendancesummary] = useState({
+    present: 0,
+    absent: 0,
+    notMarked: 0,
+  });
   useEffect(() => {
     const fetchStudents = async () => {
       setLoading(true);
       try {
-        const data = await apiService.getAllStudents(token || '');
+        const data = await apiService.getAllStudents(token || "");
         setStudents(data);
         const total = data.length;
-        const active = data.filter((student: Student) => student.status === 'active').length;
-        const inactive = data.filter((student: Student) => student.status === 'inactive').length;
+        const active = data.filter(
+          (student: Student) => student.status === "active"
+        ).length;
+        const inactive = data.filter(
+          (student: Student) => student.status === "inactive"
+        ).length;
         const percentage = total > 0 ? (inactive / total) * 100 : 0;
         setTotalStudents(total);
         setActiveStudents(active);
         setInactiveStudents(inactive);
         setInactiveStudentPercentage(percentage);
       } catch (error) {
-        console.error('Error fetching students:', error);
+        console.error("Error fetching students:", error);
       } finally {
         setLoading(false);
       }
@@ -149,10 +210,11 @@ const AdminDashboard = () => {
         const response = await axios.get(`${API_URL}/api/notices`, {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
-          }});
+          },
+        });
         setNotices(response.data);
       } catch (error) {
-        console.error('Error fetching students:', error);
+        console.error("Error fetching students:", error);
       } finally {
         setLoading(false);
       }
@@ -160,7 +222,185 @@ const AdminDashboard = () => {
     fetchNotices();
   }, []);
 
+  useEffect(() => {
+    const fetchCount = async () => {
+      setLoading(true);
+      try {
+        const response = await axios.get(
+          `${API_URL}/api/teacher/count-teacher`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          }
+        );
+        setTeacherCount(response.data.total);
+        console.log(response.data);
+        setActiveTeachers(response.data.active);
+        setInactiveTeachers(response.data.inactive);
+      } catch (error) {
+        console.error("Error fetching staff count:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCount();
+  }, []);
+  useEffect(() => {
+    const fetchConsents = async () => {
+      setLoading(true);
+      try {
+        const response = await axios.get(`${API_URL}/api/consent/admin`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        });
+        setConsents(response.data);
+      } catch (error) {
+        console.error("Error fetching consents:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchConsents();
+  }, []);
+  useEffect(() => {
+    const fetchClassCount = async () => {
+      setLoading(true);
+      try {
+        const response = await axios.get(`${API_URL}/api/class/count-class`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        });
+        setClassCount(response.data.count);
+      } catch (error) {
+        console.error("Error fetching class cpunt:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchClassCount();
+  }, []);
+  useEffect(() => {
+    const fetchCCTVCount = async () => {
+      setLoading(true);
+      try {
+        const response = await axios.get<{
+          total: number;
+          active: number;
+          inactive: number;
+        }>(`${API_URL}/api/cctv/count/cctv`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        });
+        setCctvCount(response.data);
+      } catch (error) {
+        console.error("Error fetching CCTV count:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCCTVCount();
+  }, []);
 
+  useEffect(() => {
+    const fetchStudentAttendance = async () => {
+      setLoading(true);
+      try {
+        const res = await axios.get(
+          `${API_URL}/api/attendance/attendance-data/data`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          }
+        );
+        console.log("Attendance API response:", res.data);
+
+        // Validate response structure
+        if (
+          !res.data.summary ||
+          typeof res.data.summary.present !== "number" ||
+          typeof res.data.summary.absent !== "number" ||
+          typeof res.data.summary.notMarked !== "number"
+        ) {
+          throw new Error("Invalid attendance summary format");
+        }
+
+        const { present, absent, notMarked } = res.data.summary;
+        setAttendancesummary({ present, absent, notMarked });
+        setStudentDonutChart((prev: any) => ({
+          ...prev,
+          series: [present, absent, notMarked], // Update series dynamically
+        }));
+        console.log("Attendance summary updated:", {
+          present,
+          absent,
+          notMarked,
+        });
+      } catch (err) {
+        console.error("Error fetching student attendance:", err);
+        setAttendancesummary({ present: 0, absent: 0, notMarked: 0 });
+        setStudentDonutChart((prev: any) => ({
+          ...prev,
+          series: [0, 0, 0],
+        }));
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchStudentAttendance();
+  }, []);
+  useEffect(() => {
+    const fetchStaffAttendance = async () => {
+      setLoading(true);
+      try {
+        const res = await axios.get(
+          `${API_URL}/api/attendance/staff-attendance/data`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          }
+        );
+        console.log("Attendance API response:", res.data);
+
+        // Validate response structure
+        if (
+          !res.data.summary ||
+          typeof res.data.summary.present !== "number" ||
+          typeof res.data.summary.absent !== "number" ||
+          typeof res.data.summary.notMarked !== "number"
+        ) {
+          throw new Error("Invalid attendance summary format");
+        }
+
+        const { present, absent, notMarked } = res.data.summary;
+        setStaffAttendancesummary({ present, absent, notMarked });
+        setTeacherDonutChart((prev: any) => ({
+          ...prev,
+          series: [present, absent, notMarked], // Update series dynamically
+        }));
+        console.log("Attendance summary updated:", {
+          present,
+          absent,
+          notMarked,
+        });
+      } catch (err) {
+        console.error("Error fetching staff attendance:", err);
+        setStaffAttendancesummary({ present: 0, absent: 0, notMarked: 0 });
+        setStudentDonutChart((prev: any) => ({
+          ...prev,
+          series: [0, 0, 0],
+        }));
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchStaffAttendance();
+  }, []);
   function SamplePrevArrow(props: any) {
     const { style, onClick } = props;
     return (
@@ -235,56 +475,60 @@ const AdminDashboard = () => {
     nextArrow: <SampleNextArrow />,
     prevArrow: <SamplePrevArrow />,
   };
-  const [studentDonutChart] = useState<any>({
-    chart: {
-      height: 218,
-      width: 218,
-      type: "donut",
-      toolbar: {
-        show: false,
-      },
-    },
-    legend: {
+  const [studentDonutChart, setStudentDonutChart] = useState<any>({
+  chart: {
+    height: 218,
+    width: 218,
+    type: "donut",
+    toolbar: {
       show: false,
     },
-    colors: ["#3D5EE1", "#6FCCD8"],
-    series: [3610, 44],
-    responsive: [
-      {
-        breakpoint: 480,
-        options: {
-          chart: {
-            width: 180,
-          },
+  },
+  legend: {
+    show: false,
+  },
+  labels: ["Present", "Absent", "Not Marked"], // ✅ Add labels here
+  colors: ["#3D5EE1", "#6FCCD8", "#EAB300"],
+  series: [0, 0, 0],
+  responsive: [
+    {
+      breakpoint: 480,
+      options: {
+        chart: {
+          width: 180,
         },
       },
-    ],
-  });
-  const [teacherDonutChart] = useState<any>({
-    chart: {
-      height: 218,
-      width: 218,
-      type: "donut",
-      toolbar: {
-        show: false,
-      },
     },
-    legend: {
+  ],
+});
+
+  const [teacherDonutChart, setTeacherDonutChart] = useState<any>({
+  chart: {
+    height: 218,
+    width: 218,
+    type: "donut",
+    toolbar: {
       show: false,
     },
-    colors: ["#3D5EE1", "#6FCCD8"],
-    series: [346, 54],
-    responsive: [
-      {
-        breakpoint: 480,
-        options: {
-          chart: {
-            width: 180,
-          },
+  },
+  legend: {
+    show: false,
+  },
+  labels: ["Present", "Absent", "Not Marked"], // ✅ Added labels
+  colors: ["#3D5EE1", "#6FCCD8", "#EAB300"],
+  series: [346, 54],
+  responsive: [
+    {
+      breakpoint: 480,
+      options: {
+        chart: {
+          width: 180,
         },
       },
-    ],
-  });
+    },
+  ],
+});
+
   const [staffDonutChart] = useState<any>({
     chart: {
       height: 218,
@@ -348,7 +592,7 @@ const AdminDashboard = () => {
       },
     ],
   });
-  const [feesBar] = useState<any>({
+    const [feesBar, setFeesBar] = useState<any>({
     chart: {
       height: 275,
       type: "bar",
@@ -390,24 +634,27 @@ const AdminDashboard = () => {
     series: [
       {
         name: "Collected Fee",
-        data: [30, 40, 38, 40, 38, 30, 35, 38, 40],
+        data: Array(12).fill(0), // Placeholder for 12 months
       },
       {
         name: "Total Fee",
-        data: [45, 50, 48, 50, 48, 40, 40, 50, 55],
+        data: Array(12).fill(0), // Placeholder for 12 months
       },
     ],
     xaxis: {
       categories: [
-        "Q1: 2023",
-        "Q1: 2023",
-        "Q1: 2023",
-        "Q1: 2023",
-        "Q1: 2023",
-        "uQ1: 2023l",
-        "Q1: 2023",
-        "Q1: 2023",
-        "Q1: 2023",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+        "Jan",
+        "Feb",
+        "Mar",
       ],
     },
     yaxis: {
@@ -422,41 +669,16 @@ const AdminDashboard = () => {
     tooltip: {
       y: {
         formatter: function (val: any) {
-          return "$ " + val + " thousands";
+          return "₹ " + (val).toFixed(1) + "k";
         },
       },
     },
   });
-  const [totalEarningArea] = useState<any>({
-    chart: {
-      height: 90,
-      type: "area",
-      toolbar: {
-        show: false,
-      },
-      sparkline: {
-        enabled: true,
-      },
-    },
-    colors: ["#3D5EE1"],
-    dataLabels: {
-      enabled: false,
-    },
-    stroke: {
-      curve: "straight",
-    },
-    series: [
-      {
-        name: "Earnings",
-        data: [50, 55, 40, 50, 45, 55, 50],
-      },
-    ],
-  });
   const currentDate = new Date();
-  const formattedDate = currentDate.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
+  const formattedDate = currentDate.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
   });
   const [totalExpenseArea] = useState<any>({
     chart: {
@@ -484,7 +706,7 @@ const AdminDashboard = () => {
     ],
   });
   const [events, setEvents] = useState<Event[]>([]);
-  
+
   const getDaysRemaining = (noticeDate: string) => {
     const today = new Date();
     const notice = new Date(noticeDate);
@@ -496,13 +718,11 @@ const AdminDashboard = () => {
   useEffect(() => {
     const fetchEvents = async () => {
       try {
-        const response = await axios.get(
-          `${API_URL}/api/events/get`,
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            }}
-        );
+        const response = await axios.get(`${API_URL}/api/events/get`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        });
         if (response.data && Array.isArray(response.data.events)) {
           setEvents(response.data.events);
         } else {
@@ -517,8 +737,10 @@ const AdminDashboard = () => {
 
     fetchEvents();
   }, []);
-  const token = localStorage.getItem('token');
-  const user = JSON.parse(localStorage.getItem("user") ?? JSON.stringify({ role: "student" }));
+  const token = localStorage.getItem("token");
+  const user = JSON.parse(
+    localStorage.getItem("user") ?? JSON.stringify({ role: "student" })
+  );
   const formatEventDate = (dateString: any) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("en-US", {
@@ -531,7 +753,43 @@ const AdminDashboard = () => {
   const formatEventTime = (timeString: any) => {
     return timeString;
   };
+useEffect(() => {
+    const fetchFeeCollection = async () => {
+      setLoading(true);
+      try {
+        const response = await axios.get(`${API_URL}/api/studentFees/fees-collection-summary`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        });
+        const feeData = response.data.data;
+        
+        // Map data to chart series
+        const collectedFeeData = feeData.map((item: any) => item.collectedFee / 1000); // Convert to thousands
+        const totalFeeData = feeData.map((item: any) => item.totalFee / 1000); // Convert to thousands
 
+        setFeesBar((prev: any) => ({
+          ...prev,
+          series: [
+            {
+              name: "Collected Fee",
+              data: collectedFeeData,
+            },
+            {
+              name: "Total Fee",
+              data: totalFeeData,
+            },
+          ],
+        }));
+      } catch (error) {
+        console.error("Error fetching fee collection data:", error);
+        // Keep placeholder data or handle error as needed
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchFeeCollection();
+  }, []);
   return (
     <>
       {/* Page Wrapper */}
@@ -553,59 +811,10 @@ const AdminDashboard = () => {
                   </ol>
                 </nav>
               </div>
-              <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">
-                {/* <div className="mb-2">
-                  <Link
-                    to={routes.addStudent}
-                    className="btn btn-primary d-flex align-items-center me-3"
-                  >
-                    <i className="ti ti-square-rounded-plus me-2" />
-                    Add New Student
-                  </Link>
-                </div>
-                <div className="mb-2">
-                  <Link
-                    to={routes.collectFees}
-                    className="btn btn-light d-flex align-items-center"
-                  >
-                    Fees Details
-                  </Link>
-                </div> */}
-              </div>
             </div>
             {/* /Page Header */}
             <div className="row">
               <div className="col-md-12">
-                <div className="alert-message">
-                  {/* <div
-                    className="alert alert-success rounded-pill d-flex align-items-center justify-content-between border-success mb-4"
-                    role="alert"
-                  >
-                    <div className="d-flex align-items-center">
-                      <span className="me-1 avatar avatar-sm flex-shrink-0">
-                        <ImageWithBasePath
-                          src="assets/img/profiles/avatar-27.jpg"
-                          alt="Img"
-                          className="img-fluid rounded-circle"
-                        />
-                      </span>
-                      <p>
-                        Fahed III,C has paid Fees for the{" "}
-                        <strong className="mx-1">“Term1”</strong>
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn-close p-0"
-                      data-bs-dismiss="alert"
-                      aria-label="Close"
-                    >
-                      <span>
-                        <i className="ti ti-x" />
-                      </span>
-                    </button>
-                  </div> */}
-                </div>
                 {/* Dashboard Content */}
                 <div className="card bg-dark">
                   <div className="overlay-img">
@@ -663,25 +872,34 @@ const AdminDashboard = () => {
                   <div className="card-body">
                     <div className="d-flex align-items-center">
                       <div className="avatar avatar-xl bg-danger-transparent me-2 p-1">
-                        <ImageWithBasePath src="assets/img/icons/student.svg" alt="img" />
+                        <ImageWithBasePath
+                          src="assets/img/icons/student.svg"
+                          alt="img"
+                        />
                       </div>
                       <div className="overflow-hidden flex-fill">
                         <div className="d-flex align-items-center justify-content-between">
                           <h2 className="counter">
                             <CountUp end={totalStudents} duration={2} />
                           </h2>
-                          <span className="badge bg-danger">{inactiveStudentPercentage}%</span>
+                          <span className="badge bg-danger"></span>
                         </div>
                         <p>Total Students</p>
                       </div>
                     </div>
                     <div className="d-flex align-items-center justify-content-between border-top mt-3 pt-3">
                       <p className="mb-0">
-                        Active : <span className="text-dark fw-semibold">{activeStudents}</span>
+                        Active :{" "}
+                        <span className="text-dark fw-semibold">
+                          {activeStudents}
+                        </span>
                       </p>
                       <span className="text-light">|</span>
                       <p>
-                        Inactive : <span className="text-dark fw-semibold">{inactiveStudents}</span>
+                        Inactive :{" "}
+                        <span className="text-dark fw-semibold">
+                          {inactiveStudents}
+                        </span>
                       </p>
                     </div>
                   </div>
@@ -702,29 +920,33 @@ const AdminDashboard = () => {
                       <div className="overflow-hidden flex-fill">
                         <div className="d-flex align-items-center justify-content-between">
                           <h2 className="counter">
-                            <CountUp end={284} />
+                            <CountUp end={teacherCount} />
                           </h2>
-                          <span className="badge bg-pending">1.2%</span>
+                          <span className="badge bg-pending"></span>
                         </div>
-                        <p>Total Teachers</p>
+                        <p>Total Staff</p>
                       </div>
                     </div>
                     <div className="d-flex align-items-center justify-content-between border-top mt-3 pt-3">
                       <p className="mb-0">
                         Active :{" "}
-                        <span className="text-dark fw-semibold">254</span>
+                        <span className="text-dark fw-semibold">
+                          {activeTeachers}
+                        </span>
                       </p>
                       <span className="text-light">|</span>
                       <p>
                         Inactive :{" "}
-                        <span className="text-dark fw-semibold">30</span>
+                        <span className="text-dark fw-semibold">
+                          {inactiveTeachers}
+                        </span>
                       </p>
                     </div>
                   </div>
                 </div>
               </div>
               {/* /Total Teachers */}
-              {/* Total Staff */}
+              {/* Total Classes */}
               <div className="col-xxl-3 col-sm-6 d-flex">
                 <div className="card flex-fill animate-card border-0">
                   <div className="card-body">
@@ -738,58 +960,64 @@ const AdminDashboard = () => {
                       <div className="overflow-hidden flex-fill">
                         <div className="d-flex align-items-center justify-content-between">
                           <h2 className="counter">
-                            <CountUp end={162} />
+                            <CountUp end={classCount} />
                           </h2>
-                          <span className="badge bg-warning">1.2%</span>
+                          <span className="badge bg-warning"></span>
                         </div>
-                        <p>Total Staff</p>
+                        <p>Total Classes</p>
                       </div>
                     </div>
                     <div className="d-flex align-items-center justify-content-between border-top mt-3 pt-3">
                       <p className="mb-0">
                         Active :{" "}
-                        <span className="text-dark fw-semibold">161</span>
+                        <span className="text-dark fw-semibold">
+                          {classCount}
+                        </span>
                       </p>
                       <span className="text-light">|</span>
                       <p>
                         Inactive :{" "}
-                        <span className="text-dark fw-semibold">02</span>
+                        <span className="text-dark fw-semibold">0</span>
                       </p>
                     </div>
                   </div>
                 </div>
               </div>
               {/* /Total Staff */}
-              {/* Total Subjects */}
+              {/* Total CCTV */}
               <div className="col-xxl-3 col-sm-6 d-flex">
                 <div className="card flex-fill animate-card border-0">
                   <div className="card-body">
                     <div className="d-flex align-items-center">
                       <div className="avatar avatar-xl me-2 bg-success-transparent p-1">
                         <ImageWithBasePath
-                          src="assets/img/icons/subject.svg"
+                          src="assets/img/icons/company-icon-09.svg"
                           alt="img"
                         />
                       </div>
                       <div className="overflow-hidden flex-fill">
                         <div className="d-flex align-items-center justify-content-between">
                           <h2 className="counter">
-                            <CountUp end={82} />
+                            <CountUp end={cctvCount.total} />
                           </h2>
-                          <span className="badge bg-success">1.2%</span>
+                          <span className="badge bg-success"></span>
                         </div>
-                        <p>Total Subjects</p>
+                        <p>Total CCTV</p>
                       </div>
                     </div>
                     <div className="d-flex align-items-center justify-content-between border-top mt-3 pt-3">
                       <p className="mb-0">
                         Active :{" "}
-                        <span className="text-dark fw-semibold">81</span>
+                        <span className="text-dark fw-semibold">
+                          {cctvCount.active}
+                        </span>
                       </p>
                       <span className="text-light">|</span>
                       <p>
                         Inactive :{" "}
-                        <span className="text-dark fw-semibold">01</span>
+                        <span className="text-dark fw-semibold">
+                          {cctvCount.inactive}
+                        </span>
                       </p>
                     </div>
                   </div>
@@ -798,102 +1026,65 @@ const AdminDashboard = () => {
               {/* /Total Subjects */}
             </div>
             <div className="row">
-              {/* Schedules */}
-              <div className="col-xxl-4 col-xl-6 col-md-12 d-flex">
+              {/* Communication  Board */}
+              <div className="col-xxl-4 col-xl-6 col-md-12 d-flex flex-column">
                 <div className="card flex-fill">
                   <div className="card-header d-flex align-items-center justify-content-between">
-                    <div>
-                      <h4 className="card-title">Events</h4>
-                    </div>
-                    <Link
-                      to="#"
-                      className="link-primary fw-medium me-2"
-                      data-bs-toggle="modal"
-                      data-bs-target="#add_event"
-                    >
-                      <i className="ti ti-square-plus me-1" />
-                      Add New
+                    <h4 className="card-title">Communication Board</h4>
+                    <Link to={routes.noticeBoard} className="fw-medium">
+                      View All
                     </Link>
                   </div>
                   <div className="card-body">
-                    {/* <Calendar
-                      className="datepickers mb-4"
-                      value={date}
-                      onChange={(e) => setDate(e.value)}
-                      inline
-                    /> */}
-                    <h5 className="mb-3">Upcoming Events</h5>
-                    <div className="event-wrapper event-scroll">
-                      {events.length > 0 ? (
-                        events.map((event, index) => (
+                    <div className="notice-widget">
+                      {loading ? (
+                        <p>Loading...</p>
+                      ) : notices.length === 0 ? (
+                        <p>No notices available</p>
+                      ) : (
+                        notices.slice(0, 5).map((notice) => (
                           <div
-                            key={index}
-                            className="border-start border-skyblue border-3 shadow-sm p-3 mb-3"
+                            key={notice._id}
+                            className="d-sm-flex align-items-center justify-content-between mb-4"
                           >
-                            <div className="d-flex align-items-center mb-3 pb-3 border-bottom">
-                              <span className="avatar p-1 me-2 bg-teal-transparent flex-shrink-0">
-                                <i className="ti ti-user-edit text-info fs-20" />
+                            <div className="d-flex align-items-center overflow-hidden me-2 mb-2 mb-sm-0">
+                              <span className="bg-skyblue-transparent avatar avatar-md me-2 rounded-circle flex-shrink-0">
+                                <i className="ti ti-notes fs-16" />
                               </span>
-                              <div className="flex-fill">
-                                <h6 className="mb-1">{event.eventTitle}</h6>
-                                <p className="d-flex align-items-center">
-                                  <i className="ti ti-calendar me-1" />
-                                  {formatEventDate(event.startDate)} -{" "}
-                                  {formatEventDate(event.endDate)}
+                              <div className="overflow-hidden">
+                                <h6 className="text-truncate mb-1">
+                                  {notice.title}
+                                </h6>
+                                <p>
+                                  <i className="ti ti-calendar me-2" />
+                                  Added on:{" "}
+                                  {new Date(
+                                    notice.noticeDate
+                                  ).toLocaleDateString()}
                                 </p>
                               </div>
                             </div>
-                            <div className="d-flex align-items-center justify-content-between">
-                              <p className="mb-0">
-                                <i className="ti ti-clock me-1" />
-                                {formatEventTime(event.startTime)} -{" "}
-                                {formatEventTime(event.endTime)}
-                              </p>
-                              <div className="avatar-list-stacked avatar-group-sm">
-                                {/* Add avatars or other UI elements here */}
-                              </div>
-                            </div>
+                            <span className="badge bg-light text-dark">
+                              <i className="ti ti-clck me-1" />
+                              {getDaysRemaining(notice.noticeDate)} Days
+                            </span>
                           </div>
                         ))
-                      ) : (
-                        <p>No events found.</p>
                       )}
                     </div>
                   </div>
                 </div>
               </div>
-              {/* /Schedules */}
+              {/* /Notice Board */}
+
               {/* Attendance */}
               <div className="col-xxl-4 col-xl-6 col-md-12 d-flex flex-column">
                 <div className="card">
                   <div className="card-header d-flex align-items-center justify-content-between">
                     <h4 className="card-title">Attendance</h4>
                     <div className="dropdown">
-                      <Link
-                        to="#"
-                        className="bg-white dropdown-toggle"
-                        data-bs-toggle="dropdown"
-                      >
-                        <i className="ti ti-calendar-due me-1" />
-                        Today
-                      </Link>
-                      <ul className="dropdown-menu mt-2 p-3">
-                        <li>
-                          <Link to="#" className="dropdown-item rounded-1">
-                            This Week
-                          </Link>
-                        </li>
-                        <li>
-                          <Link to="#" className="dropdown-item rounded-1">
-                            Last Week
-                          </Link>
-                        </li>
-                        <li>
-                          <Link to="#" className="dropdown-item rounded-1">
-                            Last Week
-                          </Link>
-                        </li>
-                      </ul>
+                      <i className="ti ti-calendar-due me-1" />
+                      Today
                     </div>
                   </div>
                   <div className="card-body">
@@ -918,15 +1109,6 @@ const AdminDashboard = () => {
                             Teachers
                           </Link>
                         </li>
-                        <li>
-                          <Link
-                            to="#"
-                            data-bs-toggle="tab"
-                            data-bs-target="#staff"
-                          >
-                            Staff
-                          </Link>
-                        </li>
                       </ul>
                     </div>
                     <div className="tab-content">
@@ -935,15 +1117,15 @@ const AdminDashboard = () => {
                           <div className="col-sm-4">
                             <div className="card bg-light-300 shadow-none border-0">
                               <div className="card-body p-3 text-center">
-                                <h5>28</h5>
-                                <p className="fs-12">Emergency</p>
+                                <h5>{attendancesummary.present}</h5>
+                                <p className="fs-12">Present</p>
                               </div>
                             </div>
                           </div>
                           <div className="col-sm-4">
                             <div className="card bg-light-300 shadow-none border-0">
                               <div className="card-body p-3 text-center">
-                                <h5>01</h5>
+                                <h5>{attendancesummary.absent}</h5>
                                 <p className="fs-12">Absent</p>
                               </div>
                             </div>
@@ -951,8 +1133,8 @@ const AdminDashboard = () => {
                           <div className="col-sm-4">
                             <div className="card bg-light-300 shadow-none border-0">
                               <div className="card-body p-3 text-center">
-                                <h5>01</h5>
-                                <p className="fs-12">Late</p>
+                                <h5>{attendancesummary.notMarked}</h5>
+                                <p className="fs-12">Not Marked</p>
                               </div>
                             </div>
                           </div>
@@ -966,29 +1148,23 @@ const AdminDashboard = () => {
                             type="donut"
                             height={210}
                           />
-                          <Link
-                            to={routes.studentAttendance}
-                            className="btn btn-light"
-                          >
-                            <i className="ti ti-calendar-share me-1" />
-                            View All
-                          </Link>
                         </div>
                       </div>
+                      {/* Static teacher tab */}
                       <div className="tab-pane fade" id="teachers">
                         <div className="row gx-3">
                           <div className="col-sm-4">
                             <div className="card bg-light-300 shadow-none border-0">
                               <div className="card-body p-3 text-center">
-                                <h5>30</h5>
-                                <p className="fs-12">Emergency</p>
+                                <h5>{staffAttendancesummary.present}</h5>
+                                <p className="fs-12">Present</p>
                               </div>
                             </div>
                           </div>
                           <div className="col-sm-4">
                             <div className="card bg-light-300 shadow-none border-0">
                               <div className="card-body p-3 text-center">
-                                <h5>03</h5>
+                                <h5>{staffAttendancesummary.absent}</h5>
                                 <p className="fs-12">Absent</p>
                               </div>
                             </div>
@@ -996,8 +1172,8 @@ const AdminDashboard = () => {
                           <div className="col-sm-4">
                             <div className="card bg-light-300 shadow-none border-0">
                               <div className="card-body p-3 text-center">
-                                <h5>03</h5>
-                                <p className="fs-12">Late</p>
+                                <h5>{staffAttendancesummary.notMarked}</h5>
+                                <p className="fs-12">Not Marked</p>
                               </div>
                             </div>
                           </div>
@@ -1011,59 +1187,6 @@ const AdminDashboard = () => {
                             type="donut"
                             height={210}
                           />
-                          <Link
-                            to="teacher-attendance"
-                            className="btn btn-light"
-                          >
-                            <i className="ti ti-calendar-share me-1" />
-                            View All
-                          </Link>
-                        </div>
-                      </div>
-                      <div className="tab-pane fade" id="staff">
-                        <div className="row gx-3">
-                          <div className="col-sm-4">
-                            <div className="card bg-light-300 shadow-none border-0">
-                              <div className="card-body p-3 text-center">
-                                <h5>45</h5>
-                                <p className="fs-12">Emergency</p>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="col-sm-4">
-                            <div className="card bg-light-300 shadow-none border-0">
-                              <div className="card-body p-3 text-center">
-                                <h5>01</h5>
-                                <p className="fs-12">Absent</p>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="col-sm-4">
-                            <div className="card bg-light-300 shadow-none border-0">
-                              <div className="card-body p-3 text-center">
-                                <h5>10</h5>
-                                <p className="fs-12">Late</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-center">
-                          <div id="staff-chart" className="mb-4" />
-                          <ReactApexChart
-                            id="staff-chart"
-                            className="mb-4"
-                            options={staffDonutChart}
-                            series={staffDonutChart.series}
-                            type="donut"
-                            height={210}
-                          />
-                          <Link
-                            to={routes.studentAttendance}
-                            className="btn btn-light"
-                          >
-                            <i className="ti ti-calendar-share me-1" />
-                            View All
-                          </Link>
                         </div>
                       </div>
                     </div>
@@ -1071,1214 +1194,83 @@ const AdminDashboard = () => {
                 </div>
               </div>
               {/* /Attendance */}
-              {/* Notice Board */}
-              <div className="col-xxl-4 col-xl-6 col-md-12 d-flex flex-column">
-      <div className="card flex-fill">
-        <div className="card-header d-flex align-items-center justify-content-between">
-          <h4 className="card-title">Communication Board</h4>
-          <Link to="/announcements/notice-board" className="fw-medium">
-            View All
-          </Link>
-        </div>
-        <div className="card-body">
-          <div className="notice-widget">
-            {loading ? (
-              <p>Loading...</p>
-            ) : notices.length === 0 ? (
-              <p>No notices available</p>
-            ) : (
-              notices.slice(0, 5).map((notice, index) => {
-                // Define icon and color based on index or notice type (customize as needed)
-                const icons = [
-                  { class: 'ti ti-books', color: 'primary' },
-                  { class: 'ti ti-note', color: 'success' },
-                  { class: 'ti ti-bell-check', color: 'danger' },
-                  { class: 'ti ti-notes', color: 'skyblue' },
-                  { class: 'ti ti-package', color: 'warning' },
-                ];
-                const { class: iconClass, color } = icons[index % icons.length];
 
-                return (
-                  <div
-                    key={notice._id}
-                    className="d-sm-flex align-items-center justify-content-between mb-4"
-                  >
-                    <div className="d-flex align-items-center overflow-hidden me-2 mb-2 mb-sm-0">
-                      <span
-                        className={`bg-${color}-transparent avatar avatar-md me-2 rounded-circle flex-shrink-0`}
-                      >
-                        <i className={`${iconClass} fs-16`} />
-                      </span>
-                      <div className="overflow-hidden">
-                        <h6 className="text-truncate mb-1">{notice.title}</h6>
-                        <p>
-                          <i className="ti ti-calendar me-2" />
-                          Added on: {new Date(notice.noticeDate).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="badge bg-light text-dark">
-                      <i className="ti ti-clck me-1" />
-                      {getDaysRemaining(notice.noticeDate)} Days
-                    </span>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-              {/* /Notice Board */}
-              {/* Right Column */}
-              <div className="col-xxl-4 col-md-12 d-flex flex-column">
-                {/* Quick Links */}
-                {/* <div className="card flex-fill">
+              {/* Communication  Board */}
+              <div className="col-xxl-4 col-xl-6 col-md-12 d-flex flex-column">
+                <div className="card flex-fill">
                   <div className="card-header d-flex align-items-center justify-content-between">
-                    <h4 className="card-title">Quick Links</h4>
-                  </div>
-                  <div className="card-body pb-1">
-                    <Slider {...settings} className="owl-carousel link-slider">
-                      <div className="item">
-                        <Link
-                          to={routes.classTimetable}
-                          className="d-block bg-success-transparent ronded p-2 text-center mb-3 class-hover"
-                        >
-                          <div className="avatar avatar-lg border p-1 border-success rounded-circle mb-2">
-                            <span className="d-inline-flex align-items-center justify-content-center w-100 h-100 bg-success rounded-circle">
-                              <i className="ti ti-calendar" />
-                            </span>
-                          </div>
-                          <p className="text-dark">Calendar</p>
-                        </Link>
-                        <Link
-                          to={routes.feesGroup}
-                          className="d-block bg-secondary-transparent ronded p-2 text-center mb-3 class-hover"
-                        >
-                          <div className="avatar avatar-lg border p-1 border-secondary rounded-circle mb-2">
-                            <span className="d-inline-flex align-items-center justify-content-center w-100 h-100 bg-secondary rounded-circle">
-                              <i className="ti ti-license" />
-                            </span>
-                          </div>
-                          <p className="text-dark">Fees</p>
-                        </Link>
-                      </div>
-                      <div className="item">
-                        <Link
-                          to={routes.examResult}
-                          className="d-block bg-primary-transparent ronded p-2 text-center mb-3 class-hover"
-                        >
-                          <div className="avatar avatar-lg border p-1 border-primary rounded-circle mb-2">
-                            <span className="d-inline-flex align-items-center justify-content-center w-100 h-100 bg-primary rounded-circle">
-                              <i className="ti ti-hexagonal-prism" />
-                            </span>
-                          </div>
-                          <p className="text-dark">Exam Result</p>
-                        </Link>
-                        <Link
-                          to={routes.classHomeWork}
-                          className="d-block bg-danger-transparent ronded p-2 text-center mb-3 class-hover"
-                        >
-                          <div className="avatar avatar-lg border p-1 border-danger rounded-circle mb-2">
-                            <span className="d-inline-flex align-items-center justify-content-center w-100 h-100 bg-danger rounded-circle">
-                              <i className="ti ti-report-money" />
-                            </span>
-                          </div>
-                          <p className="text-dark">Home Works</p>
-                        </Link>
-                      </div>
-                      <div className="item">
-                        <Link
-                          to={routes.studentAttendance}
-                          className="d-block bg-warning-transparent ronded p-2 text-center mb-3 class-hover"
-                        >
-                          <div className="avatar avatar-lg border p-1 border-warning rounded-circle mb-2">
-                            <span className="d-inline-flex align-items-center justify-content-center w-100 h-100 bg-warning rounded-circle">
-                              <i className="ti ti-calendar-share" />
-                            </span>
-                          </div>
-                          <p className="text-dark">Attendance</p>
-                        </Link>
-                        <Link
-                          to={routes.attendanceReport}
-                          className="d-block bg-skyblue-transparent ronded p-2 text-center mb-3 class-hover"
-                        >
-                          <div className="avatar avatar-lg border p-1 border-skyblue rounded-circle mb-2">
-                            <span className="d-inline-flex align-items-center justify-content-center w-100 h-100 bg-pending rounded-circle">
-                              <i className="ti ti-file-pencil" />
-                            </span>
-                          </div>
-                          <p className="text-dark">Reports</p>
-                        </Link>
-                      </div>
-                    </Slider>
-                  </div>
-                </div> */}
-                {/* /Quick Links */}
-                {/* Class Routine */}
-                {/* <div className="card flex-fill">
-                  <div className="card-header d-flex align-items-center justify-content-between">
-                    <h4 className="card-title">Class Routine</h4>
-                    <Link
-                      to="#"
-                      className="link-primary fw-medium"
-                      data-bs-toggle="modal"
-                      data-bs-target="#add_class_routine"
-                    >
-                      <i className="ti ti-square-plus me-1" />
-                      Add New
+                    <h4 className="card-title">Consents</h4>
+                    <Link to={routes.consents} className="fw-medium">
+                      View All
                     </Link>
                   </div>
                   <div className="card-body">
-                    <div className="d-flex align-items-center rounded border p-3 mb-3">
-                      <span className="avatar avatar-md flex-shrink-0 border rounded me-2">
-                        <ImageWithBasePath
-                          src="assets/img/teachers/teacher-01.jpg"
-                          className="rounded"
-                          alt="Profile"
-                        />
-                      </span>
-                      <div className="w-100">
-                        <p className="mb-1">Oct 2024</p>
-                        <div className="progress progress-xs  flex-grow-1 mb-1">
+                    <div className="notice-widget">
+                      {loading ? (
+                        <p>Loading...</p>
+                      ) : consents.length === 0 ? (
+                        <p>No consents available</p>
+                      ) : (
+                        consents.slice(0, 5).map((consent) => (
                           <div
-                            className="progress-bar progress-bar-striped progress-bar-animated bg-primary rounded"
-                            role="progressbar"
-                            style={{ width: "80%" }}
-                            aria-valuenow={80}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="d-flex align-items-center rounded border p-3 mb-3">
-                      <span className="avatar avatar-md flex-shrink-0 border rounded me-2">
-                        <ImageWithBasePath
-                          src="assets/img/teachers/teacher-02.jpg"
-                          className="rounded"
-                          alt="Profile"
-                        />
-                      </span>
-                      <div className="w-100">
-                        <p className="mb-1">Nov 2024</p>
-                        <div className="progress progress-xs  flex-grow-1 mb-1">
-                          <div
-                            className="progress-bar progress-bar-striped progress-bar-animated bg-warning rounded"
-                            role="progressbar"
-                            style={{ width: "80%" }}
-                            aria-valuenow={80}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="d-flex align-items-center rounded border p-3 mb-0">
-                      <span className="avatar avatar-md flex-shrink-0 border rounded me-2">
-                        <ImageWithBasePath
-                          src="assets/img/teachers/teacher-03.jpg"
-                          className="rounded"
-                          alt="Profile"
-                        />
-                      </span>
-                      <div className="w-100">
-                        <p className="mb-1">Oct 2024</p>
-                        <div className="progress progress-xs  flex-grow-1 mb-1">
-                          <div
-                            className="progress-bar progress-bar-striped progress-bar-animated bg-success rounded"
-                            role="progressbar"
-                            style={{ width: "80%" }}
-                            aria-valuenow={80}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                          />
-                        </div>
-                      </div>
+                            key={consent._id}
+                            className="d-sm-flex align-items-center justify-content-between mb-4"
+                          >
+                            <div className="d-flex align-items-center overflow-hidden me-2 mb-2 mb-sm-0">
+                              <span className="bg-success-transparent avatar avatar-md me-2 rounded-circle flex-shrink-0">
+                                <i className="ti ti-note fs-16" />
+                              </span>
+                              <div className="overflow-hidden">
+                                <h6 className="text-truncate mb-1">
+                                  {consent.title}
+                                </h6>
+                                <p className="mb-0">
+                                  <i className="ti ti-calendar me-2" />
+                                  Added on:{" "}
+                                  {new Date(
+                                    consent.createdAt
+                                  ).toLocaleDateString()}
+                                </p>
+                              </div>
+                            </div>
+                            <span className="badge bg-light text-dark">
+                              <i className="ti ti-clock me-1" />
+                              {getDaysRemaining(consent.validity)} Days
+                            </span>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
-                </div> */}
-                {/* /Class Routine */}
-                {/* Class Wise Performance */}
-                {/* <div className="card flex-fill">
-                  <div className="card-header d-flex align-items-center justify-content-between">
-                    <h4 className="card-title">Performance</h4>
-                    <div className="dropdown">
-                      <Link
-                        to="#"
-                        className="bg-white dropdown-toggle"
-                        data-bs-toggle="dropdown"
-                      >
-                        <i className="ti ti-school-bell  me-2" />
-                        Class II
-                      </Link>
-                      <ul className="dropdown-menu mt-2 p-3">
-                        <li>
-                          <Link to="#" className="dropdown-item rounded-1">
-                            Class I
-                          </Link>
-                        </li>
-                        <li>
-                          <Link to="#" className="dropdown-item rounded-1">
-                            Class II
-                          </Link>
-                        </li>
-                        <li>
-                          <Link to="#" className="dropdown-item rounded-1">
-                            Class III
-                          </Link>
-                        </li>
-                        <li>
-                          <Link to="#" className="dropdown-item rounded-1">
-                            Class IV
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                  <div className="card-body">
-                    <div className="d-md-flex align-items-center justify-content-between">
-                      <div className="me-md-3 mb-3 mb-md-0 w-100">
-                        <div className="border border-dashed p-3 rounded d-flex align-items-center justify-content-between mb-1">
-                          <p className="mb-0 me-2">
-                            <i className="ti ti-arrow-badge-down-filled me-2 text-primary" />
-                            Top
-                          </p>
-                          <h5>45</h5>
-                        </div>
-                        <div className="border border-dashed p-3 rounde d-flex align-items-center justify-content-between mb-1">
-                          <p className="mb-0 me-2">
-                            <i className="ti ti-arrow-badge-down-filled me-2 text-warning" />
-                            Average
-                          </p>
-                          <h5>11</h5>
-                        </div>
-                        <div className="border border-dashed p-3 rounded d-flex align-items-center justify-content-between mb-0">
-                          <p className="mb-0 me-2">
-                            <i className="ti ti-arrow-badge-down-filled me-2 text-danger" />
-                            Below Avg
-                          </p>
-                          <h5>02</h5>
-                        </div>
-                      </div>
-                      <ReactApexChart
-                        id="class-chart"
-                        className="text-center text-md-left"
-                        options={classDonutChart}
-                        series={classDonutChart.series}
-                        type="donut"
-                      />
-                    </div>
-                  </div>
-                </div> */}
-                {/* /Class Wise Performance */}
+                </div>
               </div>
-              {/* <div className="row flex-fill">
-                <div className="col-sm-6 d-flex flex-column">
-                  <div className="bg-success-800 p-3 br-5 text-center flex-fill mb-4 pb-0  owl-height bg-01">
-                    <Slider
-                      {...student}
-                      className="owl-carousel student-slider h-100"
-                    >
-                      <div className="item h-100">
-                        <div className="d-flex justify-content-between flex-column h-100">
-                          <div>
-                            <h5 className="mb-3 text-white">
-                              Best Performer
-                            </h5>
-                            <h4 className="mb-1 text-white">Rubell</h4>
-                            <p className="text-light">Physics Teacher</p>
-                          </div>
-                          <ImageWithBasePath
-                            src="assets/img/performer/performer-01.png"
-                            alt="img"
-                          />
-                        </div>
-                      </div>
-                      <div className="item h-100">
-                        <div className="d-flex justify-content-between flex-column h-100">
-                          <div>
-                            <h5 className="mb-3 text-white">
-                              Best Performer
-                            </h5>
-                            <h4 className="mb-1 text-white">George Odell</h4>
-                            <p className="text-light">English Teacher</p>
-                          </div>
-                          <ImageWithBasePath
-                            src="assets/img/performer/performer-02.png"
-                            alt="img"
-                          />
-                        </div>
-                      </div>
-                    </Slider>
-                  </div>
-                </div>
-                <div className="col-sm-6 d-flex flex-column">
-                  <div className="bg-info p-3 br-5 text-center flex-fill mb-4 pb-0 owl-height bg-02">
-                    <Slider
-                      {...teacher}
-                      className="owl-carousel teacher-slider h-100"
-                    >
-                      <div className="item h-100">
-                        <div className="d-flex justify-content-between flex-column h-100">
-                          <div>
-                            <h5 className="mb-3 text-white">Star Students</h5>
-                            <h4 className="mb-1 text-white">Tenesa</h4>
-                            <p className="text-light">XII, A</p>
-                          </div>
-                          <ImageWithBasePath
-                            src="assets/img/performer/student-performer-01.png"
-                            alt="img"
-                          />
-                        </div>
-                      </div>
-                      <div className="item h-100">
-                        <div className="d-flex justify-content-between flex-column h-100">
-                          <div>
-                            <h5 className="mb-3 text-white">Star Students</h5>
-                            <h4 className="mb-1 text-white">Michael </h4>
-                            <p>XII, B</p>
-                          </div>
-                          <ImageWithBasePath
-                            src="assets/img/performer/student-performer-02.png"
-                            alt="img"
-                          />
-                        </div>
-                      </div>
-                    </Slider>
-                  </div>
-                </div>
-              </div> */}
             </div>
             <div className="row">
-              {/* Fees Collection */}
               <div className="col-xxl-12 col-xl-6 d-flex">
                 <div className="card flex-fill">
-                  <div className="card-header  d-flex align-items-center justify-content-between">
+                  <div className="card-header d-flex align-items-center justify-content-between">
                     <h4 className="card-title">Fees Collection</h4>
-                    <div className="dropdown">
-                      <Link
-                        to="#"
-                        className="bg-white dropdown-toggle"
-                        data-bs-toggle="dropdown"
-                      >
-                        <i className="ti ti-calendar  me-2" />
-                        Last 8 Quater
-                      </Link>
-                      <ul className="dropdown-menu mt-2 p-3">
-                        <li>
-                          <Link to="#" className="dropdown-item rounded-1">
-                            This Month
-                          </Link>
-                        </li>
-                        <li>
-                          <Link to="#" className="dropdown-item rounded-1">
-                            This Year
-                          </Link>
-                        </li>
-                        <li>
-                          <Link to="#" className="dropdown-item rounded-1">
-                            Last 12 Quater
-                          </Link>
-                        </li>
-                        <li>
-                          <Link to="#" className="dropdown-item rounded-1">
-                            Last 16 Quater
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
                   </div>
                   <div className="card-body pb-0">
-                    <ReactApexChart
-                      id="fees-chart"
-                      options={feesBar}
-                      series={feesBar.series}
-                      type="bar"
-                      height={270}
-                    />
+                    {loading ? (
+                      <p>Loading fee data...</p>
+                    ) : (
+                      <ReactApexChart
+                        id="fees-chart"
+                        options={feesBar}
+                        series={feesBar.series}
+                        type="bar"
+                        height={270}
+                      />
+                    )}
                   </div>
                 </div>
               </div>
-              {/* /Fees Collection */}
-              {/* Leave Requests */}
+            </div>
               
-              {/* /Leave Requests */}
-            </div>
-            {/* <div className="row">
-              <div className="col-xl-3 col-md-6 d-flex">
-                <Link
-                  to={routes.studentAttendance}
-                  className="card bg-warning-transparent border border-5 border-white animate-card flex-fill"
-                >
-                  <div className="card-body">
-                    <div className="d-flex align-items-center justify-content-between">
-                      <div className="d-flex align-items-center">
-                        <span className="avatar avatar-lg bg-warning rounded flex-shrink-0 me-2">
-                          <i className="ti ti-calendar-share fs-24" />
-                        </span>
-                        <div className="overflow-hidden">
-                          <h6 className="fw-semibold text-default">
-                            View Attendance
-                          </h6>
-                        </div>
-                      </div>
-                      <span className="btn btn-white warning-btn-hover avatar avatar-sm p-0 flex-shrink-0 rounded-circle">
-                        <i className="ti ti-chevron-right fs-14" />
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              </div>
-              <div className="col-xl-3 col-md-6 d-flex">
-                <Link
-                  to={routes.events}
-                  className="card bg-success-transparent border border-5 border-white animate-card flex-fill "
-                >
-                  <div className="card-body">
-                    <div className="d-flex align-items-center justify-content-between">
-                      <div className="d-flex align-items-center">
-                        <span className="avatar avatar-lg bg-success rounded flex-shrink-0 me-2">
-                          <i className="ti ti-speakerphone fs-24" />
-                        </span>
-                        <div className="overflow-hidden">
-                          <h6 className="fw-semibold text-default">
-                            New Events
-                          </h6>
-                        </div>
-                      </div>
-                      <span className="btn btn-white success-btn-hover avatar avatar-sm p-0 flex-shrink-0 rounded-circle">
-                        <i className="ti ti-chevron-right fs-14" />
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              </div>
-              <div className="col-xl-3 col-md-6 d-flex">
-                <Link
-                  to={routes.membershipplan}
-                  className="card bg-danger-transparent border border-5 border-white animate-card flex-fill"
-                >
-                  <div className="card-body">
-                    <div className="d-flex align-items-center justify-content-between">
-                      <div className="d-flex align-items-center">
-                        <span className="avatar avatar-lg bg-danger rounded flex-shrink-0 me-2">
-                          <i className="ti ti-sphere fs-24" />
-                        </span>
-                        <div className="overflow-hidden">
-                          <h6 className="fw-semibold text-default">
-                            Membership Plans
-                          </h6>
-                        </div>
-                      </div>
-                      <span className="btn btn-white avatar avatar-sm p-0 flex-shrink-0 rounded-circle danger-btn-hover">
-                        <i className="ti ti-chevron-right fs-14" />
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              </div>
-              <div className="col-xl-3 col-md-6 d-flex">
-                <Link
-                  to={routes.studentAttendance}
-                  className="card bg-secondary-transparent border border-5 border-white animate-card flex-fill"
-                >
-                  <div className="card-body">
-                    <div className="d-flex align-items-center justify-content-between">
-                      <div className="d-flex align-items-center">
-                        <span className="avatar avatar-lg bg-secondary rounded flex-shrink-0 me-2">
-                          <i className="ti ti-moneybag fs-24" />
-                        </span>
-                        <div className="overflow-hidden">
-                          <h6 className="fw-semibold text-default">
-                            Finance & Accounts
-                          </h6>
-                        </div>
-                      </div>
-                      <span className="btn btn-white secondary-btn-hover avatar avatar-sm p-0 flex-shrink-0 rounded-circle">
-                        <i className="ti ti-chevron-right fs-14" />
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              </div>
-            </div> */}
-            <div className="row">
-              {/* Total Earnings */}
-              <div className="col-xxl-4 col-xl-6 d-flex flex-column">
-                <div className="card flex-fill">
-                  <div className="card-body">
-                    <div className="d-flex align-items-center justify-content-between">
-                      <div>
-                        <h6 className="mb-1">Total Earnings</h6>
-                        <h2>$64,522,24</h2>
-                      </div>
-                      <span className="avatar avatar-lg bg-primary">
-                        <i className="ti ti-user-dollar" />
-                      </span>
-                    </div>
-                  </div>
-                  {/* <div id="total-earning" /> */}
-                  <ReactApexChart
-                    id="total-earning"
-                    options={totalEarningArea}
-                    series={totalEarningArea.series}
-                    type="area"
-                    height={90}
-                  />
-                </div>
-                <div className="card flex-fill">
-                  <div className="card-body">
-                    <div className="d-flex align-items-center justify-content-between">
-                      <div>
-                        <h6 className="mb-1">Total Expenses</h6>
-                        <h2>$60,522,24</h2>
-                      </div>
-                      <span className="avatar avatar-lg bg-danger">
-                        <i className="ti ti-user-dollar" />
-                      </span>
-                    </div>
-                  </div>
-                  <div id="total-expenses" />
-                  <ReactApexChart
-                    id="total-expenses"
-                    options={totalExpenseArea}
-                    series={totalExpenseArea.series}
-                    type="area"
-                    height={90}
-                  />
-                </div>
-              </div>
-              {/* /Total Earnings */}
-              {/* Notice Board (Moved earlier beside Attendance) */}
-              <div className="col-xxl-5 col-xl-12 order-3 order-xxl-2 d-flex">
-              </div>
-              {/* /Notice Board */}
-              {/* Fees Collection */}
-              <div className="col-xxl-3 col-xl-6 order-2 order-xxl-3 d-flex flex-column">
-                <div className="card flex-fill mb-2">
-                  <div className="card-body">
-                    <p className="mb-2">Total Fees Collected</p>
-                    <div className="d-flex align-items-end justify-content-between">
-                      <h4>$25,000,02</h4>
-                      <span className="badge badge-soft-success">
-                        <i className="ti ti-chart-line me-1" />
-                        1.2%
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="card flex-fill mb-2">
-                  <div className="card-body">
-                    <p className="mb-2">Fine Collected till date</p>
-                    <div className="d-flex align-items-end justify-content-between">
-                      <h4>$4,56,64</h4>
-                      <span className="badge badge-soft-danger">
-                        <i className="ti ti-chart-line me-1" />
-                        1.2%
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="card flex-fill mb-2">
-                  <div className="card-body">
-                    <p className="mb-2">Student Not Paid</p>
-                    <div className="d-flex align-items-end justify-content-between">
-                      <h4>$545</h4>
-                      <span className="badge badge-soft-info">
-                        <i className="ti ti-chart-line me-1" />
-                        1.2%
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="card flex-fill mb-4">
-                  <div className="card-body">
-                    <p className="mb-2">Total Outstanding</p>
-                    <div className="d-flex align-items-end justify-content-between">
-                      <h4>$4,56,64</h4>
-                      <span className="badge badge-soft-danger">
-                        <i className="ti ti-chart-line me-1" />
-                        1.2%
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {/* /Fees Collection */}
-              <div className="col-xxl-4 col-xl-6 d-flex">
-                <div className="card flex-fill">
-                  <div className="card-header  d-flex align-items-center justify-content-between">
-                    <h4 className="card-title">Leave Requests</h4>
-                    <div className="dropdown">
-                      <Link
-                        to="#"
-                        className="bg-white dropdown-toggle"
-                        data-bs-toggle="dropdown"
-                      >
-                        <i className="ti ti-calendar-due me-1" />
-                        Today
-                      </Link>
-                      <ul className="dropdown-menu mt-2 p-3">
-                        <li>
-                          <Link to="#" className="dropdown-item rounded-1">
-                            This Week
-                          </Link>
-                        </li>
-                        <li>
-                          <Link to="#" className="dropdown-item rounded-1">
-                            Last Week
-                          </Link>
-                        </li>
-                        <li>
-                          <Link to="#" className="dropdown-item rounded-1">
-                            Last Week
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                  <div className="card-body">
-                    <div className="card mb-2">
-                      <div className="card-body p-3">
-                        <div className="d-flex align-items-center justify-content-between mb-3">
-                          <div className="d-flex align-items-center overflow-hidden me-2">
-                            <Link
-                              to="#"
-                              className="avatar avatar-lg flex-shrink-0 me-2"
-                            >
-                              <ImageWithBasePath
-                                src="assets/img/profiles/avatar-14.jpg"
-                                alt="student"
-                              />
-                            </Link>
-                            <div className="overflow-hidden">
-                              <h6 className="mb-1 text-truncate">
-                                <Link to="#">James</Link>
-                                <span className="badge badge-soft-danger ms-1">
-                                  Emergency
-                                </span>
-                              </h6>
-                              <p className="text-truncate">Physics Teacher</p>
-                            </div>
-                          </div>
-                          <div className="d-flex align-items-center">
-                            <Link
-                              to="#"
-                              className="avatar avatar-xs p-0 btn btn-success me-1"
-                            >
-                              <i className="ti ti-checks" />
-                            </Link>
-                            <Link
-                              to="#"
-                              className="avatar avatar-xs p-0 btn btn-danger"
-                            >
-                              <i className="ti ti-x" />
-                            </Link>
-                          </div>
-                        </div>
-                        <div className="d-flex align-items-center justify-content-between border-top pt-3">
-                          <p className="mb-0">
-                            Leave :{" "}
-                            <span className="fw-semibold">12 -13 May</span>
-                          </p>
-                          <p>
-                            Apply on :{" "}
-                            <span className="fw-semibold">12 May</span>
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="card mb-0">
-                      <div className="card-body p-3">
-                        <div className="d-flex align-items-center justify-content-between mb-3">
-                          <div className="d-flex align-items-center overflow-hidden me-2">
-                            <Link
-                              to="#"
-                              className="avatar avatar-lg flex-shrink-0 me-2"
-                            >
-                              <ImageWithBasePath
-                                src="assets/img/profiles/avatar-19.jpg"
-                                alt="student"
-                              />
-                            </Link>
-                            <div className="overflow-hidden">
-                              <h6 className="mb-1 text-truncate ">
-                                <Link to="#">Ramien</Link>
-                                <span className="badge badge-soft-warning ms-1">
-                                  Casual
-                                </span>
-                              </h6>
-                              <p className="text-truncate">Accountant</p>
-                            </div>
-                          </div>
-                          <div className="d-flex align-items-center">
-                            <Link
-                              to="#"
-                              className="avatar avatar-xs p-0 btn btn-success me-1"
-                            >
-                              <i className="ti ti-checks" />
-                            </Link>
-                            <Link
-                              to="#"
-                              className="avatar avatar-xs p-0 btn btn-danger"
-                            >
-                              <i className="ti ti-x" />
-                            </Link>
-                          </div>
-                        </div>
-                        <div className="d-flex align-items-center justify-content-between border-top pt-3">
-                          <p className="mb-0">
-                            Leave :{" "}
-                            <span className="fw-semibold">12 -13 May</span>
-                          </p>
-                          <p>
-                            Apply on :{" "}
-                            <span className="fw-semibold">11 May</span>
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="row">
-              {/* <div className="col-xxl-4 col-xl-6 d-flex">
-                <div className="card flex-fill">
-                  <div className="card-header  d-flex align-items-center justify-content-between">
-                    <h4 className="card-title">Top Subjects</h4>
-                    <div className="dropdown">
-                      <Link
-                        to="#"
-                        className="bg-white dropdown-toggle"
-                        data-bs-toggle="dropdown"
-                      >
-                        <i className="ti ti-school-bell  me-2" />
-                        Class II
-                      </Link>
-                      <ul className="dropdown-menu mt-2 p-3">
-                        <li>
-                          <Link to="#" className="dropdown-item rounded-1">
-                            Class I
-                          </Link>
-                        </li>
-                        <li>
-                          <Link to="#" className="dropdown-item rounded-1">
-                            Class II
-                          </Link>
-                        </li>
-                        <li>
-                          <Link to="#" className="dropdown-item rounded-1">
-                            Class III
-                          </Link>
-                        </li>
-                        <li>
-                          <Link to="#" className="dropdown-item rounded-1">
-                            Class IV
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                  <div className="card-body">
-                    <div
-                      className="alert alert-success d-flex align-items-center mb-24"
-                      role="alert"
-                    >
-                      <i className="ti ti-info-square-rounded me-2 fs-14" />
-                      <div className="fs-14">
-                        These Result are obtained from the syllabus completion
-                        on the respective Class
-                      </div>
-                    </div>
-                    <ul className="list-group">
-                      <li className="list-group-item">
-                        <div className="row align-items-center">
-                          <div className="col-sm-4">
-                            <p className="text-dark">Maths</p>
-                          </div>
-                          <div className="col-sm-8">
-                            <div className="progress progress-xs flex-grow-1">
-                              <div
-                                className="progress-bar bg-primary rounded"
-                                role="progressbar"
-                                style={{ width: "20%" }}
-                                aria-valuenow={30}
-                                aria-valuemin={0}
-                                aria-valuemax={100}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </li>
-                      <li className="list-group-item">
-                        <div className="row align-items-center">
-                          <div className="col-sm-4">
-                            <p className="text-dark">Physics</p>
-                          </div>
-                          <div className="col-sm-8">
-                            <div className="progress progress-xs flex-grow-1">
-                              <div
-                                className="progress-bar bg-secondary rounded"
-                                role="progressbar"
-                                style={{ width: "30%" }}
-                                aria-valuenow={30}
-                                aria-valuemin={0}
-                                aria-valuemax={100}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </li>
-                      <li className="list-group-item">
-                        <div className="row align-items-center">
-                          <div className="col-sm-4">
-                            <p className="text-dark">Chemistry</p>
-                          </div>
-                          <div className="col-sm-8">
-                            <div className="progress progress-xs flex-grow-1">
-                              <div
-                                className="progress-bar bg-info rounded"
-                                role="progressbar"
-                                style={{ width: "40%" }}
-                                aria-valuenow={30}
-                                aria-valuemin={0}
-                                aria-valuemax={100}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </li>
-                      <li className="list-group-item">
-                        <div className="row align-items-center">
-                          <div className="col-sm-4">
-                            <p className="text-dark">Botany</p>
-                          </div>
-                          <div className="col-sm-8">
-                            <div className="progress progress-xs flex-grow-1">
-                              <div
-                                className="progress-bar bg-success rounded"
-                                role="progressbar"
-                                style={{ width: "50%" }}
-                                aria-valuenow={30}
-                                aria-valuemin={0}
-                                aria-valuemax={100}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </li>
-                      <li className="list-group-item">
-                        <div className="row align-items-center">
-                          <div className="col-sm-4">
-                            <p className="text-dark">English</p>
-                          </div>
-                          <div className="col-sm-8">
-                            <div className="progress progress-xs flex-grow-1">
-                              <div
-                                className="progress-bar bg-warning rounded"
-                                role="progressbar"
-                                style={{ width: "70%" }}
-                                aria-valuenow={30}
-                                aria-valuemin={0}
-                                aria-valuemax={100}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </li>
-                      <li className="list-group-item">
-                        <div className="row align-items-center">
-                          <div className="col-sm-4">
-                            <p className="text-dark">Spanish</p>
-                          </div>
-                          <div className="col-sm-8">
-                            <div className="progress progress-xs flex-grow-1">
-                              <div
-                                className="progress-bar bg-danger rounded"
-                                role="progressbar"
-                                style={{ width: "80%" }}
-                                aria-valuenow={30}
-                                aria-valuemin={0}
-                                aria-valuemax={100}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </li>
-                      <li className="list-group-item">
-                        <div className="row align-items-center">
-                          <div className="col-sm-4">
-                            <p className="text-dark">Japanese</p>
-                          </div>
-                          <div className="col-sm-8">
-                            <div className="progress progress-xs flex-grow-1">
-                              <div
-                                className="progress-bar bg-primary rounded"
-                                role="progressbar"
-                                style={{ width: "85%" }}
-                                aria-valuenow={30}
-                                aria-valuemin={0}
-                                aria-valuemax={100}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div> */}
-              {/* /Top Subjects */}
-              {/* Student Activity */}
-              {/* <div className="col-xxl-4 col-xl-6 d-flex">
-                <div className="card flex-fill">
-                  <div className="card-header  d-flex align-items-center justify-content-between">
-                    <h4 className="card-title">Student Activity</h4>
-                    <div className="dropdown">
-                      <Link
-                        to="#"
-                        className="bg-white dropdown-toggle"
-                        data-bs-toggle="dropdown"
-                      >
-                        <i className="ti ti-calendar me-2" />
-                        This Month
-                      </Link>
-                      <ul className="dropdown-menu mt-2 p-3">
-                        <li>
-                          <Link to="#" className="dropdown-item rounded-1">
-                            This Month
-                          </Link>
-                        </li>
-                        <li>
-                          <Link to="#" className="dropdown-item rounded-1">
-                            This Year
-                          </Link>
-                        </li>
-                        <li>
-                          <Link to="#" className="dropdown-item rounded-1">
-                            Last Week
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                  <div className="card-body">
-                    <div className="d-flex align-items-center overflow-hidden p-3 mb-3 border rounded">
-                      <span className="avatar avatar-lg flex-shrink-0 rounded me-2">
-                        <ImageWithBasePath
-                          src="assets/img/students/student-09.jpg"
-                          alt="student"
-                        />
-                      </span>
-                      <div className="overflow-hidden">
-                        <h6 className="mb-1 text-truncate">
-                          1st place in "Chess”
-                        </h6>
-                        <p>This event took place in Our School</p>
-                      </div>
-                    </div>
-                    <div className="d-flex align-items-center overflow-hidden p-3 mb-3 border rounded">
-                      <span className="avatar avatar-lg flex-shrink-0 rounded me-2">
-                        <ImageWithBasePath
-                          src="assets/img/students/student-12.jpg"
-                          alt="student"
-                        />
-                      </span>
-                      <div className="overflow-hidden">
-                        <h6 className="mb-1 text-truncate">
-                          Participated in "Carrom"
-                        </h6>
-                        <p>Justin Lee participated in "Carrom"</p>
-                      </div>
-                    </div>
-                    <div className="d-flex align-items-center overflow-hidden p-3 mb-3 border rounded">
-                      <span className="avatar avatar-lg flex-shrink-0 rounded me-2">
-                        <ImageWithBasePath
-                          src="assets/img/students/student-11.jpg"
-                          alt="student"
-                        />
-                      </span>
-                      <div className="overflow-hidden">
-                        <h6 className="mb-1 text-truncate">
-                          1st place in "100M”
-                        </h6>
-                        <p>This event took place in Our School</p>
-                      </div>
-                    </div>
-                    <div className="d-flex align-items-center overflow-hidden p-3 mb-0 border rounded">
-                      <span className="avatar avatar-lg flex-shrink-0 rounded me-2">
-                        <ImageWithBasePath
-                          src="assets/img/students/student-10.jpg"
-                          alt="student"
-                        />
-                      </span>
-                      <div className="overflow-hidden">
-                        <h6 className="mb-1 text-truncate">
-                          International conference
-                        </h6>
-                        <p className="text-truncate">
-                          We attended international conference
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div> */}
-              {/* /Student Activity */}
-              {/* Todo */}
-              {/* <div className="col-xxl-4 col-xl-12 d-flex">
-                <div className="card flex-fill">
-                  <div className="card-header  d-flex align-items-center justify-content-between">
-                    <h4 className="card-title">Todo</h4>
-                    <div className="dropdown">
-                      <Link
-                        to="#"
-                        className="bg-white dropdown-toggle"
-                        data-bs-toggle="dropdown"
-                      >
-                        <i className="ti ti-calendar me-2" />
-                        Today
-                      </Link>
-                      <ul className="dropdown-menu mt-2 p-3">
-                        <li>
-                          <Link to="#" className="dropdown-item rounded-1">
-                            This Month
-                          </Link>
-                        </li>
-                        <li>
-                          <Link to="#" className="dropdown-item rounded-1">
-                            This Year
-                          </Link>
-                        </li>
-                        <li>
-                          <Link to="#" className="dropdown-item rounded-1">
-                            Last Week
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
-                  </div> */}
-                  {/* <div className="card-body">
-                    <ul className="list-group list-group-flush todo-list">
-                      <li className="list-group-item py-3 px-0 pt-0">
-                        <div className="d-sm-flex align-items-center justify-content-between">
-                          <div className="d-flex align-items-center overflow-hidden me-2 todo-strike-content">
-                            <div className="form-check form-check-md me-2">
-                              <input
-                                className="form-check-input"
-                                type="checkbox"
-                                defaultChecked
-                              />
-                            </div>
-                            <div className="overflow-hidden">
-                              <h6 className="mb-1 text-truncate">
-                                Send Reminder to Students
-                              </h6>
-                              <p>01:00 PM</p>
-                            </div>
-                          </div>
-                          <span className="badge badge-soft-success mt-2 mt-sm-0">
-                            Compeleted
-                          </span>
-                        </div>
-                      </li>
-                      <li className="list-group-item py-3 px-0">
-                        <div className="d-sm-flex align-items-center justify-content-between">
-                          <div className="d-flex align-items-center overflow-hidden me-2">
-                            <div className="form-check form-check-md me-2">
-                              <input
-                                className="form-check-input"
-                                type="checkbox"
-                              />
-                            </div>
-                            <div className="overflow-hidden">
-                              <h6 className="mb-1 text-truncate">
-                                Create Routine to new staff
-                              </h6>
-                              <p>04:50 PM</p>
-                            </div>
-                          </div>
-                          <span className="badge badge-soft-skyblue mt-2 mt-sm-0">
-                            Inprogress
-                          </span>
-                        </div>
-                      </li>
-                      <li className="list-group-item py-3 px-0">
-                        <div className="d-sm-flex align-items-center justify-content-between">
-                          <div className="d-flex align-items-center overflow-hidden me-2">
-                            <div className="form-check form-check-md me-2">
-                              <input
-                                className="form-check-input"
-                                type="checkbox"
-                              />
-                            </div>
-                            <div className="overflow-hidden">
-                              <h6 className="mb-1 text-truncate">
-                                Extra Class Info to Students
-                              </h6>
-                              <p>04:55 PM</p>
-                            </div>
-                          </div>
-                          <span className="badge badge-soft-warning mt-2 mt-sm-0">
-                            Yet to Start
-                          </span>
-                        </div>
-                      </li>
-                      <li className="list-group-item py-3 px-0">
-                        <div className="d-sm-flex align-items-center justify-content-between">
-                          <div className="d-flex align-items-center overflow-hidden me-2">
-                            <div className="form-check form-check-md me-2">
-                              <input
-                                className="form-check-input"
-                                type="checkbox"
-                              />
-                            </div>
-                            <div className="overflow-hidden">
-                              <h6 className="mb-1 text-truncate">
-                                Fees for Upcoming Academics
-                              </h6>
-                              <p>04:55 PM</p>
-                            </div>
-                          </div>
-                          <span className="badge badge-soft-warning mt-2 mt-sm-0">
-                            Yet to Start
-                          </span>
-                        </div>
-                      </li>
-                      <li className="list-group-item py-3 px-0 pb-0">
-                        <div className="d-sm-flex align-items-center justify-content-between">
-                          <div className="d-flex align-items-center overflow-hidden me-2">
-                            <div className="form-check form-check-md me-2">
-                              <input
-                                className="form-check-input"
-                                type="checkbox"
-                              />
-                            </div>
-                            <div className="overflow-hidden">
-                              <h6 className="mb-1 text-truncate">
-                                English - Essay on Visit
-                              </h6>
-                              <p>05:55 PM</p>
-                            </div>
-                          </div>
-                          <span className="badge badge-soft-warning mt-2 mt-sm-0">
-                            Yet to Start
-                          </span>
-                        </div>
-                      </li>
-                    </ul>
-                  </div> */}
-                {/* </div> */}
-              {/* </div> */}
-              {/* /Todo */}
-            </div>
           </>
         </div>
       </div>
-      {/* /Page Wrapper */}
       <AdminDashboardModal />
     </>
   );

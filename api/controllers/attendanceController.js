@@ -63,6 +63,60 @@ export const markAttendance = async (req, res) => {
   }
 };
 
+export const getBranchStudentsAttendance = async (req, res) => {
+  const branchId = new mongoose.Types.ObjectId(req.user.branchId);
+  const role = req.user.role;
+  try {
+    if (role !== "admin" && role !== "teacher") {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    // Get today's date in IST (YYYY-MM-DD)
+    const istNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+    const date = new Date(istNow.toISOString().split("T")[0]);
+
+    // Get all classes in the branch
+    const classes = await Class.find({ branchId }).select("_id");
+    const classIds = classes.map((c) => c._id);
+
+    // Get all students in the branch
+    const students = await Student.find({ branchId }).select("_id admissionNumber name");
+
+    // Get attendance records for today
+    const attendanceRecords = await Attendance.find({
+      date,
+      branchId,
+      classId: { $in: classIds },
+    }).select("studentId status");
+
+    // Map students with their attendance status
+    const studentAttendance = students.map((student) => {
+      const attendance = attendanceRecords.find(
+        (a) => a.studentId.toString() === student._id.toString()
+      );
+      return {
+        id: student._id,
+        admissionNo: student.admissionNumber || "N/A",
+        name: student.name,
+        status: attendance ? attendance.status : null,
+      };
+    });
+
+    const present = studentAttendance.filter((s) => s.status === "Present").length;
+    const absent = studentAttendance.filter((s) => s.status === "Absent").length;
+    const notMarked = studentAttendance.filter((s) => s.status === null).length;
+
+    return res.status(200).json({
+      students: studentAttendance,
+      summary: { present, absent, notMarked },
+    });
+  } catch (error) {
+    console.error("Error in getBranchStudentsAttendance:", error.message, "Stack:", error.stack);
+    return res.status(500).json({ message: "Server error while fetching branch attendance" });
+  }
+};
+
+
 // Update getClassStudentsForAttendance to return status
 export const getClassStudentsForAttendance = async (req, res) => {
   const branchId = new ObjectId(req.user.branchId);
@@ -436,5 +490,63 @@ export const getTeacherAttendanceByPeriod = async (req, res) => {
   } catch (error) {
     console.error("Error in getTeacherAttendanceByPeriod:", error.message);
     return res.status(500).json({ message: "Server error while fetching attendance" });
+  }
+};
+
+
+export const getBranchTeachersAttendance = async (req, res) => {
+  const branchId = new mongoose.Types.ObjectId(req.user.branchId);
+  const role = req.user.role;
+
+  console.log("getBranchTeachersAttendance called with branchId:", branchId);
+
+  try {
+    // Validate role
+    if (role !== "admin" && role !== "teacher") {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    // Get today's date in IST (YYYY-MM-DD)
+    const istNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+    const date = new Date(istNow.toISOString().split("T")[0]);
+    console.log("Fetching teacher attendance for date:", date);
+
+    // Get all teachers in the branch
+    const teachers = await Teacher.find({ branchId }).select("_id id name");
+    if (!teachers.length) {
+      return res.status(404).json({ message: "No teachers found for this branch" });
+    }
+
+    // Get attendance records for today
+    const attendanceRecords = await StaffAttendance.find({
+      date,
+      branchId,
+      staffId: { $in: teachers.map((t) => t._id) },
+    }).select("staffId status");
+
+    // Map teachers with their attendance status
+    const teacherAttendance = teachers.map((teacher) => {
+      const attendance = attendanceRecords.find(
+        (a) => a.staffId.toString() === teacher._id.toString()
+      );
+      return {
+        id: teacher._id,
+        teacherId: teacher.id || "N/A",
+        name: teacher.name,
+        status: attendance ? attendance.status : null,
+      };
+    });
+
+    const present = teacherAttendance.filter((t) => t.status === "Present").length;
+    const absent = teacherAttendance.filter((t) => t.status === "Absent").length;
+    const notMarked = teacherAttendance.filter((t) => t.status === null).length;
+
+    return res.status(200).json({
+      teachers: teacherAttendance,
+      summary: { present, absent, notMarked },
+    });
+  } catch (error) {
+    console.error("Error in getBranchTeachersAttendance:", error.message, "Stack:", error.stack);
+    return res.status(500).json({ message: "Server error while fetching branch teacher attendance" });
   }
 };

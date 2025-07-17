@@ -121,31 +121,56 @@ export const SidebarData = (userRole: string) => {
       allowedRoles: ["superadmin"],
       submenuItems: [
         {
-          label: "Branch",
+          label: "Branch Management",
           icon: "ti ti-building-bank",
-          submenu: false,
+          submenu: true,
+          submenuHdr: "Branch Management",
           showSubRoute: false,
-          link:routes.addBranch,
+          allowedRoles: ["superadmin"],
+          submenuItems: [
+            {
+              label: "Add Branch",
+              icon: "ti ti-building-bank",
+              submenu: false,
+              link: routes.addBranch,
+              showSubRoute: false,
+              allowedRoles: ["superadmin"],
+            },
+            {
+              label: "Add Admin",
+              icon: "ti ti-user-plus",
+              submenu: false,
+              link: routes.addAdmin,
+              showSubRoute: false,
+              allowedRoles: ["superadmin"],
+            },
+            {
+              label: "Assign Admin",
+              icon: "ti ti-user-check",
+              link: routes.assignAdmin,
+              submenu: false,
+              showSubRoute: false,
+              allowedRoles: ["superadmin"],
+            },
+          ],
+        },
+        {
+          label: "Students",
+          link: routes.students,
+          icon: "ti ti-backpack",
+          showSubRoute: false,
           allowedRoles: ["superadmin"],
         },
         {
-          label: "Add Admin",
-          icon: "ti ti-user-plus",
-          submenu: false,
-          link:routes.addAdmin,
+          label: "Staff",
+          link: routes.staffs,
+          icon: "ti ti-chalkboard",
           showSubRoute: false,
           allowedRoles: ["superadmin"],
         },
-        {
-          label: "Assign Admin",
-          icon: "ti ti-user-check",
-          link:routes.assignAdmin,
-          submenu: false,
-          showSubRoute: false,
-          allowedRoles: ["superadmin"],
-        }
-      ]
+      ],
     },
+    
     {
       label: "Academic",
       submenuOpen: true,
@@ -422,6 +447,13 @@ export const SidebarData = (userRole: string) => {
         {
           label: "Expenses",
           link: routes.expenses,
+          icon: "ti ti-wallet",
+          showSubRoute: false,
+          submenu: false,
+        },
+        {
+          label: "Income",
+          link: routes.income,
           icon: "ti ti-wallet",
           showSubRoute: false,
           submenu: false,

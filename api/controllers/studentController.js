@@ -19,13 +19,13 @@ export const generateId = async (entityType, branchId) => {
   const sequence = await getNextSequence(entityType, branchId);
   switch (entityType) {
     case "class":
-      return `LN-144-C${sequence}`; // LN-144-C001
+      return `LN-C${sequence}`; 
     case "session":
-      return `LN-144-S${sequence}`; // LN-144-S001
+      return `LN-S${sequence}`; 
     case "student":
-      return `LNS-144-${sequence}`; // LNS-144-1
+      return `LNS-${sequence}`; 
     case "teacher":
-      return `LNE-144-${sequence}`; // LNE-144-1
+      return `LNE-${sequence}`; 
     default:
       throw new Error("Invalid entity type");
   }
@@ -36,7 +36,7 @@ export const getNextStudentId = async (req, res) => {
     const { branchId } = req.user;
     const counter = await Counter.findOne({ type : "student_id", branchId });
     const sequence = counter ? counter.sequence + 1 : 1;
-    const id = `LNS-144-${sequence}`;
+    const id = `LNS-${sequence}`;
     res.status(200).json({ id });
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -570,3 +570,27 @@ export const getStudentsByClassAndSession = async (req, res) => {
   }
 };
 
+export const getAllStudentsWithBranch = async (req, res) => {
+  try {
+    const { branchId, sessionId, classId } = req.query;
+    const query = {};
+
+    // Use branchId directly as string (NO ObjectId conversion)
+    if (branchId) query.branchId = branchId; 
+    if (sessionId) query.sessionId = sessionId;
+    if (classId) query.classId = classId;
+
+    const students = await Student.find(query)
+      .populate('classId', 'name')
+      .select('admissionNumber name dateOfBirth gender status admissionDate classId');
+    
+    res.status(200).json({ success: true, data: students });
+  } catch (error) {
+    console.error('Error fetching students:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error',
+      error: error.message 
+    });
+  }
+};
