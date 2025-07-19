@@ -7,7 +7,6 @@ import TeacherProfileUpload from "./TeacherProfileUpload";
 import { useAuth } from "../../../../context/AuthContext";
 
 const API_URL = process.env.REACT_APP_URL || "";
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 
 interface TeacherSidebarProps {
   teacher?: {
@@ -49,11 +48,11 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({ teacher }) => {
         const cleanPath = photoData.path.replace(/\\/g, "/");
         const profileImagePath = cleanPath.startsWith('http') 
           ? cleanPath 
-          : `${BACKEND_URL}/${cleanPath}`;
+          : `${API_URL}/${cleanPath}`;
         setProfileImage(profileImagePath);
         console.log(profileImagePath)
       } else {
-        // Use default image (don't prepend BACKEND_URL for local assets)
+        // Use default image (don't prepend API_URL for local assets)
         setProfileImage("/assets/img/teachers/teacher-01.jpg");
       }
     } catch (error:any) {

@@ -15,7 +15,6 @@ const { TextArea } = Input;
 
 const API_URL = process.env.REACT_APP_URL || "";
 
-// Updated interfaces
 interface Session {
   _id: string;
   name: string;
@@ -49,7 +48,7 @@ interface Album {
   classId: Class | null;
   name: string;
   description: string;
-  images: Image[] | null; // Always array for multiple images
+  images: Image[] | null;
   createdBy: User | null;
 }
 
@@ -94,8 +93,8 @@ const AlbumManager: React.FC = () => {
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [previewImage, setPreviewImage] = useState<string>("");
   const [previewOpen, setPreviewOpen] = useState<boolean>(false);
+  const [imagesToDelete, setImagesToDelete] = useState<string[]>([]);
   
-  // Filter states
   const [filterSessionId, setFilterSessionId] = useState<string>("");
   const [filterClassId, setFilterClassId] = useState<string>("");
   const [filterClasses, setFilterClasses] = useState<Class[]>([]);
@@ -182,69 +181,60 @@ const AlbumManager: React.FC = () => {
   ];
 
   const fetchSessions = async () => {
-  try {
-    if (user?.role === "teacher") {
-      // For teachers, get sessions through their assigned classes
-      const classRes = await axios.get(`${API_URL}/api/class/teacher`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const teacherClasses = classRes.data as Class[];
-      
-      // Extract sessions, handling both string IDs and populated objects
-      const sessionsMap = new Map<string, Session>();
-      
-      teacherClasses.forEach(c => {
-        if (c.sessionId) {
-          if (typeof c.sessionId === 'string') {
-            // We have a string ID, we'll need to fetch the session details
-            // For now, we'll skip this case and fetch later
-          } else if (typeof c.sessionId === 'object' && c.sessionId._id) {
-            // We have a populated session object
-            sessionsMap.set(c.sessionId._id, c.sessionId);
+    try {
+      if (user?.role === "teacher") {
+        const classRes = await axios.get(`${API_URL}/api/class/teacher`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const teacherClasses = classRes.data as Class[];
+        
+        const sessionsMap = new Map<string, Session>();
+        
+        teacherClasses.forEach(c => {
+          if (c.sessionId) {
+            if (typeof c.sessionId === 'string') {
+              // Skip string IDs, handled later
+            } else if (typeof c.sessionId === 'object' && c.sessionId._id) {
+              sessionsMap.set(c.sessionId._id, c.sessionId);
+            }
+          }
+        });
+        
+        if (sessionsMap.size > 0) {
+          setSessions(Array.from(sessionsMap.values()));
+        } else {
+          const sessionIds = Array.from(
+            new Set(
+              teacherClasses
+                .map(c => typeof c.sessionId === 'string' ? c.sessionId : null)
+                .filter(Boolean)
+            )
+          );
+          
+          if (sessionIds.length > 0) {
+            const sessionPromises = sessionIds.map(sessionId => 
+              axios.get(`${API_URL}/api/session/${sessionId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+              })
+            );
+            const sessionResponses = await Promise.all(sessionPromises);
+            const teacherSessions = sessionResponses.map(res => res.data);
+            setSessions(teacherSessions);
+          } else {
+            setSessions([]);
           }
         }
-      });
-      
-      if (sessionsMap.size > 0) {
-        // We have populated sessions
-        setSessions(Array.from(sessionsMap.values()));
       } else {
-        // We need to fetch sessions by ID
-        const sessionIds = Array.from(
-          new Set(
-            teacherClasses
-              .map(c => typeof c.sessionId === 'string' ? c.sessionId : null)
-              .filter(Boolean)
-          )
-        );
-        
-        if (sessionIds.length > 0) {
-          const sessionPromises = sessionIds.map(sessionId => 
-            axios.get(`${API_URL}/api/session/${sessionId}`, {
-              headers: { Authorization: `Bearer ${token}` }
-            })
-          );
-          const sessionResponses = await Promise.all(sessionPromises);
-          const teacherSessions = sessionResponses.map(res => res.data);
-          setSessions(teacherSessions);
-        } else {
-          setSessions([]);
-        }
+        const res = await axios.get(`${API_URL}/api/session/get`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setSessions(res.data as Session[]);
       }
-    } else {
-      // For non-teachers, get all sessions
-      const res = await axios.get(`${API_URL}/api/session/get`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setSessions(res.data as Session[]);
+    } catch (error) {
+      console.error("Error fetching sessions:", error);
+      toast.error("Failed to fetch sessions");
     }
-  } catch (error) {
-    console.error("Error fetching sessions:", error);
-    toast.error("Failed to fetch sessions");
-  }
-};
-
-
+  };
 
   const fetchClasses = async (sessionId: string = "") => {
     try {
@@ -276,39 +266,38 @@ const AlbumManager: React.FC = () => {
   };
 
   const fetchAlbums = async (sessionId: string = "", classId: string = "") => {
-  try {
-    setIsLoading(true);
-    const endpoint = user?.role === "superadmin"
-      ? `${API_URL}/api/album/superadmin`
-      : `${API_URL}/api/album`;
-    
-    const params = new URLSearchParams();
-    if (sessionId) params.append('sessionId', sessionId);
-    if (classId) params.append('classId', classId);
-    
-    const res = await axios.get(`${endpoint}?${params.toString()}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    
-    const formattedData: Album[] = res.data.map((item: any) => ({
-      ...item,
-      key: item._id,
-    }));
-    
-    setAlbums(formattedData);
-    setFilteredAlbums(formattedData);
-  } catch (error: any) {
-    console.error("Error fetching albums:", error);
-    if (error.response?.status === 403) {
-      toast.error("Access denied to this class");
-    } else {
-      toast.error("Failed to fetch albums");
+    try {
+      setIsLoading(true);
+      const endpoint = user?.role === "superadmin"
+        ? `${API_URL}/api/album/superadmin`
+        : `${API_URL}/api/album`;
+      
+      const params = new URLSearchParams();
+      if (sessionId) params.append('sessionId', sessionId);
+      if (classId) params.append('classId', classId);
+      
+      const res = await axios.get(`${endpoint}?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      const formattedData: Album[] = res.data.map((item: any) => ({
+        ...item,
+        key: item._id,
+      }));
+      
+      setAlbums(formattedData);
+      setFilteredAlbums(formattedData);
+    } catch (error: any) {
+      console.error("Error fetching albums:", error);
+      if (error.response?.status === 403) {
+        toast.error("Access denied to this class");
+      } else {
+        toast.error("Failed to fetch albums");
+      }
+    } finally {
+      setIsLoading(false);
     }
-  } finally {
-    setIsLoading(false);
-  }
-};
-
+  };
 
   const handleAddAlbum = async () => {
     if (!formData.sessionId || !formData.classId || !formData.name || !formData.description || formData.images.length === 0) {
@@ -323,7 +312,6 @@ const AlbumManager: React.FC = () => {
       formDataToSend.append("name", formData.name);
       formDataToSend.append("description", formData.description);
       
-      // Append multiple images
       formData.images.forEach((image) => {
         formDataToSend.append("images", image);
       });
@@ -335,7 +323,6 @@ const AlbumManager: React.FC = () => {
         },
       });
 
-      // Populate the newly created album with session, class, and user data
       const populatedAlbum = await axios.get(`${API_URL}/api/album/${res.data._id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -365,7 +352,6 @@ const AlbumManager: React.FC = () => {
       fetchClasses(record.sessionId._id);
     }
     
-    // Set existing images in fileList for preview
     if (record.images && Array.isArray(record.images)) {
       const existingFiles: UploadFile[] = record.images.map((img, index) => ({
         uid: `existing-${index}`,
@@ -374,8 +360,11 @@ const AlbumManager: React.FC = () => {
         url: `${API_URL}/${img.path}`,
       }));
       setFileList(existingFiles);
+      console.log('handleEdit: Initialized fileList:', existingFiles);
     }
     
+    setImagesToDelete([]);
+    console.log('handleEdit: Initialized imagesToDelete as empty array');
     setIsEditModalOpen(true);
   };
 
@@ -397,12 +386,23 @@ const AlbumManager: React.FC = () => {
       formDataToSend.append("name", formData.name);
       formDataToSend.append("description", formData.description);
       
-      // Append new images if any
+      console.log('handleUpdateAlbum: imagesToDelete to send:', imagesToDelete);
+      if (imagesToDelete.length > 0) {
+        formDataToSend.append("imagesToDelete", JSON.stringify(imagesToDelete));
+      }
+      
       if (formData.images.length > 0) {
-        formData.images.forEach((image) => {
+        formData.images.forEach((image, index) => {
           formDataToSend.append("images", image);
+          console.log(`handleUpdateAlbum: Added image ${index}:`, image.name);
         });
       }
+
+      const formDataEntries: [string, any][] = [];
+      formDataToSend.forEach((value, key) => {
+        formDataEntries.push([key, value]);
+      });
+      console.log('handleUpdateAlbum: FormData contents:', formDataEntries);
 
       const res = await axios.put(`${API_URL}/api/album/${editAlbumId}`, formDataToSend, {
         headers: {
@@ -411,10 +411,13 @@ const AlbumManager: React.FC = () => {
         },
       });
 
-      // Get the updated album with populated data
+      console.log('handleUpdateAlbum: Backend response:', res.data);
+
       const populatedAlbum = await axios.get(`${API_URL}/api/album/${editAlbumId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+
+      console.log('handleUpdateAlbum: Populated album:', populatedAlbum.data);
 
       const updatedAlbum: Album = { ...populatedAlbum.data, key: populatedAlbum.data._id };
       setAlbums((prev) =>
@@ -426,9 +429,12 @@ const AlbumManager: React.FC = () => {
       resetForm();
       setIsEditModalOpen(false);
       setEditAlbumId(null);
+      setImagesToDelete([]);
+      console.log('handleUpdateAlbum: Form and state reset');
       toast.success("Album updated successfully");
     } catch (error: any) {
-      console.error("Error updating album:", error);
+      console.error("handleUpdateAlbum: Error updating album:", error);
+      console.log('handleUpdateAlbum: Error response:', error.response?.data);
       toast.error(error.response?.data?.message || "Error updating album");
     }
   };
@@ -466,6 +472,7 @@ const AlbumManager: React.FC = () => {
     setEditAlbumId(null);
     setClasses([]);
     setFileList([]);
+    setImagesToDelete([]);
   };
 
   const handleSearch = (value: string) => {
@@ -506,7 +513,7 @@ const AlbumManager: React.FC = () => {
     } else {
       setFilterClasses([]);
     }
-    applyFilters(searchText, value, "");
+    applyFilters(searchText, filterSessionId, "");
   };
 
   const handleFilterClassChange = (value: string) => {
@@ -514,16 +521,42 @@ const AlbumManager: React.FC = () => {
     applyFilters(searchText, filterSessionId, value);
   };
 
-  // Upload handling
   const handleUploadChange = ({ fileList: newFileList }: { fileList: UploadFile[] }) => {
-    setFileList(newFileList);
+    console.log('handleUploadChange: Previous fileList:', fileList.map(f => ({ uid: f.uid, name: f.name, status: f.status })));
+    console.log('handleUploadChange: New fileList:', newFileList.map(f => ({ uid: f.uid, name: f.name, status: f.status })));
     
-    // Extract actual files for form data
+    const newImagesToDelete = fileList
+      .filter(file => !newFileList.some(newFile => newFile.uid === file.uid))
+      .filter(file => file.status === 'done')
+      .map(file => file.name);
+    
+    console.log('handleUploadChange: New images to delete:', newImagesToDelete);
+    
+    setImagesToDelete(prev => {
+      const updated = Array.from(new Set([...prev, ...newImagesToDelete]));
+      console.log('handleUploadChange: Updated imagesToDelete:', updated);
+      return updated;
+    });
+    
     const files = newFileList
       .filter(file => file.originFileObj)
       .map(file => file.originFileObj as File);
     
+    setFileList(newFileList);
     setFormData(prev => ({ ...prev, images: files }));
+    console.log('handleUploadChange: Updated formData.images:', files.map(f => f.name));
+  };
+
+  const handleRemove = (file: UploadFile) => {
+    console.log('handleRemove: Removed file:', { uid: file.uid, name: file.name, status: file.status });
+    if (file.status === 'done') {
+      setImagesToDelete(prev => {
+        const updated = Array.from(new Set([...prev, file.name]));
+        console.log('handleRemove: Updated imagesToDelete:', updated);
+        return updated;
+      });
+    }
+    return true;
   };
 
   const handlePreview = async (file: UploadFile) => {
@@ -534,7 +567,6 @@ const AlbumManager: React.FC = () => {
     setPreviewOpen(true);
   };
 
-  // Handle image preview in view modal
   const handleViewImagePreview = (imageUrl: string) => {
     setPreviewImage(imageUrl);
     setPreviewOpen(true);
@@ -631,12 +663,6 @@ const AlbumManager: React.FC = () => {
                       </Option>
                     ))}
                   </Select>
-                  {/* <Input.Search
-                    placeholder="Search albums..."
-                    allowClear
-                    onSearch={handleSearch}
-                    style={{ width: 200 }}
-                  /> */}
                 </div>
               </div>
               <div className="card-body p-0 py-3">
@@ -659,7 +685,6 @@ const AlbumManager: React.FC = () => {
           </div>
         </div>
 
-        {/* Add Album Modal */}
         <Modal
           title="Add Album"
           open={isAddModalOpen}
@@ -734,6 +759,7 @@ const AlbumManager: React.FC = () => {
                 fileList={fileList}
                 onPreview={handlePreview}
                 onChange={handleUploadChange}
+                onRemove={handleRemove}
                 beforeUpload={() => false}
                 accept="image/*"
                 maxCount={10}
@@ -755,7 +781,6 @@ const AlbumManager: React.FC = () => {
           </div>
         </Modal>
 
-        {/* Edit Album Modal */}
         <Modal
           title="Edit Album"
           open={isEditModalOpen}
@@ -830,6 +855,7 @@ const AlbumManager: React.FC = () => {
                 fileList={fileList}
                 onPreview={handlePreview}
                 onChange={handleUploadChange}
+                onRemove={handleRemove}
                 beforeUpload={() => false}
                 accept="image/*"
                 maxCount={10}
@@ -851,7 +877,6 @@ const AlbumManager: React.FC = () => {
           </div>
         </Modal>
 
-        {/* View Album Modal */}
         <Modal
           title="Album Details"
           open={isViewModalOpen}
@@ -926,7 +951,6 @@ const AlbumManager: React.FC = () => {
           )}
         </Modal>
 
-        {/* Image Preview Modal */}
         <Modal
           open={previewOpen}
           title="Image Preview"

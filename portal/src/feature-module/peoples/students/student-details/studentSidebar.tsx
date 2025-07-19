@@ -40,7 +40,6 @@ interface Student {
 }
 
 const API_URL = process.env.REACT_APP_URL || "";
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 
 interface StudentSidebarProps {
   admissionNumber: string;
@@ -83,7 +82,7 @@ const StudentSidebar = ({ admissionNumber }: StudentSidebarProps) => {
 
       // Normalize profile image path
       const profileImagePath = studentData.profilePhoto?.path
-        ? `${BACKEND_URL}/${studentData.profilePhoto.path.replace(/\\/g, "/")}`
+        ? `${API_URL}/${studentData.profilePhoto.path.replace(/\\/g, "/")}`
         : "/assets/img/students/student-01.jpg";
 
       setStudent({
@@ -268,7 +267,7 @@ const StudentSidebar = ({ admissionNumber }: StudentSidebarProps) => {
           open={isModalOpen}
           onCancel={handleCancel}
           footer={null}
-          zIndex={1000} // Reduced zIndex to a reasonable value
+          zIndex={100000} // Reduced zIndex to a reasonable value
         >
           <StudentProfileUpload
             admissionNumber={admissionNumber}
