@@ -5,7 +5,7 @@ import Class from "../models/class.js";
 import { albumUpload } from "../middleware/multer.js";
 import fs from 'fs';
 import path from 'path';
-import { uploadsRoot } from "../UploadsRoot.js";
+import { uploadsRoot } from "../uploadsRoot.js";
 
 const fsPromises = fs.promises;
 export const createAlbum = async (req, res) => {
