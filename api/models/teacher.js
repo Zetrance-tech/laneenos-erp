@@ -202,6 +202,12 @@ const teacherSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  profilePhoto: {
+    filename: String,
+    path: String,
+    mimetype: String,
+    size: Number
+  }
 });
 
 teacherSchema.pre("save", function (next) {

@@ -16,7 +16,9 @@ import axios from "axios";
 import toast, { Toaster } from "react-hot-toast";
 import { Spin } from "antd";
 import { useAuth } from "../../../../context/AuthContext";
+
 const API_URL = process.env.REACT_APP_URL;
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 
 interface Teacher {
   _id: string; // MongoDB ID
@@ -48,6 +50,7 @@ interface Teacher {
   };
   status?: string;
   class?: string;
+  profileImage?: string; // Add this field
 }
 
 interface Option {
@@ -76,14 +79,41 @@ const TeacherList = () => {
   const [selectedRole, setSelectedRole] = useState<string>("");
   const {token} = useAuth();
 
+  // Function to fetch profile photo for a specific teacher
+  const fetchTeacherProfilePhoto = async (teacherId: string): Promise<string> => {
+    try {
+      const response = await axios.get(`${API_URL}/api/teacher/${teacherId}/profile-photo`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const photoData = response.data;
+      return photoData.path
+        ? `${BACKEND_URL}/${photoData.path.replace(/\\/g, "/")}`
+        : "/assets/img/teachers/teacher-01.jpg";
+    } catch (error) {
+      console.error(`Error fetching profile photo for teacher ${teacherId}:`, error);
+      return "/assets/img/teachers/teacher-01.jpg";
+    }
+  };
+
   useEffect(() => {
     const fetchTeachers = async () => {
       try {
         const response = await axios.get<Teacher[]>(`${API_URL}/api/teacher`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setTeachers(response.data);
-        setFilteredTeachers(response.data); // Initialize filteredTeachers
+        
+        // Fetch profile images for all teachers
+        const teachersWithImages = await Promise.all(
+          response.data.map(async (teacher) => {
+            const profileImage = await fetchTeacherProfilePhoto(teacher.id);
+            return { ...teacher, profileImage };
+          })
+        );
+        
+        setTeachers(teachersWithImages);
+        setFilteredTeachers(teachersWithImages); // Initialize filteredTeachers
         setLoading(false);
       } catch (err) {
         setError("Failed to fetch teachers");
@@ -93,7 +123,7 @@ const TeacherList = () => {
     };
 
     fetchTeachers();
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     // Apply role filter
@@ -150,10 +180,13 @@ const TeacherList = () => {
       render: (text: string, record: Teacher) => (
         <div className="d-flex align-items-center">
           <Link to="#" className="avatar avatar-md">
-            <ImageWithBasePath
-              src="assets/img/teachers/teacher-01.jpg"
+            <img
+              src={record.profileImage || "/assets/img/teachers/teacher-01.jpg"}
               className="img-fluid rounded-circle"
-              alt="img"
+              alt="Teacher Profile"
+              onError={(e) => {
+                e.currentTarget.src = "/assets/img/teachers/teacher-01.jpg";
+              }}
             />
           </Link>
           <div className="ms-2">
@@ -292,7 +325,6 @@ const TeacherList = () => {
             <div className="card-header d-flex align-items-center justify-content-between flex-wrap pb-0">
               <h4 className="mb-3">Staff List</h4>
               <div className="d-flex align-items-center flex-wrap">
-
                 <div className="d-flex align-items-center bg-white border rounded-2 p-1 mb-3 me-2">
                   <Link to="#" className="active btn btn-icon btn-sm me-1 primary-hover">
                     <i className="ti ti-list-tree" />

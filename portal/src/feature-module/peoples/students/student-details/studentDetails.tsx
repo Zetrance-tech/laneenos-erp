@@ -173,11 +173,11 @@ const StudentDetails = () => {
                           <div className="col-sm-6 col-lg-4">
                             <div className="d-flex align-items-center mb-3">
                               <span className="avatar avatar-lg flex-shrink-0">
-                                <ImageWithBasePath
+                                {/* <ImageWithBasePath
                                   src={student.fatherInfo.image || 'assets/img/parents/parent-13.jpg'}
                                   className="img-fluid rounded"
                                   alt="Father"
-                                />
+                                /> */}
                               </span>
                               <div className="ms-2 overflow-hidden">
                                 <h6 className="text-truncate">{student.fatherInfo.name}</h6>
@@ -208,11 +208,11 @@ const StudentDetails = () => {
                           <div className="col-sm-6 col-lg-4">
                             <div className="d-flex align-items-center mb-3">
                               <span className="avatar avatar-lg flex-shrink-0">
-                                <ImageWithBasePath
+                                {/* <ImageWithBasePath
                                   src={student.motherInfo.image || 'assets/img/parents/parent-14.jpg'}
                                   className="img-fluid rounded"
                                   alt="Mother"
-                                />
+                                /> */}
                               </span>
                               <div className="ms-2 overflow-hidden">
                                 <h6 className="text-truncate">{student.motherInfo.name}</h6>
@@ -243,11 +243,6 @@ const StudentDetails = () => {
                           <div className="col-sm-6 col-lg-4">
                             <div className="d-flex align-items-center mb-3">
                               <span className="avatar avatar-lg flex-shrink-0">
-                                <ImageWithBasePath
-                                  src={student.guardianInfo.image || 'assets/img/parents/parent-13.jpg'}
-                                  className="img-fluid rounded"
-                                  alt="Guardian"
-                                />
                               </span>
                               <div className="ms-2 overflow-hidden">
                                 <h6 className="text-truncate">{student.guardianInfo.name}</h6>

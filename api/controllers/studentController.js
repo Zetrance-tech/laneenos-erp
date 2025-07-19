@@ -6,6 +6,8 @@ import mongoose from "mongoose";
 import User from "../models/user.js";
 import Counter from "../models/counter.js";
 import StudentFee from "../models/studentFee.js";
+import path from "path";
+import fs from 'fs';
 export const getNextSequence = async (type, branchId) => {
   const counter = await Counter.findOneAndUpdate(
     { type: `${type}_id`, branchId },
@@ -250,7 +252,7 @@ export const getAllStudents = async (req, res) => {
       const classIds = classes.map((cls) => cls._id);
       students = await Student.find({ classId: { $in: classIds }, branchId })
         .select(
-          "name admissionNumber admissionDate status sessionId classId profileImage dateOfBirth gender bloodGroup religion category motherTongue languagesKnown fatherInfo motherInfo guardianInfo currentAddress permanentAddress transportInfo documents medicalHistory previousSchool"
+          "name admissionNumber admissionDate status sessionId classId profileImage dateOfBirth gender bloodGroup religion category motherTongue languagesKnown fatherInfo motherInfo guardianInfo currentAddress permanentAddress transportInfo documents medicalHistory previousSchool profilePhoto"
         )
         .populate("sessionId", "name sessionId")
         .populate("classId", "name id");
@@ -258,7 +260,7 @@ export const getAllStudents = async (req, res) => {
     } else if (role === "admin") {
       students = await Student.find({branchId})
         .select(
-          "name admissionNumber admissionDate status sessionId classId profileImage dateOfBirth gender bloodGroup religion category motherTongue languagesKnown fatherInfo motherInfo guardianInfo currentAddress permanentAddress transportInfo documents medicalHistory previousSchool"
+          "name admissionNumber admissionDate status sessionId classId profileImage dateOfBirth gender bloodGroup religion category motherTongue languagesKnown fatherInfo motherInfo guardianInfo currentAddress permanentAddress transportInfo documents medicalHistory previousSchool profilePhoto"
         )
         .populate("sessionId", "name sessionId")
         .populate("classId", "name id");
@@ -288,7 +290,6 @@ export const getStudentById = async (req, res) => {
     const student = await Student.findOne({ admissionNumber, branchId })
       .populate("sessionId", "name sessionId")
       .populate("classId", "name id");
-
     if (!student) return res.status(404).json({ message: "Student not found" });
 
     res.status(200).json(student);
@@ -592,5 +593,134 @@ export const getAllStudentsWithBranch = async (req, res) => {
       message: 'Server error',
       error: error.message 
     });
+  }
+};
+
+// Define the root uploads directory (one level up from api)
+// const uploadsRoot = path.join(process.cwd(), '..', 'uploads');
+
+import { uploadsRoot } from "../uploadsRoot.js";
+// Upload student profile photo
+export const uploadStudentProfilePhoto = async (req, res) => {
+  try {
+    console.log('Request file:', req.file);
+    const { admissionNumber } = req.params; // Using 'admissionNumber' field from Student schema
+    const { branchId } = req.user;
+
+    console.log("Uploaded file:", req.file);
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const student = await Student.findOne({ admissionNumber, branchId });
+    if (!student) {
+      // Delete the uploaded file if student is not found to prevent orphaned files
+      const filePath = path.join(uploadsRoot, 'students', req.file.filename);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+      return res.status(404).json({ error: "Student not found" });
+    }
+
+    // Delete old profile photo if it exists
+    if (student.profilePhoto && student.profilePhoto.path) {
+      const oldFilePath = path.join(uploadsRoot, student.profilePhoto.path);
+      if (fs.existsSync(oldFilePath)) {
+        fs.unlink(oldFilePath, (err) => {
+          if (err) console.error("Error deleting old photo:", err);
+        });
+      }
+    }
+
+    // Store relative path starting from uploads (e.g., students/filename.jpg)
+    const relativePath = path.join('students', req.file.filename).replace(/\\/g, '/');
+
+    // Update student with new profile photo
+    student.profilePhoto = {
+      filename: req.file.filename,
+      path: relativePath, // Store relative path
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+    };
+
+    const savedStudent = await student.save();
+    console.log("Saved student with profilePhoto:", savedStudent.profilePhoto);
+
+    res.json({
+      message: "Profile photo uploaded successfully",
+      file: {
+        filename: req.file.filename,
+        path: relativePath, // Return relative path
+        mimetype: req.file.mimetype,
+        size: req.file.size,
+      },
+    });
+  } catch (error) {
+    console.error("Error uploading profile photo:", error.message, error.stack);
+    // Clean up uploaded file on error
+    if (req.file) {
+      const filePath = path.join(uploadsRoot, 'students', req.file.filename);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get student profile photo
+export const getStudentProfilePhoto = async (req, res) => {
+  try {
+    const { admissionNumber } = req.params; // Using 'admissionNumber' field from Student schema
+    const { branchId } = req.user;
+
+    const student = await Student.findOne({ admissionNumber, branchId });
+    if (!student || !student.profilePhoto) {
+      return res.status(404).json({ error: "Profile photo not found" });
+    }
+
+    res.json({
+      filename: student.profilePhoto.filename,
+      path: student.profilePhoto.path, // Already stored as relative path
+      mimetype: student.profilePhoto.mimetype,
+      size: student.profilePhoto.size,
+    });
+  } catch (error) {
+    console.error("Error fetching profile photo:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Delete student profile photo
+export const deleteStudentProfilePhoto = async (req, res) => {
+  try {
+    const { admissionNumber } = req.params;
+    const { branchId } = req.user;
+
+    const student = await Student.findOne({ admissionNumber, branchId });
+    if (!student) {
+      return res.status(404).json({ error: "Student not found" });
+    }
+
+    if (!student.profilePhoto) {
+      return res.status(404).json({ error: "No profile photo to delete" });
+    }
+
+    // Delete the file from filesystem
+    const filePath = path.join(uploadsRoot, student.profilePhoto.path);
+    if (fs.existsSync(filePath)) {
+      fs.unlink(filePath, (err) => {
+        if (err) console.error("Error deleting photo file:", err);
+      });
+    }
+
+    // Remove profilePhoto from database
+    student.profilePhoto = undefined;
+    await student.save();
+
+    res.json({ message: "Profile photo deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting profile photo:", error.message);
+    res.status(500).json({ error: error.message });
   }
 };

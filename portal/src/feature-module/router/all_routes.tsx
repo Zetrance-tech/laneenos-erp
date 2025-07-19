@@ -238,6 +238,7 @@ export const all_routes = {
   feedetails:"/management/fee-details",
   expenses:"/management/expenses",
   income:"/management/income",
+  albums:"/management/albums",
   libraryMembers:"/management/library-members",
   libraryIssueBook:"/management/library-issue-book",
   libraryBooks:"/management/library-books",

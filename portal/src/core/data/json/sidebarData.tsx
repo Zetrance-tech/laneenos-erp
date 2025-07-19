@@ -383,13 +383,14 @@ export const SidebarData = (userRole: string) => {
       label: "MANAGEMENT",
       submenuOpen: true,
       submenuHdr: "Management",
-      allowedRoles: ["admin"],
+      allowedRoles: ["admin", "teacher"],
       showSubRoute: false,
       submenuItems: [
         {
           label: "Fees Collection",
           icon: "ti ti-report-money",
           submenu: true,
+          allowedRoles: ["admin"],
           showSubRoute: false,
           submenuItems: [
             { label: "Fees Group", link: routes.feesGroup },
@@ -418,6 +419,7 @@ export const SidebarData = (userRole: string) => {
           icon: "ti ti-message",
           submenu: true,
           showSubRoute: false,
+          allowedRoles: ["admin"],
           link:routes.enquiry,
           submenuItems: [
             { 
@@ -449,12 +451,24 @@ export const SidebarData = (userRole: string) => {
           link: routes.expenses,
           icon: "ti ti-wallet",
           showSubRoute: false,
+          allowedRoles: ["admin"],
+
           submenu: false,
         },
         {
           label: "Income",
           link: routes.income,
-          icon: "ti ti-wallet",
+          icon: "ti ti-cash",
+          showSubRoute: false,
+          allowedRoles: ["admin"],
+
+          submenu: false,
+        },
+        {
+          label: "Albums",
+          link: routes.albums,
+          icon: "ti ti-photo",
+          allowedRoles: ["admin", "teacher"],
           showSubRoute: false,
           submenu: false,
         },

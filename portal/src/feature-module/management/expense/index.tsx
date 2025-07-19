@@ -101,13 +101,13 @@ const ExpenseManager: React.FC = () => {
 
   const columns = [
     {
-      title: "Expense #",
+      title: "Expense ID",
       dataIndex: "expenseNumber",
       render: (text: string) => <span>{text}</span>,
       sorter: (a: Expense, b: Expense) => a.expenseNumber.localeCompare(b.expenseNumber),
     },
     {
-      title: "Invoice #",
+      title: "Invoice",
       dataIndex: "invoiceNumber",
       sorter: (a: Expense, b: Expense) => a.invoiceNumber.localeCompare(b.invoiceNumber),
     },
@@ -472,7 +472,7 @@ const ExpenseManager: React.FC = () => {
             </div>
             <div className="card">
               <div className="card-header d-flex align-items-center justify-content-between flex-wrap pb-0">
-                <h4 className="mb-3">Expenses List</h4>
+                <h4 className="mb-3">Expenses</h4>
                 {/* <Search
                   placeholder="Search by any field"
                   allowClear

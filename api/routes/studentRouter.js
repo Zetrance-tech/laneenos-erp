@@ -13,9 +13,11 @@ import {
   getNextStudentId,
   getAllStudentsWithBranch,
   updateCCTVTimes,
+  uploadStudentProfilePhoto,
+  getStudentProfilePhoto
 } from "../controllers/studentController.js";
 import authMiddleware from "../middleware/auth.js";
-
+import { upload, studentUpload } from "../middleware/multer.js";
 const router = express.Router();
 
 // Log all incoming requests
@@ -37,6 +39,9 @@ router.get("/admission/:admissionNumber", authMiddleware(["admin", "superadmin",
 router.get("/by-class-session/:classId/:sessionId", authMiddleware(["admin","superadmin",  "parent", "teacher"]), getStudentsByClassAndSession);
 router.post("/filter", authMiddleware(["admin", "parent","superadmin",  "teacher"]), getStudentByFilter);
 
+
+router.post("/profile-photo/:admissionNumber", authMiddleware(["admin", "superadmin"]), studentUpload.single('profilePhoto'), uploadStudentProfilePhoto);
+router.get("/profile-photo/:admissionNumber", authMiddleware(["admin", "superadmin", "parent", "teacher"]), getStudentProfilePhoto);
 // Must be after specific routes to avoid catching unintended paths
 router.get("/:admissionNumber", authMiddleware(["admin", "parent", "superadmin", "teacher"]), getStudentById);
 

@@ -1147,7 +1147,7 @@ const FeeTemplateManager: React.FC = () => {
   const [showEditTemplateModal, setShowEditTemplateModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
-  const token = useAuth();
+  const {token} = useAuth();
   const config = {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1466,7 +1466,7 @@ const AddFeeTemplateModal: React.FC<AddFeeTemplateModalProps> = ({
     fees: [{ feesGroup: "", amount: 0 }] as FeeDetail[],
     status: "Active" as "Active" | "Inactive",
   });
-  const token = useAuth();
+  const {token} = useAuth();
   const config = {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1689,7 +1689,7 @@ const EditFeeTemplateModal: React.FC<EditFeeTemplateModalProps> = ({
     fees: [] as FeeDetail[],
     status: "Active" as "Active" | "Inactive",
   });
-  const token = useAuth();
+  const {token }= useAuth();
 
     const config = {
       headers: {
@@ -1995,7 +1995,7 @@ const AssignTemplateModal: React.FC<AssignTemplateModalProps> = ({
 }) => {
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const token = useAuth();
+  const {token} = useAuth();
   const config = {
       headers: {
         Authorization: `Bearer ${token}`,

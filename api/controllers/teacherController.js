@@ -4,7 +4,8 @@ import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import Counter from "../models/counter.js";
 import Branch from "../models/branch.js";
-
+import path from "path";
+import fs from "fs";
 export const getNextSequence = async (type, branchId) => {
   const counter = await Counter.findOneAndUpdate(
    { type: `${type}_id`, branchId },
@@ -352,3 +353,130 @@ export const countTeacher = async (req, res) => {
   }
 };
 
+
+
+// const uploadsRoot = path.join(process.cwd(), '..', 'uploads');
+import { uploadsRoot } from "../uploadsRoot.js";
+// Upload teacher profile photo
+export const uploadTeacherProfilePhoto = async (req, res) => {
+  try {
+    const { id } = req.params; // Using custom 'id' field from Teacher schema
+    const { branchId } = req.user;
+
+    console.log("Uploaded file:", req.file);
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const teacher = await Teacher.findOne({ id, branchId });
+    if (!teacher) {
+      // Delete the uploaded file if teacher is not found to prevent orphaned files
+      const filePath = path.join(uploadsRoot, 'teachers', req.file.filename);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+      return res.status(404).json({ error: "Teacher not found" });
+    }
+
+    // Delete old profile photo if it exists
+    if (teacher.profilePhoto && teacher.profilePhoto.path) {
+      const oldFilePath = path.join(uploadsRoot, teacher.profilePhoto.path);
+      if (fs.existsSync(oldFilePath)) {
+        fs.unlink(oldFilePath, (err) => {
+          if (err) console.error("Error deleting old photo:", err);
+        });
+      }
+    }
+
+    // Store relative path starting from uploads (e.g., teachers/filename.jpg)
+    const relativePath = path.join('teachers', req.file.filename).replace(/\\/g, '/');
+
+    // Update teacher with new profile photo
+    teacher.profilePhoto = {
+      filename: req.file.filename,
+      path: relativePath, // Store relative path
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+    };
+
+    const savedTeacher = await teacher.save();
+    console.log("Saved teacher with profilePhoto:", savedTeacher.profilePhoto);
+
+    res.json({
+      message: "Profile photo uploaded successfully",
+      file: {
+        filename: req.file.filename,
+        path: relativePath, // Return relative path
+        mimetype: req.file.mimetype,
+        size: req.file.size,
+      },
+    });
+  } catch (error) {
+    console.error("Error uploading profile photo:", error.message, error.stack);
+    // Clean up uploaded file on error
+    if (req.file) {
+      const filePath = path.join(uploadsRoot, 'teachers', req.file.filename);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get teacher profile photo
+export const getTeacherProfilePhoto = async (req, res) => {
+  try {
+    const { id } = req.params; // Using custom 'id' field from Teacher schema
+    const { branchId } = req.user;
+
+    const teacher = await Teacher.findOne({ id, branchId });
+    if (!teacher || !teacher.profilePhoto) {
+      return res.status(404).json({ error: "Profile photo not found" });
+    }
+
+    res.json({
+      filename: teacher.profilePhoto.filename,
+      path: teacher.profilePhoto.path, // Already stored as relative path
+      mimetype: teacher.profilePhoto.mimetype,
+      size: teacher.profilePhoto.size,
+    });
+  } catch (error) {
+    console.error("Error fetching profile photo:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Delete teacher profile photo
+export const deleteTeacherProfilePhoto = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { branchId } = req.user;
+
+    const teacher = await Teacher.findOne({ id, branchId });
+    if (!teacher) {
+      return res.status(404).json({ error: "Teacher not found" });
+    }
+
+    if (!teacher.profilePhoto) {
+      return res.status(404).json({ error: "No profile photo to delete" });
+    }
+
+    // Delete the file from filesystem
+    const filePath = path.join(uploadsRoot, teacher.profilePhoto.path);
+    if (fs.existsSync(filePath)) {
+      fs.unlink(filePath, (err) => {
+        if (err) console.error("Error deleting photo file:", err);
+      });
+    }
+
+    // Remove profilePhoto from database
+    teacher.profilePhoto = undefined;
+    await teacher.save();
+
+    res.json({ message: "Profile photo deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting profile photo:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+};

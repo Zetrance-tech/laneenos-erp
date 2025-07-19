@@ -271,6 +271,7 @@ import AssignAdmin from "../superadmin/assignAdmin";
 import StudentListForSuperadmin from "../superadmin/student";
 import StaffListForSuperadmin from "../superadmin/staff";
 import IncomeManager from "../management/income";
+import AlbumManager from "../management/album";
 const routes = all_routes;
 interface StudentLeaves {
   admissionNumber: string; // Updated prop name to match API field
@@ -1284,6 +1285,10 @@ export const protectedPublicRoutes = [
   {
     path: routes.income,
     element: <IncomeManager/>,
+  },
+  {
+    path: routes.albums,
+    element: <AlbumManager/>,
   },
   {
     path: routes.cctvList,

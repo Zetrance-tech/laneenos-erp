@@ -20,7 +20,6 @@ const studentSchema = new mongoose.Schema({
     ref: "Class",
     default: null
   }, 
-  profileImage: { type: String, default: null },
   name: { type: String, required: true },
   dateOfBirth: { type: Date, required: true },
   gender: { type: String, enum: ["male", "female", "other"], required: true },
@@ -90,7 +89,12 @@ const studentSchema = new mongoose.Schema({
     allergies: [{ type: String }],
     medications: [{ type: String }]
   },
-  
+  profilePhoto: {
+    filename: String,
+    path: String,
+    mimetype: String,
+    size: Number
+  }
 })
 import bcrypt from "bcryptjs"
 

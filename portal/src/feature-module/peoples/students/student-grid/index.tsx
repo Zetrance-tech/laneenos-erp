@@ -10,6 +10,7 @@ import { useAuth } from '../../../../context/AuthContext';
 
 const { Option } = Select;
 const API_URL = process.env.REACT_APP_URL;
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 
 interface Student {
   _id: string;
@@ -22,7 +23,13 @@ interface Student {
   classId?: { _id: string; name: string } | string;
   rollNumber?: string;
   status: 'active' | 'inactive';
-  profileImage?: string;
+  profileImage: string; // Changed to string for type safety
+  profilePhoto?: {
+    filename: string;
+    path: string;
+    mimetype: string;
+    size: number;
+  };
 }
 
 const StudentGrid = () => {
@@ -48,9 +55,18 @@ const StudentGrid = () => {
       const res = await axios.get(`${API_URL}/api/student`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setStudents(res.data);
-      setFilteredStudents(res.data);
-      console.log('Students fetched:', res.data);
+      console.log("here", res)
+      // Process each student to normalize profile image path
+      const processedStudents = res.data.map((student: any) => ({
+        ...student,
+        profileImage: student.profilePhoto?.path
+          ? `${BACKEND_URL}/${student.profilePhoto.path.replace(/\\/g, "/")}`
+          : "/assets/img/students/student-01.jpg"
+      }));
+      
+      setStudents(processedStudents);
+      setFilteredStudents(processedStudents);
+      console.log('Students fetched:', processedStudents);
     } catch (error) {
       console.error('Error fetching students:', error);
       setError('Failed to load students');
@@ -240,8 +256,8 @@ const StudentGrid = () => {
                           to={routes.studentDetail.replace(":admissionNumber", item.admissionNumber)}
                           className="avatar avatar-lg flex-shrink-0"
                         >
-                          <ImageWithBasePath
-                            src={item.profileImage || 'assets/img/students/student-01.jpg'}
+                          <img
+                            src={item.profileImage}
                             className="img-fluid rounded-circle"
                             alt="Student"
                           />

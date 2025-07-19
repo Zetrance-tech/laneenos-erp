@@ -10,7 +10,9 @@ import TooltipOption from '../../../../core/common/tooltipOption';
 import axios from 'axios';
 import { Spin } from 'antd';
 import { useAuth } from '../../../../context/AuthContext';
+
 const API_URL = process.env.REACT_APP_URL;
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 
 interface Teacher {
   _id: string;
@@ -47,6 +49,7 @@ interface Teacher {
     phoneNumber?: string;
   };
   status?: string;
+  profileImage?: string; // Add this field
 }
 
 interface Option {
@@ -74,14 +77,41 @@ const TeacherGrid = () => {
   const [selectedRole, setSelectedRole] = useState<string>("");
   const {token} = useAuth();
 
+  // Function to fetch profile photo for a specific teacher
+  const fetchTeacherProfilePhoto = async (teacherId: string): Promise<string> => {
+    try {
+      const response = await axios.get(`${API_URL}/api/teacher/${teacherId}/profile-photo`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const photoData = response.data;
+      return photoData.path
+        ? `${BACKEND_URL}/${photoData.path.replace(/\\/g, "/")}`
+        : "/assets/img/teachers/teacher-01.jpg";
+    } catch (error) {
+      console.error(`Error fetching profile photo for teacher ${teacherId}:`, error);
+      return "/assets/img/teachers/teacher-01.jpg";
+    }
+  };
+
   useEffect(() => {
     const fetchTeachers = async () => {
       try {
         const response = await axios.get<Teacher[]>(`${API_URL}/api/teacher`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setTeachers(response.data);
-        setFilteredTeachers(response.data);
+        
+        // Fetch profile images for all teachers
+        const teachersWithImages = await Promise.all(
+          response.data.map(async (teacher) => {
+            const profileImage = await fetchTeacherProfilePhoto(teacher.id);
+            return { ...teacher, profileImage };
+          })
+        );
+        
+        setTeachers(teachersWithImages);
+        setFilteredTeachers(teachersWithImages);
         setLoading(false);
       } catch (err) {
         setError("Failed to fetch teachers");
@@ -91,7 +121,7 @@ const TeacherGrid = () => {
     };
 
     fetchTeachers();
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     // Apply role filter
@@ -249,10 +279,13 @@ const TeacherGrid = () => {
                             to={routes.teacherDetails.replace(":id", teacher.id || "")}
                             className="avatar avatar-lg flex-shrink-0"
                           >
-                            <ImageWithBasePath
-                              src={`assets/img/teachers/teacher-01.jpg`}
+                            <img
+                              src={teacher.profileImage || "/assets/img/teachers/teacher-01.jpg"}
                               className="img-fluid rounded-circle"
-                              alt="img"
+                              alt="Teacher Profile"
+                              onError={(e) => {
+                                e.currentTarget.src = "/assets/img/teachers/teacher-01.jpg";
+                              }}
                             />
                           </Link>
                           <div className="ms-2 d-flex flex-column gap-1">

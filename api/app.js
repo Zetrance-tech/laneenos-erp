@@ -31,6 +31,8 @@ import expenseRoute from './routes/expenseRouter.js';
 import branchRoute from './routes/branchRouter.js';
 import cctvRoute from './routes/cctvRouter.js'
 import incomeRoute from './routes/incomeRouter.js'
+import albumRoute from './routes/albumRouter.js'
+import path from "path";
 dotenv.config();
 const app = express();
 const MongoURL = process.env.MONGODB_URI;
@@ -41,6 +43,7 @@ app.use(bodyParser.json());
 app.use(methodOverride("_method"));
 app.use(express.urlencoded({ extended: true }));
 
+app.use('/', express.static(path.join(process.cwd(),'..', 'uploads')));
 app.use("/api/auth", authRoute)
 app.use("/api/branch", branchRoute);
 app.use("/api/events", eventRoute);
@@ -65,6 +68,7 @@ app.use("/api/expenses", expenseRoute);
 app.use("/api/concession", concessionRoute);
 app.use("/api/cctv", cctvRoute);
 app.use("/api/income", incomeRoute);
+app.use("/api/album", albumRoute);
 
 app.get("/", (req, res) => {
   res.send("hehehehe");

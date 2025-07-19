@@ -846,12 +846,7 @@ useEffect(() => {
                           <h1 className="text-white me-2">
                             Welcome Back, {user.name}
                           </h1>
-                          <Link
-                            to="profile"
-                            className="avatar avatar-sm img-rounded bg-gray-800 dark-hover"
-                          >
-                            <i className="ti ti-edit text-white" />
-                          </Link>
+                          
                         </div>
                         <p className="text-white">Have a Good day at work</p>
                       </div>

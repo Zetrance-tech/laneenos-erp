@@ -11,6 +11,7 @@ import { useAuth } from "../../../../context/AuthContext";
 
 const { Option } = Select;
 const API_URL = process.env.REACT_APP_URL;
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 
 interface Student {
   _id: string;
@@ -22,6 +23,13 @@ interface Student {
   admissionDate: string;
   class: string | null;
   classId?: { id: string; name: string };
+  profileImage: string; // Added for profile image path
+  profilePhoto?: {
+    filename: string;
+    path: string;
+    mimetype: string;
+    size: number;
+  };
 }
 
 const StudentList = () => {
@@ -40,10 +48,13 @@ const StudentList = () => {
       const res = await axios.get(`${API_URL}/api/student`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      // Map classId.name to class field
+      // Process each student to normalize profile image path and map classId.name to class field
       const mappedStudents = res.data.map((student: any) => ({
         ...student,
         class: student.classId?.name || "N/A",
+        profileImage: student.profilePhoto?.path
+          ? `${BACKEND_URL}/${student.profilePhoto.path.replace(/\\/g, "/")}`
+          : "/assets/img/students/student-01.jpg",
       }));
       setStudents(mappedStudents);
       setFilteredStudents(mappedStudents);
@@ -87,18 +98,18 @@ const StudentList = () => {
     {
       title: "Name",
       dataIndex: "name",
-      render: (text: string) => (
+      render: (text: string, record: Student) => (
         <div className="d-flex align-items-center">
-          <Link to="#" className="avatar avatar-md">
-            <ImageWithBasePath
-              src="assets/img/students/student-01.jpg"
+          <Link to={routes.studentDetail.replace(":admissionNumber", record.admissionNumber)} className="avatar avatar-md">
+            <img
+              src={record.profileImage}
               className="img-fluid rounded-circle"
-              alt="img"
+              alt="Student"
             />
           </Link>
           <div className="ms-2">
             <p className="text-dark mb-0">
-              <Link to="#">{text}</Link>
+              <Link to={routes.studentDetail.replace(":admissionNumber", record.admissionNumber)}>{text}</Link>
             </p>
           </div>
         </div>

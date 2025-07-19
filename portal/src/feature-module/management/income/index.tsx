@@ -232,23 +232,6 @@ const IncomeManager: React.FC = () => {
   };
 
   const handleAddIncome = async () => {
-    // if (
-    //   !formData.income_title ||
-    //   !formData.income_type ||
-    //   !formData.amount ||
-    //   !formData.receipt_date ||
-    //   !formData.received_from ||
-    //   !formData.received_by ||
-    //   !formData.status ||
-    //   (formData.paymentStatus === "Paid" && (
-    //     !formData.paymentDate ||
-    //     (formData.payment_method === "Cheque" && (!formData.bankName || !formData.chequeNumber || !formData.chequeDate)) ||
-    //     ((formData.payment_method === "Bank Transfer" || formData.payment_method === "UPI" || formData.payment_method === "Card") && !formData.transactionId)
-    //   ))
-    // ) {
-    //   toast.error("All required fields must be filled");
-    //   return;
-    // }
 
     try {
       const payload = {
@@ -458,7 +441,7 @@ const IncomeManager: React.FC = () => {
           <div className="content">
             <div className="d-md-flex d-block align-items-center justify-content-between mb-3">
               <div className="my-auto mb-2">
-                <h3 className="page-title mb-1">Incomes List</h3>
+                <h3 className="page-title mb-1">Income</h3>
                 <nav>
                   <ol className="breadcrumb mb-0">
                     <li className="breadcrumb-item">
