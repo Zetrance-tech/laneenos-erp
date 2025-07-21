@@ -4,7 +4,7 @@ import ImageWithBasePath from "../../../../core/common/imageWithBasePath";
 import axios from "axios";
 import StudentProfileUpload from "./StudentProfileUpload";
 import { Modal } from "antd";
-
+import { all_routes } from "../../../router/all_routes";
 interface Student {
   session: string;
   firstName: string;
@@ -196,10 +196,7 @@ const StudentSidebar = ({ admissionNumber }: StudentSidebarProps) => {
               <dd className="col-6 mb-3">{student.className}</dd>
             </dl>
             <Link
-              to="#"
-              data-bs-toggle="modal"
-              data-bs-target="#add_fees_collect"
-              className="btn btn-primary btn-sm w-100"
+              to={all_routes.generateFees}
             >
               Add Fees
             </Link>
@@ -230,7 +227,7 @@ const StudentSidebar = ({ admissionNumber }: StudentSidebarProps) => {
         </div>
         <div className="card border-white mb-0">
           <div className="card-body pb-1">
-            <h5 className="mb-3">Transportation Infoබ- Info</h5>
+            <h5 className="mb-3">Transportation Info</h5>
             <div className="d-flex align-items-center mb-3">
               <span className="avatar avatar-md bg-light-300 rounded me-2 flex-shrink-0 text-default">
                 <i className="ti ti-bus fs-16" />

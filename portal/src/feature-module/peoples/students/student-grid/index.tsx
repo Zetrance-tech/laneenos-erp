@@ -1,16 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { all_routes } from '../../../router/all_routes';
 import ImageWithBasePath from '../../../../core/common/imageWithBasePath';
-import StudentModals from '../studentModals';
 import TooltipOption from '../../../../core/common/tooltipOption';
 import axios from 'axios';
-import { Spin, Select } from 'antd';
+import { Modal, Spin, Select, message } from 'antd';
 import { useAuth } from '../../../../context/AuthContext';
 
 const { Option } = Select;
 const API_URL = process.env.REACT_APP_URL;
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 
 interface Student {
   _id: string;
@@ -23,7 +21,7 @@ interface Student {
   classId?: { _id: string; name: string } | string;
   rollNumber?: string;
   status: 'active' | 'inactive';
-  profileImage: string; // Changed to string for type safety
+  profileImage: string;
   profilePhoto?: {
     filename: string;
     path: string;
@@ -41,6 +39,8 @@ const StudentGrid = () => {
   const [error, setError] = useState<string | null>(null);
   const [classes, setClasses] = useState<{ value: string; label: string }[]>([]);
   const [selectedClass, setSelectedClass] = useState<string | null>(null);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [studentToDelete, setStudentToDelete] = useState<string | null>(null);
   const { token } = useAuth();
 
   const handleApplyClick = () => {
@@ -55,18 +55,14 @@ const StudentGrid = () => {
       const res = await axios.get(`${API_URL}/api/student`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      console.log("here", res)
-      // Process each student to normalize profile image path
       const processedStudents = res.data.map((student: any) => ({
         ...student,
         profileImage: student.profilePhoto?.path
-          ? `${BACKEND_URL}/${student.profilePhoto.path.replace(/\\/g, "/")}`
+          ? `${API_URL}/${student.profilePhoto.path.replace(/\\/g, "/")}`
           : "/assets/img/students/student-01.jpg"
       }));
-      
       setStudents(processedStudents);
       setFilteredStudents(processedStudents);
-      console.log('Students fetched:', processedStudents);
     } catch (error) {
       console.error('Error fetching students:', error);
       setError('Failed to load students');
@@ -91,7 +87,6 @@ const StudentGrid = () => {
     fetchClasses();
   }, []);
 
-  // Filter students by selected class
   useEffect(() => {
     if (selectedClass) {
       setFilteredStudents(
@@ -113,6 +108,33 @@ const StudentGrid = () => {
       month: 'short',
       day: 'numeric',
     });
+  };
+
+  const handleDelete = async () => {
+    if (!studentToDelete) return;
+    try {
+      await axios.delete(`${API_URL}/api/student/${studentToDelete}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setStudents(students.filter((student) => student.admissionNumber !== studentToDelete));
+      setFilteredStudents(filteredStudents.filter((student) => student.admissionNumber !== studentToDelete));
+      message.success("Student deleted successfully");
+      setIsModalVisible(false);
+      setStudentToDelete(null);
+    } catch (error) {
+      console.error("Error deleting student:", error);
+      message.error("Failed to delete student");
+    }
+  };
+
+  const showDeleteModal = (admissionNumber: string) => {
+    setStudentToDelete(admissionNumber);
+    setIsModalVisible(true);
+  };
+
+  const handleCancel = () => {
+    setIsModalVisible(false);
+    setStudentToDelete(null);
   };
 
   return (
@@ -137,7 +159,9 @@ const StudentGrid = () => {
             <TooltipOption />
             <div className="mb-2">
               <Link to={routes.addStudent} className="btn btn-primary d-flex align-items-center">
-                <i className="ti ti-square-rounded-plus me-2" />
+                <i className="ti ti
+
+-square-rounded-plus me-2" />
                 Add Student
               </Link>
             </div>
@@ -190,9 +214,7 @@ const StudentGrid = () => {
                     </Link>
                     <div className="d-flex align-items-center">
                       <span
-                        className={`badge badge-soft-${
-                          item.status === 'active' ? 'success' : 'danger'
-                        } d-inline-flex align-items-center me-1`}
+                        className={`badge badge-soft-${item.status === 'active' ? 'success' : 'danger'} d-inline-flex align-items-center me-1`}
                       >
                         <i className="ti ti-circle-filled fs-5 me-1" />
                         {item.status}
@@ -238,8 +260,7 @@ const StudentGrid = () => {
                             <Link
                               className="dropdown-item rounded-1"
                               to="#"
-                              data-bs-toggle="modal"
-                              data-bs-target="#delete-modal"
+                              onClick={() => showDeleteModal(item.admissionNumber)}
                             >
                               <i className="ti ti-trash-x me-2" />
                               Delete
@@ -295,7 +316,18 @@ const StudentGrid = () => {
           )}
         </div>
       </div>
-      <StudentModals />
+      <Modal
+        title="Confirm Deletion"
+        open={isModalVisible}
+        onOk={handleDelete}
+        onCancel={handleCancel}
+        okText="Delete"
+        cancelText="Cancel"
+        zIndex={10000}
+        okButtonProps={{ danger: true }}
+      >
+        <p>Are you sure you want to delete this student?</p>
+      </Modal>
     </div>
   );
 };

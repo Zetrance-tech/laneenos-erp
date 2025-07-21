@@ -464,13 +464,26 @@ export const SidebarData = (userRole: string) => {
 
           submenu: false,
         },
+        // {
+        //   label: "Albums",
+        //   link: routes.albums,
+        //   icon: "ti ti-photo",
+        //   allowedRoles: ["admin", "teacher"],
+        //   showSubRoute: false,
+        //   submenu: false,
+        // },
         {
-          label: "Albums",
-          link: routes.albums,
+          label: "Media",
           icon: "ti ti-photo",
+          submenu: true,
           allowedRoles: ["admin", "teacher"],
           showSubRoute: false,
-          submenu: false,
+          submenuItems: [
+            { label: "Albums", link: routes.albums },
+            { label: "Advertisement", link: routes.advertisement },
+            { label: "Stories", link: routes.stories },
+            { label: "Videos", link: routes.videos },
+          ],
         },
         // {
         //   label: "Players",

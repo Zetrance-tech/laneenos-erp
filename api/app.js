@@ -32,6 +32,9 @@ import branchRoute from './routes/branchRouter.js';
 import cctvRoute from './routes/cctvRouter.js'
 import incomeRoute from './routes/incomeRouter.js'
 import albumRoute from './routes/albumRouter.js'
+import advertisementRoute from "./routes/advertisementRouter.js";
+import storyRoute from "./routes/storyRouter.js";
+import videoRoute from "./routes/videoRouter.js";
 import path from "path";
 dotenv.config();
 const app = express();
@@ -69,6 +72,9 @@ app.use("/api/concession", concessionRoute);
 app.use("/api/cctv", cctvRoute);
 app.use("/api/income", incomeRoute);
 app.use("/api/album", albumRoute);
+app.use("/api/advertisement", advertisementRoute);
+app.use("/api/story", storyRoute);
+app.use("/api/video", videoRoute);
 
 app.get("/", (req, res) => {
   res.send("hehehehe");

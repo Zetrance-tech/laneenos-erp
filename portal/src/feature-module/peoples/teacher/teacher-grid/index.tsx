@@ -12,7 +12,6 @@ import { Spin } from 'antd';
 import { useAuth } from '../../../../context/AuthContext';
 
 const API_URL = process.env.REACT_APP_URL;
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 
 interface Teacher {
   _id: string;
@@ -87,7 +86,7 @@ const TeacherGrid = () => {
       });
       const photoData = response.data;
       return photoData.path
-        ? `${BACKEND_URL}/${photoData.path.replace(/\\/g, "/")}`
+        ? `${API_URL}/${photoData.path.replace(/\\/g, "/")}`
         : "/assets/img/teachers/teacher-01.jpg";
     } catch (error) {
       console.error(`Error fetching profile photo for teacher ${teacherId}:`, error);

@@ -2,16 +2,14 @@ import React, { useRef, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { all_routes } from "../../../router/all_routes";
 import ImageWithBasePath from "../../../../core/common/imageWithBasePath";
-import StudentModals from "../studentModals";
 import Table from "../../../../core/common/dataTable/index";
 import TooltipOption from "../../../../core/common/tooltipOption";
 import axios from "axios";
-import { Spin, Select } from "antd";
+import { Modal, Spin, Select, message } from "antd";
 import { useAuth } from "../../../../context/AuthContext";
 
 const { Option } = Select;
 const API_URL = process.env.REACT_APP_URL;
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 
 interface Student {
   _id: string;
@@ -23,7 +21,7 @@ interface Student {
   admissionDate: string;
   class: string | null;
   classId?: { id: string; name: string };
-  profileImage: string; // Added for profile image path
+  profileImage: string;
   profilePhoto?: {
     filename: string;
     path: string;
@@ -40,6 +38,8 @@ const StudentList = () => {
   const [classes, setClasses] = useState<string[]>([]);
   const [selectedClass, setSelectedClass] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [studentToDelete, setStudentToDelete] = useState<string | null>(null);
   const { token } = useAuth();
 
   const fetchStudents = async () => {
@@ -48,24 +48,23 @@ const StudentList = () => {
       const res = await axios.get(`${API_URL}/api/student`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      // Process each student to normalize profile image path and map classId.name to class field
       const mappedStudents = res.data.map((student: any) => ({
         ...student,
         class: student.classId?.name || "N/A",
         profileImage: student.profilePhoto?.path
-          ? `${BACKEND_URL}/${student.profilePhoto.path.replace(/\\/g, "/")}`
+          ? `${API_URL}/${student.profilePhoto.path.replace(/\\/g, "/")}`
           : "/assets/img/students/student-01.jpg",
       }));
       setStudents(mappedStudents);
       setFilteredStudents(mappedStudents);
 
-      // Extract unique classes for dropdown
       const uniqueClasses = Array.from(
         new Set(mappedStudents.map((student: Student) => student.class).filter((cls: string) => cls !== "N/A"))
       ) as string[];
       setClasses(uniqueClasses);
     } catch (error) {
       console.error("Error fetching students:", error);
+      message.error("Failed to fetch students");
     } finally {
       setIsLoading(false);
     }
@@ -75,7 +74,6 @@ const StudentList = () => {
     fetchStudents();
   }, []);
 
-  // Filter students by selected class
   useEffect(() => {
     if (selectedClass) {
       setFilteredStudents(students.filter((student) => student.class === selectedClass));
@@ -83,6 +81,33 @@ const StudentList = () => {
       setFilteredStudents(students);
     }
   }, [selectedClass, students]);
+
+  const handleDelete = async () => {
+    if (!studentToDelete) return;
+    try {
+      await axios.delete(`${API_URL}/api/student/${studentToDelete}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setStudents(students.filter((student) => student.admissionNumber !== studentToDelete));
+      setFilteredStudents(filteredStudents.filter((student) => student.admissionNumber !== studentToDelete));
+      message.success("Student deleted successfully");
+      setIsModalVisible(false);
+      setStudentToDelete(null);
+    } catch (error) {
+      console.error("Error deleting student:", error);
+      message.error("Failed to delete student");
+    }
+  };
+
+  const showDeleteModal = (admissionNumber: string) => {
+    setStudentToDelete(admissionNumber);
+    setIsModalVisible(true);
+  };
+
+  const handleCancel = () => {
+    setIsModalVisible(false);
+    setStudentToDelete(null);
+  };
 
   const columns = [
     {
@@ -208,8 +233,7 @@ const StudentList = () => {
                 <Link
                   className="dropdown-item rounded-1"
                   to="#"
-                  data-bs-toggle="modal"
-                  data-bs-target="#delete-modal"
+                  onClick={() => showDeleteModal(record.admissionNumber)}
                 >
                   <i className="ti ti-trash-x me-2" />
                   Delete
@@ -298,7 +322,18 @@ const StudentList = () => {
           </div>
         </div>
       </div>
-      <StudentModals />
+      <Modal
+        title="Confirm Deletion"
+        open={isModalVisible}
+        onOk={handleDelete}
+        onCancel={handleCancel}
+        okText="Delete"
+        cancelText="Cancel"
+        zIndex={10000}
+        okButtonProps={{ danger: true }}
+      >
+        <p>Are you sure you want to delete this student?</p>
+      </Modal>
     </>
   );
 };

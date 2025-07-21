@@ -78,10 +78,10 @@ const studentSchema = new mongoose.Schema({
     pickupPoint: { type: String }
   },
   documents: [
-  {
-    name: { type: String, required: true },
-    url: { type: String, default: null }
-  }
+    {
+      name: { type: String, required: true },
+      path: { type: String, required: true }, 
+    },
   ],
 
   medicalHistory: {

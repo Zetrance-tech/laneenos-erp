@@ -271,7 +271,10 @@ import AssignAdmin from "../superadmin/assignAdmin";
 import StudentListForSuperadmin from "../superadmin/student";
 import StaffListForSuperadmin from "../superadmin/staff";
 import IncomeManager from "../management/income";
-import AlbumManager from "../management/album";
+import AlbumManager from "../management/media/album";
+import AdvertisementManager from "../management/media/advertisement";
+import StoriesManager from "../management/media/stories";
+import VideoManager from "../management/media/videos";
 const routes = all_routes;
 interface StudentLeaves {
   admissionNumber: string; // Updated prop name to match API field
@@ -1289,6 +1292,18 @@ export const protectedPublicRoutes = [
   {
     path: routes.albums,
     element: <AlbumManager/>,
+  },
+  {
+    path: routes.advertisement,
+    element: <AdvertisementManager/>,
+  },
+  {
+    path: routes.stories,
+    element: <StoriesManager/>,
+  },
+  {
+    path: routes.videos,
+    element: <VideoManager/>,
   },
   {
     path: routes.cctvList,
