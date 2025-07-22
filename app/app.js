@@ -28,8 +28,9 @@ import timetableRoute from './routes/timetableRouter.js'
 import attendanceRoute from './routes/attendanceRouter.js';
 import cctvRoute from "./routes/cctvRouter.js"
 import albumRoute from "./routes/albumRouter.js"
-
-
+import advertisementRoute from "./routes/advertisementRouter.js"
+import storyRouter from "./routes/storyRouter.js"
+import videoRouter from "./routes/videoRouter.js"
 dotenv.config();
 const app = express();
 const MongoURL = process.env.MONGODB_URI;
@@ -62,6 +63,9 @@ app.use("/api/leaves", leaveRoute);
 app.use("/api/feesPayment", feePaymentRoute);
 app.use("/api/cctv", cctvRoute);
 app.use("/api/album", albumRoute);
+app.use("/api/advertisement", advertisementRoute)
+app.use("/api/story", storyRouter)
+app.use("/api/video", videoRouter)
 
 app.get("/", (req, res) => {
   res.send("hehehehe");
