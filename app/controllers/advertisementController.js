@@ -6,7 +6,7 @@ import Student from '../models/student.js';
 
 const getStudentIdsForParent = async (parentEmail, branchId) => {
   const students = await Student.find({
-    branchId,
+    branchId: new mongoose.Types.ObjectId(branchId),
     $or: [
       { 'fatherInfo.email': parentEmail },
       { 'motherInfo.email': parentEmail },
@@ -19,28 +19,26 @@ const getStudentIdsForParent = async (parentEmail, branchId) => {
 export const getParentAdvertisements = async (req, res) => {
   try {
     const { email, branchId, role } = req.user;
+    const branchObjectId = new mongoose.Types.ObjectId(branchId);
 
     console.log("User Info:", { email, branchId, role });
 
-    // Verify user is a parent
     if (role !== "parent") {
       console.log("Access denied: User is not a parent");
       return res.status(403).json({ message: "Access denied: Only parents can access this endpoint" });
     }
 
-    // Get student IDs for the parent
     const studentIds = await getStudentIdsForParent(email, branchId);
     console.log("Student IDs for parent:", studentIds);
 
     if (studentIds.length === 0) {
       console.log("No student IDs found for parent");
-      return res.status(200).json([]); // No students found, return empty array
+      return res.status(200).json([]);
     }
 
-    // Find classes for the students
     const students = await Student.find({
       _id: { $in: studentIds },
-      branchId,
+      branchId: branchObjectId,
       status: "active"
     }).select("classId");
 
@@ -49,19 +47,17 @@ export const getParentAdvertisements = async (req, res) => {
 
     if (classIds.length === 0) {
       console.log("No classes found for the given students");
-      return res.status(200).json([]); // No classes found, return empty array
+      return res.status(200).json([]);
     }
 
-    // Build query for advertisements
     const query = {
-      branchId,
+      branchId: branchObjectId,
       classId: { $in: classIds },
-      status: 'active' // Only fetch active advertisements
+      status: 'active'
     };
 
     console.log("Final Advertisement Query:", query);
 
-    // Fetch advertisements for the classes
     const advertisements = await Advertisement.find(query)
       .populate("sessionId", "name sessionId")
       .populate("classId", "name id")

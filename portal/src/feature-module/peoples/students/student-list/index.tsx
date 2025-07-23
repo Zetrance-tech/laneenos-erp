@@ -28,6 +28,41 @@ interface Student {
     mimetype: string;
     size: number;
   };
+  bloodGroup: string;
+  religion: string;
+  category: string;
+  fatherInfo: {
+    name: string;
+    email: string;
+    phoneNumber: string;
+    occupation: string;
+  };
+  motherInfo: {
+    name: string;
+    email: string;
+    phoneNumber: string;
+    occupation: string;
+  };
+  guardianInfo: {
+    name: string;
+    relation: string;
+    phoneNumber: string;
+    email: string;
+    occupation: string;
+  };
+  currentAddress: string;
+  permanentAddress: string;
+  transportInfo: {
+    route: string;
+    vehicleNumber: string;
+    pickupPoint: string;
+  };
+  documents: { name: string; path: string }[];
+  medicalHistory: {
+    condition: string;
+    allergies: string[];
+    medications: string[];
+  };
 }
 
 const StudentList = () => {
@@ -109,7 +144,103 @@ const StudentList = () => {
     setStudentToDelete(null);
   };
 
+  const exportToCSV = () => {
+    const headers = [
+      "Admission Number",
+      "Name",
+      "Class",
+      "Gender",
+      "Status",
+      "Admission Date",
+      "Date of Birth",
+      "Blood Group",
+      "Religion",
+      "Category",
+      "Father Name",
+      "Father Email",
+      "Father Phone",
+      "Father Occupation",
+      "Mother Name",
+      "Mother Email",
+      "Mother Phone",
+      "Mother Occupation",
+      "Guardian Name",
+      "Guardian Relation",
+      "Guardian Email",
+      "Guardian Phone",
+      "Guardian Occupation",
+      "Current Address",
+      "Permanent Address",
+      "Transport Route",
+      "Vehicle Number",
+      "Pickup Point",
+      "Medical Condition",
+      "Allergies",
+      "Medications",
+      "Documents"
+    ];
+
+    const escapeCSVField = (field: any) => {
+      if (field === null || field === undefined) return "";
+      let str = String(field).trim(); // Trim leading/trailing spaces and convert to string
+      str = str.replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const rows = filteredStudents.map((student) => [
+      escapeCSVField(student.admissionNumber),
+      escapeCSVField(student.name),
+      escapeCSVField(student.class || "N/A"),
+      escapeCSVField(student.gender),
+      escapeCSVField(student.status),
+      escapeCSVField(new Date(student.admissionDate).toLocaleDateString("en-US")),
+      escapeCSVField(new Date(student.dateOfBirth).toLocaleDateString("en-US")),
+      escapeCSVField(student.bloodGroup || ""),
+      escapeCSVField(student.religion || ""),
+      escapeCSVField(student.category || ""),
+      escapeCSVField(student.fatherInfo?.name || ""),
+      escapeCSVField(student.fatherInfo?.email || ""),
+      escapeCSVField(String(student.fatherInfo?.phoneNumber || '').trim()), // Explicit string + trim for phone
+      escapeCSVField(student.fatherInfo?.occupation || ""),
+      escapeCSVField(student.motherInfo?.name || ""),
+      escapeCSVField(student.motherInfo?.email || ""),
+      escapeCSVField(String(student.motherInfo?.phoneNumber || '').trim()), // Explicit string + trim for phone
+      escapeCSVField(student.motherInfo?.occupation || ""),
+      escapeCSVField(student.guardianInfo?.name || ""),
+      escapeCSVField(student.guardianInfo?.relation || ""),
+      escapeCSVField(student.guardianInfo?.email || ""),
+      escapeCSVField(String(student.guardianInfo?.phoneNumber || '').trim()), // Explicit string + trim for phone
+      escapeCSVField(student.guardianInfo?.occupation || ""),
+      escapeCSVField(student.currentAddress || ""),
+      escapeCSVField(student.permanentAddress || ""),
+      escapeCSVField(student.transportInfo?.route || ""),
+      escapeCSVField(student.transportInfo?.vehicleNumber || ""),
+      escapeCSVField(student.transportInfo?.pickupPoint || ""),
+      escapeCSVField(student.medicalHistory?.condition || ""),
+      escapeCSVField(student.medicalHistory?.allergies?.join(";") || ""),
+      escapeCSVField(student.medicalHistory?.medications?.join(";") || ""),
+      escapeCSVField(student.documents?.map((doc) => doc.name).join(";") || "")
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) => row.join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "students_export.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    message.success("Students exported to CSV successfully");
+  };
+
   const columns = [
+    // ... (unchanged, as per your original code)
     {
       title: "Admission Number",
       dataIndex: "admissionNumber",
@@ -266,7 +397,16 @@ const StudentList = () => {
               </nav>
             </div>
             <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">
-              <TooltipOption />
+              {/* <TooltipOption /> */}
+              <div className="mb-2 me-2">
+                <button
+                  onClick={exportToCSV}
+                  className="btn btn-light fw-medium d-inline-flex align-items-center"
+                >
+                  <i className="ti ti-file-download me-2" />
+                  Export to CSV
+                </button>
+              </div>
               <div className="mb-2">
                 <Link to={routes.addStudent} className="btn btn-primary d-flex align-items-center">
                   <i className="ti ti-square-rounded-plus me-2" />

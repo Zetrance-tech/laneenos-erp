@@ -173,7 +173,7 @@ const teacherSchema = new mongoose.Schema({
   documents: [
     {
       name: { type: String, required: true },
-      url: { type: String, default: null },
+      path: { type: String, required: true }, 
     },
   ],
   payroll: {

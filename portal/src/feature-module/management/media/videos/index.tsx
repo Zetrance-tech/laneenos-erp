@@ -15,6 +15,13 @@ const { TextArea } = Input;
 
 const API_URL = process.env.REACT_APP_URL || "";
 
+interface VideoFile {
+  filename: string;
+  path: string;
+  mimetype: string;
+  size: number;
+}
+
 interface Session {
   _id: string;
   name: string;
@@ -34,18 +41,11 @@ interface User {
   email: string;
 }
 
-interface VideoFile {
-  filename: string;
-  path: string;
-  mimetype: string;
-  size: number;
-}
-
 interface Video {
   _id: string;
   key: string;
   sessionId: Session | null;
-  classId: Class | null;
+  classId: Class[] | null;
   name: string;
   description: string;
   video: VideoFile | null;
@@ -54,11 +54,11 @@ interface Video {
 
 interface FormData {
   sessionId: string;
-  classId: string;
+  classId: string[];
   name: string;
   description: string;
   video: File | null;
-  deleteVideo?: boolean; // Only used in edit mode
+  deleteVideo?: boolean;
 }
 
 interface Route {
@@ -81,20 +81,21 @@ const VideoManager: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [editVideoId, setEditVideoId] = useState<string | null>(null);
   const [viewVideo, setViewVideo] = useState<Video | null>(null);
   const [formData, setFormData] = useState<FormData>({
     sessionId: "",
-    classId: "",
+    classId: [],
     name: "",
     description: "",
     video: null,
+    deleteVideo: false,
   });
   const [searchText, setSearchText] = useState<string>("");
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [previewVideo, setPreviewVideo] = useState<string>("");
   const [previewOpen, setPreviewOpen] = useState<boolean>(false);
-  
   const [filterSessionId, setFilterSessionId] = useState<string>("");
   const [filterClassId, setFilterClassId] = useState<string>("");
   const [filterClasses, setFilterClasses] = useState<Class[]>([]);
@@ -112,12 +113,17 @@ const VideoManager: React.FC = () => {
       sorter: (a: Video, b: Video) => (a.sessionId?.name || "").localeCompare(b.sessionId?.name || ""),
     },
     {
-      title: "Class",
+      title: "Classes",
       dataIndex: "classId",
-      render: (classData: Class | null) => classData?.name || "N/A",
-      sorter: (a: Video, b: Video) => (a.classId?.name || "").localeCompare(b.classId?.name || ""),
+      render: (classes: Class[] | null) =>
+        classes && Array.isArray(classes) && classes.length > 0
+          ? classes.map(c => c.name).join(", ")
+          : "N/A",
+      sorter: (a: Video, b: Video) =>
+        (a.classId && a.classId.length > 0 ? a.classId[0].name : "").localeCompare(
+          b.classId && b.classId.length > 0 ? b.classId[0].name : ""
+        ),
     },
-    
     {
       title: "Created By",
       dataIndex: "createdBy",
@@ -189,7 +195,6 @@ const VideoManager: React.FC = () => {
         teacherClasses.forEach(c => {
           if (c.sessionId) {
             if (typeof c.sessionId === 'string') {
-              // Skip string IDs, handled later
             } else if (typeof c.sessionId === 'object' && c.sessionId._id) {
               sessionsMap.set(c.sessionId._id, c.sessionId);
             }
@@ -280,6 +285,7 @@ const VideoManager: React.FC = () => {
       const formattedData: Video[] = res.data.map((item: any) => ({
         ...item,
         key: item._id,
+        classId: item.classId || [],
       }));
       
       setVideos(formattedData);
@@ -293,15 +299,16 @@ const VideoManager: React.FC = () => {
   };
 
   const handleAddVideo = async () => {
-    if (!formData.sessionId || !formData.classId || !formData.name || !formData.description || !formData.video) {
-      toast.error("All fields are required, including a video");
+    if (!formData.sessionId || formData.classId.length === 0 || !formData.name || !formData.description || !formData.video) {
+      toast.error("All fields are required, including at least one class and a video");
       return;
     }
 
     try {
+      setIsSubmitting(true);
       const formDataToSend = new FormData();
       formDataToSend.append("sessionId", formData.sessionId);
-      formDataToSend.append("classId", formData.classId);
+      formData.classId.forEach(id => formDataToSend.append("classId[]", id));
       formDataToSend.append("name", formData.name);
       formDataToSend.append("description", formData.description);
       if (formData.video) {
@@ -328,13 +335,15 @@ const VideoManager: React.FC = () => {
     } catch (error: any) {
       console.error("Error adding video:", error);
       toast.error(error.response?.data?.message || "Error adding video");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleEdit = (record: Video) => {
     setFormData({
       sessionId: record.sessionId?._id || "",
-      classId: record.classId?._id || "",
+      classId: record.classId?.map(c => c._id) || [],
       name: record.name || "",
       description: record.description || "",
       video: null,
@@ -366,15 +375,16 @@ const VideoManager: React.FC = () => {
   };
 
   const handleUpdateVideo = async () => {
-    if (!formData.sessionId || !formData.classId || !formData.name || !formData.description) {
-      toast.error("All fields are required");
+    if (!formData.sessionId || formData.classId.length === 0 || !formData.name || !formData.description) {
+      toast.error("All fields are required, including at least one class");
       return;
     }
 
     try {
+      setIsSubmitting(true);
       const formDataToSend = new FormData();
       formDataToSend.append("sessionId", formData.sessionId);
-      formDataToSend.append("classId", formData.classId);
+      formData.classId.forEach(id => formDataToSend.append("classId[]", id));
       formDataToSend.append("name", formData.name);
       formDataToSend.append("description", formData.description);
       if (formData.deleteVideo) {
@@ -409,6 +419,8 @@ const VideoManager: React.FC = () => {
     } catch (error: any) {
       console.error("Error updating video:", error);
       toast.error(error.response?.data?.message || "Error updating video");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -426,18 +438,25 @@ const VideoManager: React.FC = () => {
     }
   };
 
-  const handleInputChange = (name: keyof FormData, value: string) => {
+  const handleInputChange = (name: keyof FormData, value: any) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (name === "sessionId" && value) {
       fetchClasses(value);
-      setFormData((prev) => ({ ...prev, classId: "" }));
+      setFormData((prev) => ({ ...prev, classId: [] }));
     }
+  };
+
+  const handleSelectAllClasses = () => {
+    setFormData((prev) => ({
+      ...prev,
+      classId: classes.map(c => c._id),
+    }));
   };
 
   const resetForm = () => {
     setFormData({
       sessionId: "",
-      classId: "",
+      classId: [],
       name: "",
       description: "",
       video: null,
@@ -462,7 +481,7 @@ const VideoManager: React.FC = () => {
         (video) =>
           video.name.toLowerCase().includes(lowerValue) ||
           (video.sessionId?.name || "").toLowerCase().includes(lowerValue) ||
-          (video.classId?.name || "").toLowerCase().includes(lowerValue) ||
+          (video.classId?.some(c => c.name.toLowerCase().includes(lowerValue)) || false) ||
           (video.createdBy?.name || "").toLowerCase().includes(lowerValue)
       );
     }
@@ -472,7 +491,7 @@ const VideoManager: React.FC = () => {
     }
     
     if (classId) {
-      filtered = filtered.filter(video => video.classId?._id === classId);
+      filtered = filtered.filter(video => video.classId?.some(c => c._id === classId));
     }
     
     setFilteredVideos(filtered);
@@ -537,6 +556,20 @@ const VideoManager: React.FC = () => {
       reader.onerror = (error) => reject(error);
     });
 
+  const customDropdownRender = (menu: React.ReactElement) => (
+    <div>
+      <div style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+        <div
+          style={{ cursor: 'pointer' }}
+          onClick={handleSelectAllClasses}
+        >
+          Select All Classes
+        </div>
+      </div>
+      {menu}
+    </div>
+  );
+
   const uploadButton = (
     <div>
       <PlusOutlined />
@@ -577,7 +610,7 @@ const VideoManager: React.FC = () => {
                 </nav>
               </div>
               <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">
-                <TooltipOption />
+                {/* <TooltipOption /> */}
                 <div className="mb-2">
                   <Button
                     type="primary"
@@ -658,83 +691,110 @@ const VideoManager: React.FC = () => {
                 resetForm();
                 setIsAddModalOpen(false);
               }}
+              disabled={isSubmitting}
             >
               Cancel
             </Button>,
-            <Button key="submit" type="primary" onClick={handleAddVideo}>
-              Add Video
+            <Button
+              key="submit"
+              type="primary"
+              onClick={handleAddVideo}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? <Spin size="small" /> : "Add Video"}
             </Button>,
           ]}
         >
-          <div className="row">
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Session *</label>
-              <Select
-                placeholder="Select Session"
-                value={formData.sessionId || undefined}
-                onChange={(value: string) => handleInputChange("sessionId", value)}
-                className="w-100"
-              >
-                {sessions.map((session) => (
-                  <Option key={session._id} value={session._id}>
-                    {session.name} ({session.sessionId})
-                  </Option>
-                ))}
-              </Select>
+          {isSubmitting ? (
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "200px" }}>
+              <Spin size="large" />
             </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Class *</label>
-              <Select
-                placeholder="Select Class"
-                value={formData.classId || undefined}
-                onChange={(value: string) => handleInputChange("classId", value)}
-                className="w-100"
-                disabled={!formData.sessionId}
-              >
-                {classes.map((classItem) => (
-                  <Option key={classItem._id} value={classItem._id}>
-                    {classItem.name} ({classItem.id})
-                  </Option>
-                ))}
-              </Select>
+          ) : (
+            <div className="row">
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Session *</label>
+                <Select
+                  placeholder="Select Session"
+                  value={formData.sessionId || undefined}
+                  onChange={(value: string) => handleInputChange("sessionId", value)}
+                  className="w-100"
+                >
+                  {sessions.map((session) => (
+                    <Option key={session._id} value={session._id}>
+                      {session.name} ({session.sessionId})
+                    </Option>
+                  ))}
+                </Select>
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Classes *</label>
+                <Select
+                  mode="multiple"
+                  placeholder="Select Classes"
+                  value={formData.classId}
+                  onChange={(value: string[]) => handleInputChange("classId", value)}
+                  className="w-100 text-black"
+                  disabled={!formData.sessionId}
+                  dropdownRender={customDropdownRender}
+                  tagRender={(props) => (
+                    <span
+                      style={{
+                        color: "black",
+                        backgroundColor: "#f5f5f5",
+                        padding: "2px 8px",
+                        margin: "2px",
+                        borderRadius: "4px",
+                      }}
+                    >
+                      {props.label}
+                    </span>
+                  )}
+                >
+                  {classes.map((classItem) => (
+                    <Option key={classItem._id} value={classItem._id}>
+                      {classItem.name}
+                    </Option>
+                  ))}
+                </Select>
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Video Name *</label>
+                <Input
+                  value={formData.name}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    handleInputChange("name", e.target.value)
+                  }
+                  placeholder="Enter Video Name"
+                />
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Video *</label>
+                <Upload
+                  listType="picture-card"
+                  fileList={fileList}
+                  onPreview={handlePreview}
+                  onChange={handleUploadChange}
+                  onRemove={handleRemove}
+                  beforeUpload={() => false}
+                  accept="video/mp4,video/mov,video/avi,video/wmv,video/mkv"
+                  maxCount={1}
+                >
+                  {fileList.length >= 1 ? null : uploadButton}
+                </Upload>
+              </div>
+              <div className="col-md-12 mb-3">
+                <label className="form-label">Description *</label>
+                <TextArea
+                  value={formData.description}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                    handleInputChange("description", e.target.value)
+                  }
+                  placeholder="Enter Description"
+                  rows={4}
+                />
+              </div>
             </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Video Name *</label>
-              <Input
-                value={formData.name}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  handleInputChange("name", e.target.value)
-                }
-                placeholder="Enter Video Name"
-              />
-            </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Video *</label>
-              <Upload
-                listType="picture-card"
-                fileList={fileList}
-                onPreview={handlePreview}
-                onChange={handleUploadChange}
-                onRemove={handleRemove}
-                beforeUpload={() => false}
-                accept="video/mp4,video/mov,video/avi,video/wmv,video/mkv"
-                maxCount={1}
-              >
-                {fileList.length >= 1 ? null : uploadButton}
-              </Upload>
-            </div>
-            <div className="col-md-12 mb-3">
-              <label className="form-label">Description *</label>
-              <TextArea
-                value={formData.description}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                  handleInputChange("description", e.target.value)
-                }
-                placeholder="Enter Description"
-                rows={4}
-              />
-            </div>
-          </div>
+          )}
         </Modal>
 
         <Modal
@@ -753,83 +813,110 @@ const VideoManager: React.FC = () => {
                 resetForm();
                 setIsEditModalOpen(false);
               }}
+              disabled={isSubmitting}
             >
               Cancel
             </Button>,
-            <Button key="submit" type="primary" onClick={handleUpdateVideo}>
-              Update Video
+            <Button
+              key="submit"
+              type="primary"
+              onClick={handleUpdateVideo}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? <Spin size="small" /> : "Update Video"}
             </Button>,
           ]}
         >
-          <div className="row">
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Session *</label>
-              <Select
-                placeholder="Select Session"
-                value={formData.sessionId || undefined}
-                onChange={(value: string) => handleInputChange("sessionId", value)}
-                className="w-100"
-              >
-                {sessions.map((session) => (
-                  <Option key={session._id} value={session._id}>
-                    {session.name} ({session.sessionId})
-                  </Option>
-                ))}
-              </Select>
+          {isSubmitting ? (
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "200px" }}>
+              <Spin size="large" />
             </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Class *</label>
-              <Select
-                placeholder="Select Class"
-                value={formData.classId || undefined}
-                onChange={(value: string) => handleInputChange("classId", value)}
-                className="w-100"
-                disabled={!formData.sessionId}
-              >
-                {classes.map((classItem) => (
-                  <Option key={classItem._id} value={classItem._id}>
-                    {classItem.name} ({classItem.id})
-                  </Option>
-                ))}
-              </Select>
+          ) : (
+            <div className="row">
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Session *</label>
+                <Select
+                  placeholder="Select Session"
+                  value={formData.sessionId || undefined}
+                  onChange={(value: string) => handleInputChange("sessionId", value)}
+                  className="w-100"
+                >
+                  {sessions.map((session) => (
+                    <Option key={session._id} value={session._id}>
+                      {session.name} ({session.sessionId})
+                    </Option>
+                  ))}
+                </Select>
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Classes *</label>
+                <Select
+                  mode="multiple"
+                  placeholder="Select Classes"
+                  value={formData.classId}
+                  onChange={(value: string[]) => handleInputChange("classId", value)}
+                  className="w-100 text-black"
+                  disabled={!formData.sessionId}
+                  dropdownRender={customDropdownRender}
+                  tagRender={(props) => (
+                    <span
+                      style={{
+                        color: "black",
+                        backgroundColor: "#f5f5f5",
+                        padding: "2px 8px",
+                        margin: "2px",
+                        borderRadius: "4px",
+                      }}
+                    >
+                      {props.label}
+                    </span>
+                  )}
+                >
+                  {classes.map((classItem) => (
+                    <Option key={classItem._id} value={classItem._id}>
+                      {classItem.name}
+                    </Option>
+                  ))}
+                </Select>
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Video Name *</label>
+                <Input
+                  value={formData.name}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    handleInputChange("name", e.target.value)
+                  }
+                  placeholder="Enter Video Name"
+                />
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Video</label>
+                <Upload
+                  listType="picture-card"
+                  fileList={fileList}
+                  onPreview={handlePreview}
+                  onChange={handleUploadChange}
+                  onRemove={handleRemove}
+                  beforeUpload={() => false}
+                  accept="video/mp4,video/mov,video/avi,video/wmv,video/mkv"
+                  maxCount={1}
+                >
+                  {fileList.length >= 1 ? null : uploadButton}
+                </Upload>
+              </div>
+              <div className="col-md-12 mb-3">
+                <label className="form-label">Description *</label>
+                <TextArea
+                  value={formData.description}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                    handleInputChange("description", e.target.value)
+                  }
+                  placeholder="Enter Description"
+                  rows={4}
+                />
+              </div>
             </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Video Name *</label>
-              <Input
-                value={formData.name}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  handleInputChange("name", e.target.value)
-                }
-                placeholder="Enter Video Name"
-              />
-            </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Video</label>
-              <Upload
-                listType="picture-card"
-                fileList={fileList}
-                onPreview={handlePreview}
-                onChange={handleUploadChange}
-                onRemove={handleRemove}
-                beforeUpload={() => false}
-                accept="video/mp4,video/mov,video/avi,video/wmv,video/mkv"
-                maxCount={1}
-              >
-                {fileList.length >= 1 ? null : uploadButton}
-              </Upload>
-            </div>
-            <div className="col-md-12 mb-3">
-              <label className="form-label">Description *</label>
-              <TextArea
-                value={formData.description}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                  handleInputChange("description", e.target.value)
-                }
-                placeholder="Enter Description"
-                rows={4}
-              />
-            </div>
-          </div>
+          )}
         </Modal>
 
         <Modal
@@ -851,8 +938,15 @@ const VideoManager: React.FC = () => {
                 <Input value={viewVideo.sessionId?.name || "N/A"} readOnly />
               </div>
               <div className="col-md-6 mb-3">
-                <label className="form-label">Class</label>
-                <Input value={viewVideo.classId?.name || "N/A"} readOnly />
+                <label className="form-label">Classes</label>
+                <Input
+                  value={
+                    viewVideo.classId && viewVideo.classId.length > 0
+                      ? viewVideo.classId.map(c => c.name).join(", ")
+                      : "N/A"
+                  }
+                  readOnly
+                />
               </div>
               <div className="col-md-6 mb-3">
                 <label className="form-label">Video Name</label>

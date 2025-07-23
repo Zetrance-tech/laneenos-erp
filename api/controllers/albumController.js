@@ -8,17 +8,18 @@ import path from 'path';
 import { uploadsRoot } from "../uploadsRoot.js";
 
 const fsPromises = fs.promises;
+
 export const createAlbum = async (req, res) => {
   try {
     const branchId = req.user.branchId;
     const userId = req.user.userId;
-    const { sessionId, classId, name, description } = req.body;
+    const { sessionId, classId: classIds, name, description } = req.body;
 
     if (!branchId || !userId) {
       return res.status(400).json({ message: "Branch ID or User ID is missing" });
     }
 
-    if (!sessionId || !classId || !name || !description) {
+    if (!Array.isArray(classIds) || classIds.length === 0 || !sessionId || !name || !description) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
@@ -27,13 +28,14 @@ export const createAlbum = async (req, res) => {
       return res.status(404).json({ message: "Session not found in this branch" });
     }
 
-    const classQuery = { _id: classId, branchId };
+    const classQuery = { _id: { $in: classIds }, branchId };
     if (req.user.role === "teacher") {
       classQuery.teacherId = { $in: [userId] };
     }
-    const classExists = await Class.findOne(classQuery);
-    if (!classExists) {
-      return res.status(404).json({ message: "Class not found or you don't have access" });
+
+    const classes = await Class.find(classQuery);
+    if (classes.length !== classIds.length) {
+      return res.status(403).json({ message: "You don't have access to one or more selected classes" });
     }
 
     if (!req.files || req.files.length === 0) {
@@ -50,7 +52,7 @@ export const createAlbum = async (req, res) => {
     const newAlbum = new Album({
       branchId,
       sessionId,
-      classId,
+      classId: classIds,
       name,
       description,
       images,
@@ -76,26 +78,30 @@ export const createAlbum = async (req, res) => {
 };
 
 export const updateAlbum = async (req, res) => {
-
   try {
-    const { sessionId, classId, name, description, imagesToDelete } = req.body;
+    const { sessionId, classId: classIds, name, description, imagesToDelete } = req.body;
     const albumId = req.params.id;
 
-    // Validate required fields
-    if (!sessionId || !classId || !name || !description || !albumId) {
+    if (!sessionId || !Array.isArray(classIds) || classIds.length === 0 || !name || !description || !albumId) {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
 
-    // Find the existing album
+    const classQuery = { _id: { $in: classIds }, branchId: req.user.branchId };
+    if (req.user.role === "teacher") {
+      classQuery.teacherId = { $in: [req.user.userId] };
+    }
+    const classes = await Class.find(classQuery);
+    if (classes.length !== classIds.length) {
+      return res.status(403).json({ message: "You don't have access to one or more selected classes" });
+    }
+
     const existingAlbum = await Album.findById(albumId);
     if (!existingAlbum) {
       return res.status(404).json({ message: 'Album not found' });
     }
 
-    // Initialize images array with existing images
     let images = existingAlbum.images || [];
 
-    // Parse imagesToDelete
     let imagesToDeleteArray = [];
     try {
       imagesToDeleteArray = imagesToDelete ? JSON.parse(imagesToDelete) : [];
@@ -104,38 +110,24 @@ export const updateAlbum = async (req, res) => {
       return res.status(400).json({ message: 'Invalid imagesToDelete format' });
     }
 
-    // Delete specified images from the file system and database
     if (Array.isArray(imagesToDeleteArray) && imagesToDeleteArray.length > 0) {
       for (const filename of imagesToDeleteArray) {
-        
-        // Check if the image exists in the album
         const imageIndex = images.findIndex(img => img.filename === filename);
-        if (imageIndex === -1) {
-          continue; // Skip if image not found in album
-        }
+        if (imageIndex === -1) continue;
 
-        // Construct the file path
         const filePath = path.join(uploadsRoot, 'albums', filename);
 
         try {
-          // Check if file exists before attempting deletion
           await fsPromises.access(filePath);
           await fsPromises.unlink(filePath);
         } catch (error) {
-          if (error.code === 'ENOENT') {
-            console.log('updateAlbum: File not found:', filePath);
-          } else {
-          }
-          // Continue with other deletions even if one fails
+          if (error.code !== 'ENOENT') console.error(error);
         }
 
-        // Remove the image from the images array
         images.splice(imageIndex, 1);
       }
     }
 
-
-    // Handle new image uploads
     if (req.files && Array.isArray(req.files)) {
       const newImages = req.files.map(file => ({
         filename: file.filename,
@@ -146,19 +138,15 @@ export const updateAlbum = async (req, res) => {
       images = [...images, ...newImages];
     }
 
-
-    // Prepare update data
     const updateData = {
       sessionId,
-      classId,
+      classId: classIds,
       name,
       description,
       images,
       updatedAt: new Date()
     };
 
-
-    // Update the album in the database
     const updatedAlbum = await Album.findByIdAndUpdate(
       albumId,
       { $set: updateData },
@@ -185,7 +173,7 @@ export const deleteAlbum = async (req, res) => {
     const query = { _id: id, branchId };
     if (req.user.role === "teacher") {
       const userClasses = await Class.find({ teacherId: { $in: [userId] }, branchId });
-      query.classId = { $in: userClasses.map(c => c._id) };
+      query.classId = { $elemMatch: { $in: userClasses.map(c => c._id) } };
     }
 
     const deletedAlbum = await Album.findOneAndDelete(query);
@@ -201,8 +189,6 @@ export const deleteAlbum = async (req, res) => {
             if (err) console.error('Error deleting image:', err);
             else console.log('Successfully deleted image:', filePath);
           });
-        } else {
-          console.log('Image file not found:', filePath);
         }
       });
     }
@@ -226,20 +212,19 @@ export const getAllAlbums = async (req, res) => {
       const userClasses = await Class.find({ teacherId: { $in: [userId] }, branchId });
       const teacherClassIds = userClasses.map(c => c._id);
 
-      if (teacherClassIds.length === 0) {
-        return res.status(200).json([]);
-      }
+      if (teacherClassIds.length === 0) return res.status(200).json([]);
 
-      query.classId = { $in: teacherClassIds };
+      query.classId = { $elemMatch: { $in: teacherClassIds } };
+
       if (classId) {
         const isValidClass = teacherClassIds.some(id => id.toString() === classId);
         if (!isValidClass) {
           return res.status(403).json({ message: "Access denied to this class" });
         }
-        query.classId = classId;
+        query.classId = { $elemMatch: { $eq: classId } };
       }
     } else {
-      if (classId) query.classId = classId;
+      if (classId) query.classId = { $elemMatch: { $eq: classId } };
     }
 
     if (sessionId) query.sessionId = sessionId;
@@ -265,7 +250,7 @@ export const getAlbumById = async (req, res) => {
     const query = { _id: id, branchId };
     if (req.user.role === "teacher") {
       const userClasses = await Class.find({ teacherId: { $in: [userId] }, branchId });
-      query.classId = { $in: userClasses.map(c => c._id) };
+      query.classId = { $elemMatch: { $in: userClasses.map(c => c._id) } };
     }
 
     const album = await Album.findOne(query)
@@ -291,7 +276,7 @@ export const getAllAlbumsForSuperadmin = async (req, res) => {
 
     if (branchId) query.branchId = branchId;
     if (sessionId) query.sessionId = sessionId;
-    if (classId) query.classId = classId;
+    if (classId) query.classId = { $elemMatch: { $eq: classId } };
 
     const albums = await Album.find(query)
       .populate("sessionId", "name sessionId")

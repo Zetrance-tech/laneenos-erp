@@ -14,42 +14,45 @@ import ImageWithBasePath from "../../../../core/common/imageWithBasePath";
 import TooltipOption from "../../../../core/common/tooltipOption";
 import axios from "axios";
 import toast, { Toaster } from "react-hot-toast";
-import { Spin } from "antd";
+import { Spin, Select, message, Modal } from "antd";
 import { useAuth } from "../../../../context/AuthContext";
 
+const { Option } = Select;
 const API_URL = process.env.REACT_APP_URL;
 
 interface Teacher {
   _id: string; // MongoDB ID
+  userId: string;
+  role: string;
+  branchId: string;
   id: string; // Custom ID for display (e.g., "T001")
   name: string;
-  dateOfBirth: string;
-  gender: string;
   email: string;
   phoneNumber: string;
-  address: string; // Updated to match TeacherForm (flat string)
+  dateOfBirth: string;
+  gender: string;
+  address: string; // Flat string
+  emergencyContact: string;
   joiningDate: string;
-  qualifications: any[];
   experienceYears: number;
-  subjects: string[];
-  role: string;
+  documents: { name: string; path: string }[];
+  payroll: {
+    epfNo: string;
+    basicSalary: number;
+  };
   contractType: string;
   workShift: string;
   workLocation: string;
-  languagesSpoken: string[];
-  emergencyContact: string;
-  bio: string;
+  dateOfLeaving?: string | null;
   createdAt: string;
   updatedAt: string;
-  userId: {
-    _id: string;
-    name: string;
-    email: string;
-    phoneNumber?: string;
+  profilePhoto?: {
+    filename: string;
+    path: string;
+    mimetype: string;
+    size: number;
   };
-  status?: string;
-  class?: string;
-  profileImage?: string; // Add this field
+  profileImage?: string; // Derived field for UI
 }
 
 interface Option {
@@ -68,7 +71,7 @@ const roleOptions: Option[] = [
 
 const TeacherList = () => {
   const routes = all_routes;
-  const dropdownMenuRef = useRef<HTMLDivElement>(null);
+  const dropdownMenuRef = useRef<HTMLDivElement | null>(null);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [filteredTeachers, setFilteredTeachers] = useState<Teacher[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -76,7 +79,8 @@ const TeacherList = () => {
   const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(null);
   const [teacherToDelete, setTeacherToDelete] = useState<string | null>(null);
   const [selectedRole, setSelectedRole] = useState<string>("");
-  const {token} = useAuth();
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const { token } = useAuth();
 
   // Function to fetch profile photo for a specific teacher
   const fetchTeacherProfilePhoto = async (teacherId: string): Promise<string> => {
@@ -142,13 +146,23 @@ const TeacherList = () => {
       });
       setTeachers(teachers.filter((teacher) => teacher._id !== teacherToDelete));
       setFilteredTeachers(filteredTeachers.filter((teacher) => teacher._id !== teacherToDelete));
+      message.success("Teacher deleted successfully");
       setTeacherToDelete(null);
-      toast.success("Teacher deleted successfully");
+      setIsModalVisible(false);
     } catch (err) {
-      setError("Failed to delete teacher");
       console.error("Error deleting teacher:", err);
-      toast.error("Failed to delete teacher");
+      message.error("Failed to delete teacher");
     }
+  };
+
+  const showDeleteModal = (teacherId: string) => {
+    setTeacherToDelete(teacherId);
+    setIsModalVisible(true);
+  };
+
+  const handleCancel = () => {
+    setIsModalVisible(false);
+    setTeacherToDelete(null);
   };
 
   const handleResetFilters = () => {
@@ -160,6 +174,73 @@ const TeacherList = () => {
     if (dropdownMenuRef.current) {
       dropdownMenuRef.current.classList.remove("show");
     }
+  };
+
+  const exportToCSV = () => {
+    const headers = [
+      "ID",
+      "Name",
+      "Email",
+      "Phone Number",
+      "Date of Birth",
+      "Gender",
+      "Role",
+      "Address",
+      "Emergency Contact",
+      "Joining Date",
+      "Experience Years",
+      "Contract Type",
+      "Work Shift",
+      "Work Location",
+      "Date of Leaving",
+      "EPF No",
+      "Basic Salary",
+      "Documents",
+    ];
+
+    const escapeCSVField = (field: any) => {
+      if (field === null || field === undefined) return "";
+      let str = String(field).trim(); // Trim leading/trailing spaces and convert to string
+      str = str.replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const rows = filteredTeachers.map((teacher) => [
+      escapeCSVField(teacher.id),
+      escapeCSVField(teacher.name),
+      escapeCSVField(teacher.email),
+      escapeCSVField(String(teacher.phoneNumber || '').trim()), // Explicit string + trim for phone
+      escapeCSVField(new Date(teacher.dateOfBirth).toLocaleDateString("en-US")),
+      escapeCSVField(teacher.gender),
+      escapeCSVField(teacher.role),
+      escapeCSVField(teacher.address || ""),
+      escapeCSVField(String(teacher.emergencyContact || '').trim()), // Explicit string + trim for emergency contact
+      escapeCSVField(new Date(teacher.joiningDate).toLocaleDateString("en-US")),
+      escapeCSVField(teacher.experienceYears),
+      escapeCSVField(teacher.contractType),
+      escapeCSVField(teacher.workShift),
+      escapeCSVField(teacher.workLocation),
+      escapeCSVField(teacher.dateOfLeaving ? new Date(teacher.dateOfLeaving).toLocaleDateString("en-US") : ""),
+      escapeCSVField(teacher.payroll?.epfNo || ""),
+      escapeCSVField(teacher.payroll?.basicSalary || ""),
+      escapeCSVField(teacher.documents?.map((doc) => doc.name).join(";") || ""),
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) => row.join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "teachers_export.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    message.success("Teachers exported to CSV successfully");
   };
 
   const columns = [
@@ -207,8 +288,8 @@ const TeacherList = () => {
     },
     {
       title: "Email",
-      dataIndex: ["userId", "email"],
-      sorter: (a: Teacher, b: Teacher) => a.userId.email.localeCompare(b.userId.email),
+      dataIndex: "email",
+      sorter: (a: Teacher, b: Teacher) => a.email.localeCompare(b.email),
     },
     {
       title: "Phone",
@@ -267,16 +348,14 @@ const TeacherList = () => {
               </button>
             </li>
             <li>
-              <button
+              <Link
                 className="dropdown-item rounded-1"
-                type="button"
-                data-bs-toggle="modal"
-                data-bs-target="#delete-modal"
-                onClick={() => setTeacherToDelete(mongoId)}
+                to="#"
+                onClick={() => showDeleteModal(mongoId)}
               >
                 <i className="ti ti-trash-x me-2" />
                 Delete
-              </button>
+              </Link>
             </li>
           </ul>
         </div>
@@ -307,7 +386,16 @@ const TeacherList = () => {
               </nav>
             </div>
             <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">
-              <TooltipOption />
+              {/* <TooltipOption /> */}
+              <div className="mb-2 me-2">
+                <button
+                  onClick={exportToCSV}
+                  className="btn btn-light fw-medium d-inline-flex align-items-center"
+                >
+                  <i className="ti ti-file-download me-2" />
+                  Export to CSV
+                </button>
+              </div>
               <div className="mb-2">
                 <Link
                   to={routes.addTeacher}
@@ -324,6 +412,22 @@ const TeacherList = () => {
             <div className="card-header d-flex align-items-center justify-content-between flex-wrap pb-0">
               <h4 className="mb-3">Staff List</h4>
               <div className="d-flex align-items-center flex-wrap">
+                <div className="me-3 mb-3">
+                  <Select
+                    style={{ width: 200 }}
+                    placeholder="Select Role"
+                    value={selectedRole}
+                    onChange={(value) => setSelectedRole(value)}
+                    allowClear
+                    onClear={() => setSelectedRole("")}
+                  >
+                    {roleOptions.map((option) => (
+                      <Option key={option.value} value={option.value}>
+                        {option.label}
+                      </Option>
+                    ))}
+                  </Select>
+                </div>
                 <div className="d-flex align-items-center bg-white border rounded-2 p-1 mb-3 me-2">
                   <Link to="#" className="active btn btn-icon btn-sm me-1 primary-hover">
                     <i className="ti ti-list-tree" />
@@ -351,50 +455,18 @@ const TeacherList = () => {
           </div>
         </div>
 
-        {/* Delete Confirmation Modal */}
-        <div
-          className="modal fade"
-          id="delete-modal"
-          tabIndex={-1}
-          aria-labelledby="deleteModalLabel"
-          aria-hidden="true"
+        <Modal
+          title="Confirm Deletion"
+          open={isModalVisible}
+          onOk={handleDeleteTeacher}
+          onCancel={handleCancel}
+          okText="Delete"
+          cancelText="Cancel"
+          zIndex={10000}
+          okButtonProps={{ danger: true }}
         >
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title" id="deleteModalLabel">
-                  Confirm Deletion
-                </h5>
-                <button
-                  type="button"
-                  className="btn-close"
-                  data-bs-dismiss="modal"
-                  aria-label="Close"
-                ></button>
-              </div>
-              <div className="modal-body">
-                Are you sure you want to delete this teacher? This action cannot be undone.
-              </div>
-              <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-light"
-                  data-bs-dismiss="modal"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-danger"
-                  data-bs-dismiss="modal"
-                  onClick={handleDeleteTeacher}
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+          <p>Are you sure you want to delete this teacher? This action cannot be undone.</p>
+        </Modal>
 
         <TeacherModal selectedTeacherId={selectedTeacherId} />
       </div>

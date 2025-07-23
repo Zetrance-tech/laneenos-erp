@@ -17,7 +17,7 @@ import {
   getStudentProfilePhoto
 } from "../controllers/studentController.js";
 import authMiddleware from "../middleware/auth.js";
-import { upload, studentUpload } from "../middleware/multer.js";
+import { studentUpload, studentDocUpload } from "../middleware/multer.js";
 const router = express.Router();
 
 // Log all incoming requests
@@ -46,7 +46,7 @@ router.get("/profile-photo/:admissionNumber", authMiddleware(["admin", "superadm
 router.get("/:admissionNumber", authMiddleware(["admin", "parent", "superadmin", "teacher"]), getStudentById);
 
 // Admin-only routes
-router.post("/create", authMiddleware(["admin"]), createStudent);
-router.put("/:admissionNumber", authMiddleware(["admin"]), updateStudent);
+router.post("/create", authMiddleware(["admin"]), studentDocUpload,createStudent);
+router.put("/:admissionNumber", authMiddleware(["admin"]),studentDocUpload, updateStudent);
 router.delete("/:admissionNumber", authMiddleware(["admin"]), deleteStudent);
 export default router;

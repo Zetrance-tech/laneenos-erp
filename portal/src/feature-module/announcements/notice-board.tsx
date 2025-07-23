@@ -490,7 +490,7 @@ const handleEditNotice = async (e: React.FormEvent) => {
               </nav>
             </div>
             <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">
-              <TooltipOption />
+              {/* <TooltipOption /> */}
               {["admin", "superadmin", "teacher"].includes(userRole.toLowerCase()) && (
                 <div className="mb-2">
                   <Link

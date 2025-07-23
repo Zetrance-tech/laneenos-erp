@@ -15,6 +15,13 @@ const { TextArea } = Input;
 
 const API_URL = process.env.REACT_APP_URL || "";
 
+interface Image {
+  filename: string;
+  path: string;
+  mimetype: string;
+  size: number;
+}
+
 interface Session {
   _id: string;
   name: string;
@@ -25,7 +32,7 @@ interface Class {
   _id: string;
   name: string;
   id: string;
-  sessionId: string | Session; 
+  sessionId: string | Session;
 }
 
 interface User {
@@ -34,18 +41,11 @@ interface User {
   email: string;
 }
 
-interface Image {
-  filename: string;
-  path: string;
-  mimetype: string;
-  size: number;
-}
-
 interface Advertisement {
   _id: string;
   key: string;
   sessionId: Session | null;
-  classId: Class | null;
+  classId: Class[] | null;
   name: string;
   description: string;
   status: 'active' | 'inactive';
@@ -55,7 +55,7 @@ interface Advertisement {
 
 interface FormData {
   sessionId: string;
-  classId: string;
+  classId: string[];
   name: string;
   description: string;
   status: 'active' | 'inactive';
@@ -82,11 +82,12 @@ const AdvertisementManager: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [editAdvertisementId, setEditAdvertisementId] = useState<string | null>(null);
   const [viewAdvertisement, setViewAdvertisement] = useState<Advertisement | null>(null);
   const [formData, setFormData] = useState<FormData>({
     sessionId: "",
-    classId: "",
+    classId: [],
     name: "",
     description: "",
     status: "active",
@@ -96,7 +97,6 @@ const AdvertisementManager: React.FC = () => {
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [previewImage, setPreviewImage] = useState<string>("");
   const [previewOpen, setPreviewOpen] = useState<boolean>(false);
-  
   const [filterSessionId, setFilterSessionId] = useState<string>("");
   const [filterClassId, setFilterClassId] = useState<string>("");
   const [filterStatus, setFilterStatus] = useState<string>("");
@@ -115,17 +115,38 @@ const AdvertisementManager: React.FC = () => {
       sorter: (a: Advertisement, b: Advertisement) => (a.sessionId?.name || "").localeCompare(b.sessionId?.name || ""),
     },
     {
-      title: "Class",
+      title: "Classes",
       dataIndex: "classId",
-      render: (classData: Class | null) => classData?.name || "N/A",
-      sorter: (a: Advertisement, b: Advertisement) => (a.classId?.name || "").localeCompare(b.classId?.name || ""),
+      render: (classes: Class[] | null) =>
+        classes && Array.isArray(classes) && classes.length > 0
+          ? classes.map(c => c.name).join(", ")
+          : "N/A",
+      sorter: (a: Advertisement, b: Advertisement) =>
+        (a.classId && a.classId.length > 0 ? a.classId[0].name : "").localeCompare(
+          b.classId && b.classId.length > 0 ? b.classId[0].name : ""
+        ),
     },
+    // {
+    //   title: "Status",
+    //   dataIndex: "status",
+    //   render: (status: string) => status.charAt(0).toUpperCase() + status.slice(1),
+    //   sorter: (a: Advertisement, b: Advertisement) => a.status.localeCompare(b.status),
+    // },
     {
-      title: "Status",
-      dataIndex: "status",
-      render: (status: string) => status.charAt(0).toUpperCase() + status.slice(1),
-      sorter: (a: Advertisement, b: Advertisement) => a.status.localeCompare(b.status),
-    },
+          title: "Status",
+          dataIndex: "status",
+          render: (text: string) => (
+            <span
+              className={`badge badge-soft-${
+                text === "active" ? "success" : "danger"
+              } d-inline-flex align-items-center`}
+            >
+              <i className="ti ti-circle-filled fs-5 me-1"></i>
+              {text}
+            </span>
+          ),
+          sorter: (a: Advertisement, b: Advertisement) => a.status.length - b.status.length,
+        },
     {
       title: "Created By",
       dataIndex: "createdBy",
@@ -197,7 +218,6 @@ const AdvertisementManager: React.FC = () => {
         teacherClasses.forEach(c => {
           if (c.sessionId) {
             if (typeof c.sessionId === 'string') {
-              // Skip string IDs, handled later
             } else if (typeof c.sessionId === 'object' && c.sessionId._id) {
               sessionsMap.set(c.sessionId._id, c.sessionId);
             }
@@ -266,6 +286,7 @@ const AdvertisementManager: React.FC = () => {
       setFilterClasses(res.data as Class[]);
     } catch (error) {
       console.error("Error fetching filter classes:", error);
+      toast.error("Failed to fetch filter classes");
     }
   };
 
@@ -288,6 +309,7 @@ const AdvertisementManager: React.FC = () => {
       const formattedData: Advertisement[] = res.data.map((item: any) => ({
         ...item,
         key: item._id,
+        classId: item.classId || [],
       }));
       
       setAdvertisements(formattedData);
@@ -305,15 +327,16 @@ const AdvertisementManager: React.FC = () => {
   };
 
   const handleAddAdvertisement = async () => {
-    if (!formData.sessionId || !formData.classId || !formData.name || !formData.description || !formData.status || !formData.image) {
-      toast.error("All fields are required, including an image");
+    if (!formData.sessionId || formData.classId.length === 0 || !formData.name || !formData.description || !formData.status || !formData.image) {
+      toast.error("All fields are required, including at least one class and an image");
       return;
     }
 
     try {
+      setIsSubmitting(true);
       const formDataToSend = new FormData();
       formDataToSend.append("sessionId", formData.sessionId);
-      formDataToSend.append("classId", formData.classId);
+      formData.classId.forEach(id => formDataToSend.append("classId[]", id));
       formDataToSend.append("name", formData.name);
       formDataToSend.append("description", formData.description);
       formDataToSend.append("status", formData.status);
@@ -339,13 +362,15 @@ const AdvertisementManager: React.FC = () => {
     } catch (error: any) {
       console.error("Error adding advertisement:", error);
       toast.error(error.response?.data?.message || "Error adding advertisement");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleEdit = (record: Advertisement) => {
     setFormData({
       sessionId: record.sessionId?._id || "",
-      classId: record.classId?._id || "",
+      classId: record.classId?.map(c => c._id) || [],
       name: record.name || "",
       description: record.description || "",
       status: record.status || "active",
@@ -377,15 +402,16 @@ const AdvertisementManager: React.FC = () => {
   };
 
   const handleUpdateAdvertisement = async () => {
-    if (!formData.sessionId || !formData.classId || !formData.name || !formData.description || !formData.status) {
-      toast.error("All fields are required");
+    if (!formData.sessionId || formData.classId.length === 0 || !formData.name || !formData.description || !formData.status) {
+      toast.error("All fields are required, including at least one class");
       return;
     }
 
     try {
+      setIsSubmitting(true);
       const formDataToSend = new FormData();
       formDataToSend.append("sessionId", formData.sessionId);
-      formDataToSend.append("classId", formData.classId);
+      formData.classId.forEach(id => formDataToSend.append("classId[]", id));
       formDataToSend.append("name", formData.name);
       formDataToSend.append("description", formData.description);
       formDataToSend.append("status", formData.status);
@@ -419,6 +445,8 @@ const AdvertisementManager: React.FC = () => {
     } catch (error: any) {
       console.error("Error updating advertisement:", error);
       toast.error(error.response?.data?.message || "Error updating advertisement");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -440,14 +468,21 @@ const AdvertisementManager: React.FC = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (name === "sessionId" && value) {
       fetchClasses(value);
-      setFormData((prev) => ({ ...prev, classId: "" }));
+      setFormData((prev) => ({ ...prev, classId: [] }));
     }
+  };
+
+  const handleSelectAllClasses = () => {
+    setFormData((prev) => ({
+      ...prev,
+      classId: classes.map(c => c._id),
+    }));
   };
 
   const resetForm = () => {
     setFormData({
       sessionId: "",
-      classId: "",
+      classId: [],
       name: "",
       description: "",
       status: "active",
@@ -472,7 +507,7 @@ const AdvertisementManager: React.FC = () => {
         (advertisement) =>
           advertisement.name.toLowerCase().includes(lowerValue) ||
           (advertisement.sessionId?.name || "").toLowerCase().includes(lowerValue) ||
-          (advertisement.classId?.name || "").toLowerCase().includes(lowerValue) ||
+          (advertisement.classId?.some(c => c.name.toLowerCase().includes(lowerValue)) || false) ||
           (advertisement.createdBy?.name || "").toLowerCase().includes(lowerValue)
       );
     }
@@ -482,7 +517,7 @@ const AdvertisementManager: React.FC = () => {
     }
     
     if (classId) {
-      filtered = filtered.filter(advertisement => advertisement.classId?._id === classId);
+      filtered = filtered.filter(advertisement => advertisement.classId?.some(c => c._id === classId));
     }
     
     if (status) {
@@ -549,6 +584,20 @@ const AdvertisementManager: React.FC = () => {
       reader.onerror = (error) => reject(error);
     });
 
+  const customDropdownRender = (menu: React.ReactElement) => (
+    <div>
+      <div style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+        <div
+          style={{ cursor: 'pointer' }}
+          onClick={handleSelectAllClasses}
+        >
+          Select All Classes
+        </div>
+      </div>
+      {menu}
+    </div>
+  );
+
   const uploadButton = (
     <div>
       <PlusOutlined />
@@ -589,7 +638,7 @@ const AdvertisementManager: React.FC = () => {
                 </nav>
               </div>
               <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">
-                <TooltipOption />
+                {/* <TooltipOption /> */}
                 <div className="mb-2">
                   <Button
                     type="primary"
@@ -680,94 +729,121 @@ const AdvertisementManager: React.FC = () => {
                 resetForm();
                 setIsAddModalOpen(false);
               }}
+              disabled={isSubmitting}
             >
               Cancel
             </Button>,
-            <Button key="submit" type="primary" onClick={handleAddAdvertisement}>
-              Add Advertisement
+            <Button 
+              key="submit" 
+              type="primary" 
+              onClick={handleAddAdvertisement}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? <Spin size="small" /> : 'Add Advertisement'}
             </Button>,
           ]}
         >
-          <div className="row">
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Session *</label>
-              <Select
-                placeholder="Select Session"
-                value={formData.sessionId || undefined}
-                onChange={(value: string) => handleInputChange("sessionId", value)}
-                className="w-100"
-              >
-                {sessions.map((session) => (
-                  <Option key={session._id} value={session._id}>
-                    {session.name} ({session.sessionId})
-                  </Option>
-                ))}
-              </Select>
+          {isSubmitting ? (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px' }}>
+              <Spin size="large" />
             </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Class *</label>
-              <Select
-                placeholder="Select Class"
-                value={formData.classId || undefined}
-                onChange={(value: string) => handleInputChange("classId", value)}
-                className="w-100"
-                disabled={!formData.sessionId}
-              >
-                {classes.map((classItem) => (
-                  <Option key={classItem._id} value={classItem._id}>
-                    {classItem.name} ({classItem.id})
-                  </Option>
-                ))}
-              </Select>
+          ) : (
+            <div className="row">
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Session *</label>
+                <Select
+                  placeholder="Select Session"
+                  value={formData.sessionId || undefined}
+                  onChange={(value: string) => handleInputChange("sessionId", value)}
+                  className="w-100"
+                >
+                  {sessions.map((session) => (
+                    <Option key={session._id} value={session._id}>
+                      {session.name} ({session.sessionId})
+                    </Option>
+                  ))}
+                </Select>
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Classes *</label>
+                <Select
+                  mode="multiple"
+                  placeholder="Select Classes"
+                  value={formData.classId}
+                  onChange={(value: string[]) => handleInputChange("classId", value)}
+                  className="w-100 text-black"
+                  disabled={!formData.sessionId}
+                  dropdownRender={customDropdownRender}
+                  tagRender={(props) => (
+                    <span
+                      style={{
+                        color: 'black',
+                        backgroundColor: '#f5f5f5',
+                        padding: '2px 8px',
+                        margin: '2px',
+                        borderRadius: '4px',
+                      }}
+                    >
+                      {props.label}
+                    </span>
+                  )}
+                >
+                  {classes.map((classItem) => (
+                    <Option key={classItem._id} value={classItem._id}>
+                      {classItem.name}
+                    </Option>
+                  ))}
+                </Select>
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Advertisement Name *</label>
+                <Input
+                  value={formData.name}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    handleInputChange("name", e.target.value)
+                  }
+                  placeholder="Enter Advertisement Name"
+                />
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Status *</label>
+                <Select
+                  value={formData.status}
+                  onChange={(value: 'active' | 'inactive') => handleInputChange("status", value)}
+                  className="w-100"
+                >
+                  <Option value="active">Active</Option>
+                  <Option value="inactive">Inactive</Option>
+                </Select>
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Image *</label>
+                <Upload
+                  listType="picture-card"
+                  fileList={fileList}
+                  onPreview={handlePreview}
+                  onChange={handleUploadChange}
+                  onRemove={handleRemove}
+                  beforeUpload={() => false}
+                  accept="image/*"
+                  maxCount={1}
+                >
+                  {fileList.length >= 1 ? null : uploadButton}
+                </Upload>
+              </div>
+              <div className="col-md-12 mb-3">
+                <label className="form-label">Description *</label>
+                <TextArea
+                  value={formData.description}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                    handleInputChange("description", e.target.value)
+                  }
+                  placeholder="Enter Description"
+                  rows={4}
+                />
+              </div>
             </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Advertisement Name *</label>
-              <Input
-                value={formData.name}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  handleInputChange("name", e.target.value)
-                }
-                placeholder="Enter Advertisement Name"
-              />
-            </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Status *</label>
-              <Select
-                value={formData.status}
-                onChange={(value: 'active' | 'inactive') => handleInputChange("status", value)}
-                className="w-100"
-              >
-                <Option value="active">Active</Option>
-                <Option value="inactive">Inactive</Option>
-              </Select>
-            </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Image *</label>
-              <Upload
-                listType="picture-card"
-                fileList={fileList}
-                onPreview={handlePreview}
-                onChange={handleUploadChange}
-                onRemove={handleRemove}
-                beforeUpload={() => false}
-                accept="image/*"
-                maxCount={1}
-              >
-                {fileList.length >= 1 ? null : uploadButton}
-              </Upload>
-            </div>
-            <div className="col-md-12 mb-3">
-              <label className="form-label">Description *</label>
-              <TextArea
-                value={formData.description}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                  handleInputChange("description", e.target.value)
-                }
-                placeholder="Enter Description"
-                rows={4}
-              />
-            </div>
-          </div>
+          )}
         </Modal>
 
         <Modal
@@ -786,94 +862,121 @@ const AdvertisementManager: React.FC = () => {
                 resetForm();
                 setIsEditModalOpen(false);
               }}
+              disabled={isSubmitting}
             >
               Cancel
             </Button>,
-            <Button key="submit" type="primary" onClick={handleUpdateAdvertisement}>
-              Update Advertisement
+            <Button 
+              key="submit" 
+              type="primary" 
+              onClick={handleUpdateAdvertisement}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? <Spin size="small" /> : 'Update Advertisement'}
             </Button>,
           ]}
         >
-          <div className="row">
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Session *</label>
-              <Select
-                placeholder="Select Session"
-                value={formData.sessionId || undefined}
-                onChange={(value: string) => handleInputChange("sessionId", value)}
-                className="w-100"
-              >
-                {sessions.map((session) => (
-                  <Option key={session._id} value={session._id}>
-                    {session.name} ({session.sessionId})
-                  </Option>
-                ))}
-              </Select>
+          {isSubmitting ? (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px' }}>
+              <Spin size="large" />
             </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Class *</label>
-              <Select
-                placeholder="Select Class"
-                value={formData.classId || undefined}
-                onChange={(value: string) => handleInputChange("classId", value)}
-                className="w-100"
-                disabled={!formData.sessionId}
-              >
-                {classes.map((classItem) => (
-                  <Option key={classItem._id} value={classItem._id}>
-                    {classItem.name} ({classItem.id})
-                  </Option>
-                ))}
-              </Select>
+          ) : (
+            <div className="row">
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Session *</label>
+                <Select
+                  placeholder="Select Session"
+                  value={formData.sessionId || undefined}
+                  onChange={(value: string) => handleInputChange("sessionId", value)}
+                  className="w-100"
+                >
+                  {sessions.map((session) => (
+                    <Option key={session._id} value={session._id}>
+                      {session.name} ({session.sessionId})
+                    </Option>
+                  ))}
+                </Select>
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Classes *</label>
+                <Select
+                  mode="multiple"
+                  placeholder="Select Classes"
+                  value={formData.classId}
+                  onChange={(value: string[]) => handleInputChange("classId", value)}
+                  className="w-100 text-black"
+                  disabled={!formData.sessionId}
+                  dropdownRender={customDropdownRender}
+                  tagRender={(props) => (
+                    <span
+                      style={{
+                        color: 'black',
+                        backgroundColor: '#f5f5f5',
+                        padding: '2px 8px',
+                        margin: '2px',
+                        borderRadius: '4px',
+                      }}
+                    >
+                      {props.label}
+                    </span>
+                  )}
+                >
+                  {classes.map((classItem) => (
+                    <Option key={classItem._id} value={classItem._id}>
+                      {classItem.name}
+                    </Option>
+                  ))}
+                </Select>
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Advertisement Name *</label>
+                <Input
+                  value={formData.name}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    handleInputChange("name", e.target.value)
+                  }
+                  placeholder="Enter Advertisement Name"
+                />
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Status *</label>
+                <Select
+                  value={formData.status}
+                  onChange={(value: 'active' | 'inactive') => handleInputChange("status", value)}
+                  className="w-100"
+                >
+                  <Option value="active">Active</Option>
+                  <Option value="inactive">Inactive</Option>
+                </Select>
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Image</label>
+                <Upload
+                  listType="picture-card"
+                  fileList={fileList}
+                  onPreview={handlePreview}
+                  onChange={handleUploadChange}
+                  onRemove={handleRemove}
+                  beforeUpload={() => false}
+                  accept="image/*"
+                  maxCount={1}
+                >
+                  {fileList.length >= 1 ? null : uploadButton}
+                </Upload>
+              </div>
+              <div className="col-md-12 mb-3">
+                <label className="form-label">Description *</label>
+                <TextArea
+                  value={formData.description}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                    handleInputChange("description", e.target.value)
+                  }
+                  placeholder="Enter Description"
+                  rows={4}
+                />
+              </div>
             </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Advertisement Name *</label>
-              <Input
-                value={formData.name}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  handleInputChange("name", e.target.value)
-                }
-                placeholder="Enter Advertisement Name"
-              />
-            </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Status *</label>
-              <Select
-                value={formData.status}
-                onChange={(value: 'active' | 'inactive') => handleInputChange("status", value)}
-                className="w-100"
-              >
-                <Option value="active">Active</Option>
-                <Option value="inactive">Inactive</Option>
-              </Select>
-            </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Image</label>
-              <Upload
-                listType="picture-card"
-                fileList={fileList}
-                onPreview={handlePreview}
-                onChange={handleUploadChange}
-                onRemove={handleRemove}
-                beforeUpload={() => false}
-                accept="image/*"
-                maxCount={1}
-              >
-                {fileList.length >= 1 ? null : uploadButton}
-              </Upload>
-            </div>
-            <div className="col-md-12 mb-3">
-              <label className="form-label">Description *</label>
-              <TextArea
-                value={formData.description}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                  handleInputChange("description", e.target.value)
-                }
-                placeholder="Enter Description"
-                rows={4}
-              />
-            </div>
-          </div>
+          )}
         </Modal>
 
         <Modal
@@ -895,8 +998,15 @@ const AdvertisementManager: React.FC = () => {
                 <Input value={viewAdvertisement.sessionId?.name || "N/A"} readOnly />
               </div>
               <div className="col-md-6 mb-3">
-                <label className="form-label">Class</label>
-                <Input value={viewAdvertisement.classId?.name || "N/A"} readOnly />
+                <label className="form-label">Classes</label>
+                <Input
+                  value={
+                    viewAdvertisement.classId && viewAdvertisement.classId.length > 0
+                      ? viewAdvertisement.classId.map(c => c.name).join(", ")
+                      : "N/A"
+                  }
+                  readOnly
+                />
               </div>
               <div className="col-md-6 mb-3">
                 <label className="form-label">Advertisement Name</label>
@@ -914,34 +1024,34 @@ const AdvertisementManager: React.FC = () => {
                 <label className="form-label">Image</label>
                 <div className="d-flex flex-wrap gap-2">
                   {viewAdvertisement.image ? (
-  <div className="position-relative">
-    <img
-      src={`${API_URL}/${viewAdvertisement.image.path}`}
-      alt={viewAdvertisement.name}
-      style={{ 
-        width: "150px", 
-        height: "150px", 
-        objectFit: "cover",
-        borderRadius: "8px",
-        cursor: "pointer"
-      }}
-      onClick={() => viewAdvertisement.image && handleViewImagePreview(`${API_URL}/${viewAdvertisement.image.path}`)}
-    />
-    <div 
-      className="position-absolute top-0 end-0 p-1"
-      style={{
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        borderRadius: "0 8px 0 8px",
-        cursor: "pointer"
-      }}
-      onClick={() => viewAdvertisement.image && handleViewImagePreview(`${API_URL}/${viewAdvertisement.image.path}`)}
-    >
-      <EyeOutlined style={{ color: "white", fontSize: "16px" }} />
-    </div>
-  </div>
-) : (
-  <div>No Image</div>
-)}
+                    <div className="position-relative">
+                      <img
+                        src={`${API_URL}/${viewAdvertisement.image.path}`}
+                        alt={viewAdvertisement.name}
+                        style={{ 
+                          width: "150px", 
+                          height: "150px", 
+                          objectFit: "cover",
+                          borderRadius: "8px",
+                          cursor: "pointer"
+                        }}
+                        onClick={() => viewAdvertisement.image && handleViewImagePreview(`${API_URL}/${viewAdvertisement.image.path}`)}
+                      />
+                      <div 
+                        className="position-absolute top-0 end-0 p-1"
+                        style={{
+                          backgroundColor: "rgba(0, 0, 0, 0.5)",
+                          borderRadius: "0 8px 0 8px",
+                          cursor: "pointer"
+                        }}
+                        onClick={() => viewAdvertisement.image && handleViewImagePreview(`${API_URL}/${viewAdvertisement.image.path}`)}
+                      >
+                        <EyeOutlined style={{ color: "white", fontSize: "16px" }} />
+                      </div>
+                    </div>
+                  ) : (
+                    <div>No Image</div>
+                  )}
                 </div>
               </div>
               <div className="col-md-12 mb-3">

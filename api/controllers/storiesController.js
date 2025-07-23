@@ -5,7 +5,7 @@ import { storyUpload } from '../middleware/multer.js';
 import fs from 'fs';
 import path from 'path';
 import { uploadsRoot } from '../uploadsRoot.js';
-
+import mongoose from 'mongoose';
 const fsPromises = fs.promises;
 
 export const createStory = async (req, res) => {
@@ -22,18 +22,26 @@ export const createStory = async (req, res) => {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
-    const sessionExists = await Session.findOne({ _id: sessionId, branchId });
+    const classIdArray = Array.isArray(classId) ? classId : [classId];
+
+    const sessionExists = await Session.findOne({
+      _id: sessionId,
+      branchId
+    });
     if (!sessionExists) {
       return res.status(404).json({ message: 'Session not found in this branch' });
     }
 
-    const classQuery = { _id: classId, branchId };
+    const classQuery = {
+      _id: { $in: classIdArray },
+      branchId
+    };
     if (req.user.role === 'teacher') {
       classQuery.teacherId = { $in: [userId] };
     }
-    const classExists = await Class.findOne(classQuery);
-    if (!classExists) {
-      return res.status(404).json({ message: 'Class not found or you don\'t have access' });
+    const classExists = await Class.find(classQuery);
+    if (classExists.length === 0) {
+      return res.status(404).json({ message: 'No valid classes found or access denied' });
     }
 
     if (!req.files || req.files.length === 0) {
@@ -50,7 +58,7 @@ export const createStory = async (req, res) => {
     const newStory = new Story({
       branchId,
       sessionId,
-      classId,
+      classId: classIdArray,
       name,
       description,
       pdfs,
@@ -89,23 +97,31 @@ export const updateStory = async (req, res) => {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
 
+    const classIdArray = Array.isArray(classId) ? classId : [classId];
+
     const existingStory = await Story.findById(storyId);
     if (!existingStory) {
       return res.status(404).json({ message: 'Story not found' });
     }
 
-    const sessionExists = await Session.findOne({ _id: sessionId, branchId: req.user.branchId });
+    const sessionExists = await Session.findOne({
+      _id: sessionId,
+      branchId: req.user.branchId
+    });
     if (!sessionExists) {
       return res.status(404).json({ message: 'Session not found in this branch' });
     }
 
-    const classQuery = { _id: classId, branchId: req.user.branchId };
+    const classQuery = {
+      _id: { $in: classIdArray },
+      branchId: req.user.branchId
+    };
     if (req.user.role === 'teacher') {
       classQuery.teacherId = { $in: [req.user.userId] };
     }
-    const classExists = await Class.findOne(classQuery);
-    if (!classExists) {
-      return res.status(404).json({ message: 'Class not found or you don\'t have access' });
+    const classExists = await Class.find(classQuery);
+    if (classExists.length === 0) {
+      return res.status(404).json({ message: 'No valid classes found or access denied' });
     }
 
     let pdfs = existingStory.pdfs || [];
@@ -121,18 +137,14 @@ export const updateStory = async (req, res) => {
     if (Array.isArray(pdfsToDeleteArray) && pdfsToDeleteArray.length > 0) {
       for (const filename of pdfsToDeleteArray) {
         const pdfIndex = pdfs.findIndex(pdf => pdf.filename === filename);
-        if (pdfIndex === -1) {
-          continue;
-        }
+        if (pdfIndex === -1) continue;
 
         const filePath = path.join(uploadsRoot, 'stories', filename);
         try {
           await fsPromises.access(filePath);
           await fsPromises.unlink(filePath);
         } catch (error) {
-          if (error.code === 'ENOENT') {
-            console.log('updateStory: File not found:', filePath);
-          } else {
+          if (error.code !== 'ENOENT') {
             console.error('updateStory: Error deleting file:', error);
           }
         }
@@ -153,7 +165,7 @@ export const updateStory = async (req, res) => {
 
     const updateData = {
       sessionId,
-      classId,
+      classId: classIdArray,
       name,
       description,
       pdfs,
@@ -182,16 +194,18 @@ export const updateStory = async (req, res) => {
   }
 };
 
+
 export const deleteStory = async (req, res) => {
   try {
-    const branchId = req.user.branchId;
+    const branchId = new mongoose.Types.ObjectId(req.user.branchId);
     const userId = req.user.userId;
     const { id } = req.params;
 
     const query = { _id: id, branchId };
     if (req.user.role === 'teacher') {
-      const userClasses = await Class.find({ teacherId: { $in: [userId] }, branchId });
-      query.classId = { $in: userClasses.map(c => c._id) };
+      const userClasses = await Class.find({ teacherId: userId, branchId });
+      const teacherClassIds = userClasses.map(c => c._id);
+      query.classId = { $in: teacherClassIds };
     }
 
     const deletedStory = await Story.findOneAndDelete(query);
@@ -199,7 +213,7 @@ export const deleteStory = async (req, res) => {
       return res.status(404).json({ message: 'Story not found or you don\'t have access' });
     }
 
-    if (deletedStory.pdfs && deletedStory.pdfs.length > 0) {
+    if (deletedStory.pdfs?.length > 0) {
       deletedStory.pdfs.forEach(pdf => {
         const filePath = path.join(uploadsRoot, pdf.path);
         if (fs.existsSync(filePath)) {
@@ -222,14 +236,14 @@ export const deleteStory = async (req, res) => {
 
 export const getAllStories = async (req, res) => {
   try {
-    const branchId = req.user.branchId;
+    const branchId = new mongoose.Types.ObjectId(req.user.branchId);
     const userId = req.user.userId;
     const { sessionId, classId } = req.query;
 
     const query = { branchId };
 
     if (req.user.role === 'teacher') {
-      const userClasses = await Class.find({ teacherId: { $in: [userId] }, branchId });
+      const userClasses = await Class.find({ teacherId: userId, branchId });
       const teacherClassIds = userClasses.map(c => c._id);
 
       if (teacherClassIds.length === 0) {
@@ -237,18 +251,19 @@ export const getAllStories = async (req, res) => {
       }
 
       query.classId = { $in: teacherClassIds };
+
       if (classId) {
         const isValidClass = teacherClassIds.some(id => id.toString() === classId);
         if (!isValidClass) {
           return res.status(403).json({ message: 'Access denied to this class' });
         }
-        query.classId = classId;
+        query.classId = new mongoose.Types.ObjectId(classId);
       }
     } else {
-      if (classId) query.classId = classId;
+      if (classId) query.classId = new mongoose.Types.ObjectId(classId);
     }
 
-    if (sessionId) query.sessionId = sessionId;
+    if (sessionId) query.sessionId = new mongoose.Types.ObjectId(sessionId);
 
     const stories = await Story.find(query)
       .populate('sessionId', 'name sessionId')
@@ -264,14 +279,16 @@ export const getAllStories = async (req, res) => {
 
 export const getStoryById = async (req, res) => {
   try {
-    const branchId = req.user.branchId;
+    const branchId = new mongoose.Types.ObjectId(req.user.branchId);
     const userId = req.user.userId;
     const { id } = req.params;
 
     const query = { _id: id, branchId };
+
     if (req.user.role === 'teacher') {
-      const userClasses = await Class.find({ teacherId: { $in: [userId] }, branchId });
-      query.classId = { $in: userClasses.map(c => c._id) };
+      const userClasses = await Class.find({ teacherId: userId, branchId });
+      const teacherClassIds = userClasses.map(c => c._id);
+      query.classId = { $in: teacherClassIds };
     }
 
     const story = await Story.findOne(query)
@@ -295,9 +312,9 @@ export const getAllStoriesForSuperadmin = async (req, res) => {
     const { branchId, sessionId, classId } = req.query;
     const query = {};
 
-    if (branchId) query.branchId = branchId;
-    if (sessionId) query.sessionId = sessionId;
-    if (classId) query.classId = classId;
+    if (branchId) query.branchId = new mongoose.Types.ObjectId(branchId);
+    if (sessionId) query.sessionId = new mongoose.Types.ObjectId(sessionId);
+    if (classId) query.classId = new mongoose.Types.ObjectId(classId);
 
     const stories = await Story.find(query)
       .populate('sessionId', 'name sessionId')

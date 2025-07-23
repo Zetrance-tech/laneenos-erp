@@ -237,13 +237,13 @@ const StaffListForSuperadmin = () => {
       dataIndex: "name",
       render: (text: string, record: Staff) => (
         <div className="d-flex align-items-center">
-          <Link to="#" className="avatar avatar-md">
+          {/* <Link to="#" className="avatar avatar-md">
             <ImageWithBasePath
               src="assets/img/teachers/teacher-01.jpg"
               className="img-fluid rounded-circle"
               alt="img"
             />
-          </Link>
+          </Link> */}
           <div className="ms-2">
             <p className="text-dark mb-0">
               {/* <Link to={routes.teacherDetails.replace(":id", record._id)}> */}

@@ -198,13 +198,13 @@ const fetchClasses = async (branchId?: string, sessionId?: string) => {
       dataIndex: "name",
       render: (text: string) => (
         <div className="d-flex align-items-center">
-          <Link to="#" className="avatar avatar-md">
+          {/* <Link to="#" className="avatar avatar-md">
             <ImageWithBasePath
               src="assets/img/students/student-01.jpg"
               className="img-fluid rounded-circle"
               alt="img"
             />
-          </Link>
+          </Link> */}
           <div className="ms-2">
             <p className="text-dark mb-0">
               <Link to="#">{text}</Link>

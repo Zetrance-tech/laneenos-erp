@@ -46,7 +46,7 @@ interface Story {
   _id: string;
   key: string;
   sessionId: Session | null;
-  classId: Class | null;
+  classId: Class[] | null;
   name: string;
   description: string;
   pdfs: Pdf[];
@@ -55,7 +55,7 @@ interface Story {
 
 interface FormData {
   sessionId: string;
-  classId: string;
+  classId: string[];
   name: string;
   description: string;
   pdf: File | null;
@@ -81,11 +81,12 @@ const StoriesManager: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [editStoryId, setEditStoryId] = useState<string | null>(null);
   const [viewStory, setViewStory] = useState<Story | null>(null);
   const [formData, setFormData] = useState<FormData>({
     sessionId: "",
-    classId: "",
+    classId: [],
     name: "",
     description: "",
     pdf: null,
@@ -113,11 +114,16 @@ const StoriesManager: React.FC = () => {
         (a.sessionId?.name || "").localeCompare(b.sessionId?.name || ""),
     },
     {
-      title: "Class",
+      title: "Classes",
       dataIndex: "classId",
-      render: (classData: Class | null) => classData?.name || "N/A",
+      render: (classes: Class[] | null) =>
+        classes && Array.isArray(classes) && classes.length > 0
+          ? classes.map(c => c.name).join(", ")
+          : "N/A",
       sorter: (a: Story, b: Story) =>
-        (a.classId?.name || "").localeCompare(b.classId?.name || ""),
+        (a.classId && a.classId.length > 0 ? a.classId[0].name : "").localeCompare(
+          b.classId && b.classId.length > 0 ? b.classId[0].name : ""
+        ),
     },
     {
       title: "Created By",
@@ -307,19 +313,20 @@ const StoriesManager: React.FC = () => {
   const handleAddStory = async () => {
     if (
       !formData.sessionId ||
-      !formData.classId ||
+      formData.classId.length === 0 ||
       !formData.name ||
       !formData.description ||
       !formData.pdf
     ) {
-      toast.error("All fields are required, including a PDF file");
+      toast.error("All fields are required, including at least one class and a PDF file");
       return;
     }
 
     try {
+      setIsSubmitting(true);
       const formDataToSend = new FormData();
       formDataToSend.append("sessionId", formData.sessionId);
-      formDataToSend.append("classId", formData.classId);
+      formData.classId.forEach(id => formDataToSend.append("classId[]", id));
       formDataToSend.append("name", formData.name);
       formDataToSend.append("description", formData.description);
       formDataToSend.append("pdf", formData.pdf);
@@ -350,13 +357,15 @@ const StoriesManager: React.FC = () => {
     } catch (error: any) {
       console.error("Error adding story:", error);
       toast.error(error.response?.data?.message || "Error adding story");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleEdit = (record: Story) => {
     setFormData({
       sessionId: record.sessionId?._id || "",
-      classId: record.classId?._id || "",
+      classId: record.classId?.map(c => c._id) || [],
       name: record.name || "",
       description: record.description || "",
       pdf: null,
@@ -389,18 +398,19 @@ const StoriesManager: React.FC = () => {
   const handleUpdateStory = async () => {
     if (
       !formData.sessionId ||
-      !formData.classId ||
+      formData.classId.length === 0 ||
       !formData.name ||
       !formData.description
     ) {
-      toast.error("All fields are required");
+      toast.error("All fields are required, including at least one class");
       return;
     }
 
     try {
+      setIsSubmitting(true);
       const formDataToSend = new FormData();
       formDataToSend.append("sessionId", formData.sessionId);
-      formDataToSend.append("classId", formData.classId);
+      formData.classId.forEach(id => formDataToSend.append("classId[]", id));
       formDataToSend.append("name", formData.name);
       formDataToSend.append("description", formData.description);
 
@@ -443,6 +453,8 @@ const StoriesManager: React.FC = () => {
     } catch (error: any) {
       console.error("Error updating story:", error);
       toast.error(error.response?.data?.message || "Error updating story");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -464,14 +476,21 @@ const StoriesManager: React.FC = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (name === "sessionId" && value) {
       fetchClasses(value);
-      setFormData((prev) => ({ ...prev, classId: "" }));
+      setFormData((prev) => ({ ...prev, classId: [] }));
     }
+  };
+
+  const handleSelectAllClasses = () => {
+    setFormData((prev) => ({
+      ...prev,
+      classId: classes.map(c => c._id),
+    }));
   };
 
   const resetForm = () => {
     setFormData({
       sessionId: "",
-      classId: "",
+      classId: [],
       name: "",
       description: "",
       pdf: null,
@@ -495,7 +514,7 @@ const StoriesManager: React.FC = () => {
         (story) =>
           story.name.toLowerCase().includes(lowerValue) ||
           (story.sessionId?.name || "").toLowerCase().includes(lowerValue) ||
-          (story.classId?.name || "").toLowerCase().includes(lowerValue) ||
+          (story.classId?.some(c => c.name.toLowerCase().includes(lowerValue)) || false) ||
           (story.createdBy?.name || "").toLowerCase().includes(lowerValue)
       );
     }
@@ -505,7 +524,7 @@ const StoriesManager: React.FC = () => {
     }
 
     if (classId) {
-      filtered = filtered.filter((story) => story.classId?._id === classId);
+      filtered = filtered.filter((story) => story.classId?.some(c => c._id === classId));
     }
 
     setFilteredStories(filtered);
@@ -561,7 +580,6 @@ const StoriesManager: React.FC = () => {
         headers: { Authorization: `Bearer ${token}` },
         responseType: "blob",
       });
-      console.log("PDF Fetch Response:", response.status, response.headers);
       const blob = new Blob([response.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
       setPreviewUrl(url);
@@ -587,6 +605,20 @@ const StoriesManager: React.FC = () => {
       }
     };
   }, [previewUrl]);
+
+  const customDropdownRender = (menu: React.ReactElement) => (
+    <div>
+      <div style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+        <div
+          style={{ cursor: 'pointer' }}
+          onClick={handleSelectAllClasses}
+        >
+          Select All Classes
+        </div>
+      </div>
+      {menu}
+    </div>
+  );
 
   const uploadButton = (
     <div>
@@ -628,7 +660,7 @@ const StoriesManager: React.FC = () => {
                 </nav>
               </div>
               <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">
-                <TooltipOption />
+                {/* <TooltipOption /> */}
                 <div className="mb-2">
                   <Button
                     type="primary"
@@ -711,105 +743,130 @@ const StoriesManager: React.FC = () => {
                 resetForm();
                 setIsAddModalOpen(false);
               }}
+              disabled={isSubmitting}
             >
               Cancel
             </Button>,
-            <Button key="submit" type="primary" onClick={handleAddStory}>
-              Add Story
+            <Button 
+              key="submit" 
+              type="primary" 
+              onClick={handleAddStory}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? <Spin size="small" /> : 'Add Story'}
             </Button>,
           ]}
         >
-          <div className="row">
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Session *</label>
-              <Select
-                placeholder="Select Session"
-                value={formData.sessionId || undefined}
-                onChange={(value: string) =>
-                  handleInputChange("sessionId", value)
-                }
-                className="w-100"
-              >
-                {sessions.map((session) => (
-                  <Option key={session._id} value={session._id}>
-                    {session.name} ({session.sessionId})
-                  </Option>
-                ))}
-              </Select>
+          {isSubmitting ? (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px' }}>
+              <Spin size="large" />
             </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Class *</label>
-              <Select
-                placeholder="Select Class"
-                value={formData.classId || undefined}
-                onChange={(value: string) =>
-                  handleInputChange("classId", value)
-                }
-                className="w-100"
-                disabled={!formData.sessionId}
-              >
-                {classes.map((classItem) => (
-                  <Option key={classItem._id} value={classItem._id}>
-                    {classItem.name} ({classItem.id})
-                  </Option>
-                ))}
-              </Select>
+          ) : (
+            <div className="row">
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Session *</label>
+                <Select
+                  placeholder="Select Session"
+                  value={formData.sessionId || undefined}
+                  onChange={(value: string) =>
+                    handleInputChange("sessionId", value)
+                  }
+                  className="w-100"
+                >
+                  {sessions.map((session) => (
+                    <Option key={session._id} value={session._id}>
+                      {session.name} ({session.sessionId})
+                    </Option>
+                  ))}
+                </Select>
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Classes *</label>
+                <Select
+                  mode="multiple"
+                  placeholder="Select Classes"
+                  value={formData.classId}
+                  onChange={(value: string[]) =>
+                    handleInputChange("classId", value)
+                  }
+                  className="w-100 text-black"
+                  disabled={!formData.sessionId}
+                  dropdownRender={customDropdownRender}
+                  tagRender={(props) => (
+                    <span
+                      style={{
+                        color: 'black',
+                        backgroundColor: '#f5f5f5',
+                        padding: '2px 8px',
+                        margin: '2px',
+                        borderRadius: '4px',
+                      }}
+                    >
+                      {props.label}
+                    </span>
+                  )}
+                >
+                  {classes.map((classItem) => (
+                    <Option key={classItem._id} value={classItem._id}>
+                      {classItem.name}
+                    </Option>
+                  ))}
+                </Select>
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Story Name *</label>
+                <Input
+                  value={formData.name}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    handleInputChange("name", e.target.value)
+                  }
+                  placeholder="Enter Story Name"
+                />
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label d-block">PDF *</label>
+                <Upload
+                  listType="picture"
+                  fileList={fileList}
+                  onPreview={handlePreview}
+                  onChange={handleUploadChange}
+                  onRemove={handleRemove}
+                  beforeUpload={() => false}
+                  accept="application/pdf"
+                  maxCount={1}
+                >
+                  {fileList.length >= 1 ? null : (
+                    <div
+                      style={{
+                        border: '1px dashed #d9d9d9',
+                        borderRadius: '6px',
+                        padding: '16px',
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        backgroundColor: '#fafafa',
+                      }}
+                    >
+                      <p className="ant-upload-drag-icon">
+                        <i className="fas fa-file-upload" style={{ fontSize: 24 }} />
+                      </p>
+                      <p className="ant-upload-text">Upload pdf</p>
+                    </div>
+                  )}
+                </Upload>
+              </div>
+              <div className="col-md-12 mb-3">
+                <label className="form-label">Description *</label>
+                <TextArea
+                  value={formData.description}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                    handleInputChange("description", e.target.value)
+                  }
+                  placeholder="Enter Description"
+                  rows={4}
+                />
+              </div>
             </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Story Name *</label>
-              <Input
-                value={formData.name}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  handleInputChange("name", e.target.value)
-                }
-                placeholder="Enter Story Name"
-              />
-            </div>
-            <div className="col-md-6 mb-3">
-  <label className="form-label d-block">PDF *</label>
-  <Upload
-    listType="picture"
-    fileList={fileList}
-    onPreview={handlePreview}
-    onChange={handleUploadChange}
-    onRemove={handleRemove}
-    beforeUpload={() => false}
-    accept="application/pdf"
-    maxCount={1}
-  >
-    {fileList.length >= 1 ? null : (
-      <div
-        style={{
-          border: '1px dashed #d9d9d9',
-          borderRadius: '6px',
-          padding: '16px',
-          textAlign: 'center',
-          cursor: 'pointer',
-          backgroundColor: '#fafafa',
-        }}
-      >
-        <p className="ant-upload-drag-icon">
-          <i className="fas fa-file-upload" style={{ fontSize: 24 }} />
-        </p>
-        <p className="ant-upload-text">Upload pdf</p>
-        {/* <p className="ant-upload-hint">Only one PDF file is allowed</p> */}
-      </div>
-    )}
-  </Upload>
-</div>
-
-            <div className="col-md-12 mb-3">
-              <label className="form-label">Description *</label>
-              <TextArea
-                value={formData.description}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                  handleInputChange("description", e.target.value)
-                }
-                placeholder="Enter Description"
-                rows={4}
-              />
-            </div>
-          </div>
+          )}
         </Modal>
 
         <Modal
@@ -821,94 +878,123 @@ const StoriesManager: React.FC = () => {
           }}
           zIndex={10001}
           width={1000}
-          footer={[
+          footer={
+            <>
             <Button
               key="cancel"
               onClick={() => {
                 resetForm();
                 setIsEditModalOpen(false);
               }}
+              disabled={isSubmitting}
             >
               Cancel
             </Button>,
-            <Button key="submit" type="primary" onClick={handleUpdateStory}>
-              Update Story
-            </Button>,
-          ]}
+            <Button 
+              key="submit" 
+              type="primary" 
+              onClick={handleUpdateStory}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? <Spin size="small" /> : 'Update Story'}
+            </Button>
+            </>
+          }
         >
-          <div className="row">
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Session *</label>
-              <Select
-                placeholder="Select Session"
-                value={formData.sessionId || undefined}
-                onChange={(value: string) =>
-                  handleInputChange("sessionId", value)
-                }
-                className="w-100"
-              >
-                {sessions.map((session) => (
-                  <Option key={session._id} value={session._id}>
-                    {session.name} ({session.sessionId})
-                  </Option>
-                ))}
-              </Select>
+          {isSubmitting ? (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px' }}>
+              <Spin size="large" />
             </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Class *</label>
-              <Select
-                placeholder="Select Class"
-                value={formData.classId || undefined}
-                onChange={(value: string) =>
-                  handleInputChange("classId", value)
-                }
-                className="w-100"
-                disabled={!formData.sessionId}
-              >
-                {classes.map((classItem) => (
-                  <Option key={classItem._id} value={classItem._id}>
-                    {classItem.name} ({classItem.id})
-                  </Option>
-                ))}
-              </Select>
+          ) : (
+            <div className="row">
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Session *</label>
+                <Select
+                  placeholder="Select Session"
+                  value={formData.sessionId || undefined}
+                  onChange={(value: string) =>
+                    handleInputChange("sessionId", value)
+                  }
+                  className="w-100"
+                >
+                  {sessions.map((session) => (
+                    <Option key={session._id} value={session._id}>
+                      {session.name} ({session.sessionId})
+                    </Option>
+                  ))}
+                </Select>
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Classes *</label>
+                <Select
+                  mode="multiple"
+                  placeholder="Select Classes"
+                  value={formData.classId}
+                  onChange={(value: string[]) =>
+                    handleInputChange("classId", value)
+                  }
+                  className="w-100 text-black"
+                  disabled={!formData.sessionId}
+                  dropdownRender={customDropdownRender}
+                  tagRender={(props) => (
+                    <span
+                      style={{
+                        color: 'black',
+                        backgroundColor: '#f5f5f5',
+                        padding: '2px 8px',
+                        margin: '2px',
+                        borderRadius: '4px',
+                      }}
+                    >
+                      {props.label}
+                    </span>
+                  )}
+                >
+                  {classes.map((classItem) => (
+                    <Option key={classItem._id} value={classItem._id}>
+                      {classItem.name}
+                    </Option>
+                  ))}
+                </Select>
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Story Name *</label>
+                <Input
+                  value={formData.name}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    handleInputChange("name", e.target.value)
+                  }
+                  placeholder="Enter Story Name"
+                />
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">PDF</label>
+                <Upload
+                  listType="text"
+                  fileList={fileList}
+                  onPreview={handlePreview}
+                  onChange={handleUploadChange}
+                  onRemove={handleRemove}
+                  beforeUpload={() => false}
+                  accept="application/pdf"
+                  maxCount={1}
+                >
+                  {fileList.length >= 1 ? null : uploadButton}
+                </Upload>
+              </div>
+              <div className="col-md-12 mb-3">
+                <label className="form-label">Description *</label>
+                <TextArea
+                  value={formData.description}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                    handleInputChange("description", e.target.value)
+                  }
+                  placeholder="Enter Description"
+                  rows={4}
+                />
+              </div>
             </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Story Name *</label>
-              <Input
-                value={formData.name}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  handleInputChange("name", e.target.value)
-                }
-                placeholder="Enter Story Name"
-              />
-            </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">PDF</label>
-              <Upload
-                listType="text"
-                fileList={fileList}
-                onPreview={handlePreview}
-                onChange={handleUploadChange}
-                onRemove={handleRemove}
-                beforeUpload={() => false}
-                accept="application/pdf"
-                maxCount={1}
-              >
-                {fileList.length >= 1 ? null : uploadButton}
-              </Upload>
-            </div>
-            <div className="col-md-12 mb-3">
-              <label className="form-label">Description *</label>
-              <TextArea
-                value={formData.description}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                  handleInputChange("description", e.target.value)
-                }
-                placeholder="Enter Description"
-                rows={4}
-              />
-            </div>
-          </div>
+          )}
         </Modal>
 
         <Modal
@@ -930,8 +1016,15 @@ const StoriesManager: React.FC = () => {
                 <Input value={viewStory.sessionId?.name || "N/A"} readOnly />
               </div>
               <div className="col-md-6 mb-3">
-                <label className="form-label">Class</label>
-                <Input value={viewStory.classId?.name || "N/A"} readOnly />
+                <label className="form-label">Classes</label>
+                <Input
+                  value={
+                    viewStory.classId && viewStory.classId.length > 0
+                      ? viewStory.classId.map(c => c.name).join(", ")
+                      : "N/A"
+                  }
+                  readOnly
+                />
               </div>
               <div className="col-md-6 mb-3">
                 <label className="form-label">Story Name</label>

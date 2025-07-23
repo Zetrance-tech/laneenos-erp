@@ -13,20 +13,54 @@ const API_URL = process.env.REACT_APP_URL;
 interface Student {
   _id: string;
   admissionNumber: string;
-  admissionDate: string;
   name: string;
   dateOfBirth: string;
-  gender: 'male' | 'female' | 'other';
-  academicYear: string;
-  classId?: { _id: string; name: string } | string;
-  rollNumber?: string;
-  status: 'active' | 'inactive';
+  gender: string;
+  status: string;
+  admissionDate: string;
+  class: string | null;
+  classId?: { id: string; name: string };
   profileImage: string;
   profilePhoto?: {
     filename: string;
     path: string;
     mimetype: string;
     size: number;
+  };
+  bloodGroup: string;
+  religion: string;
+  category: string;
+  fatherInfo: {
+    name: string;
+    email: string;
+    phoneNumber: string;
+    occupation: string;
+  };
+  motherInfo: {
+    name: string;
+    email: string;
+    phoneNumber: string;
+    occupation: string;
+  };
+  guardianInfo: {
+    name: string;
+    relation: string;
+    phoneNumber: string;
+    email: string;
+    occupation: string;
+  };
+  currentAddress: string;
+  permanentAddress: string;
+  transportInfo: {
+    route: string;
+    vehicleNumber: string;
+    pickupPoint: string;
+  };
+  documents: { name: string; path: string }[];
+  medicalHistory: {
+    condition: string;
+    allergies: string[];
+    medications: string[];
   };
 }
 
@@ -55,14 +89,20 @@ const StudentGrid = () => {
       const res = await axios.get(`${API_URL}/api/student`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const processedStudents = res.data.map((student: any) => ({
+      const mappedStudents = res.data.map((student: any) => ({
         ...student,
+        class: student.classId?.name || "N/A",
         profileImage: student.profilePhoto?.path
           ? `${API_URL}/${student.profilePhoto.path.replace(/\\/g, "/")}`
-          : "/assets/img/students/student-01.jpg"
+          : "/assets/img/students/student-01.jpg",
       }));
-      setStudents(processedStudents);
-      setFilteredStudents(processedStudents);
+      setStudents(mappedStudents);
+      setFilteredStudents(mappedStudents);
+
+      const uniqueClasses = Array.from(
+        new Set(mappedStudents.map((student: Student) => student.class).filter((cls: string) => cls !== "N/A"))
+      ) as string[];
+      setClasses(uniqueClasses.map(cls => ({ value: cls, label: cls })));
     } catch (error) {
       console.error('Error fetching students:', error);
       setError('Failed to load students');
@@ -71,35 +111,17 @@ const StudentGrid = () => {
     }
   };
 
-  const fetchClasses = async () => {
-    try {
-      const res = await axios.get(`${API_URL}/api/class`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setClasses(res.data.map((c: any) => ({ value: c._id, label: c.name })));
-    } catch (error) {
-      console.error('Error fetching classes:', error);
-    }
-  };
-
   useEffect(() => {
     fetchStudents();
-    fetchClasses();
   }, []);
 
   useEffect(() => {
     if (selectedClass) {
-      setFilteredStudents(
-        students.filter((student) =>
-          typeof student.classId === 'object' && student.classId?.name
-            ? student.classId.name === classes.find((c) => c.value === selectedClass)?.label
-            : false
-        )
-      );
+      setFilteredStudents(students.filter((student) => student.class === selectedClass));
     } else {
       setFilteredStudents(students);
     }
-  }, [selectedClass, students, classes]);
+  }, [selectedClass, students]);
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'N/A';
@@ -137,6 +159,101 @@ const StudentGrid = () => {
     setStudentToDelete(null);
   };
 
+  const exportToCSV = () => {
+    const headers = [
+      "Admission Number",
+      "Name",
+      "Class",
+      "Gender",
+      "Status",
+      "Admission Date",
+      "Date of Birth",
+      "Blood Group",
+      "Religion",
+      "Category",
+      "Father Name",
+      "Father Email",
+      "Father Phone",
+      "Father Occupation",
+      "Mother Name",
+      "Mother Email",
+      "Mother Phone",
+      "Mother Occupation",
+      "Guardian Name",
+      "Guardian Relation",
+      "Guardian Email",
+      "Guardian Phone",
+      "Guardian Occupation",
+      "Current Address",
+      "Permanent Address",
+      "Transport Route",
+      "Vehicle Number",
+      "Pickup Point",
+      "Medical Condition",
+      "Allergies",
+      "Medications",
+      "Documents"
+    ];
+
+    const escapeCSVField = (field: any) => {
+      if (field === null || field === undefined) return "";
+      let str = String(field).trim(); // Trim leading/trailing spaces and convert to string
+      str = str.replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const rows = filteredStudents.map((student) => [
+      escapeCSVField(student.admissionNumber),
+      escapeCSVField(student.name),
+      escapeCSVField(student.class || "N/A"),
+      escapeCSVField(student.gender),
+      escapeCSVField(student.status),
+      escapeCSVField(new Date(student.admissionDate).toLocaleDateString("en-US")),
+      escapeCSVField(new Date(student.dateOfBirth).toLocaleDateString("en-US")),
+      escapeCSVField(student.bloodGroup || ""),
+      escapeCSVField(student.religion || ""),
+      escapeCSVField(student.category || ""),
+      escapeCSVField(student.fatherInfo?.name || ""),
+      escapeCSVField(student.fatherInfo?.email || ""),
+      escapeCSVField(String(student.fatherInfo?.phoneNumber || '').trim()), // Explicit string + trim for phone
+      escapeCSVField(student.fatherInfo?.occupation || ""),
+      escapeCSVField(student.motherInfo?.name || ""),
+      escapeCSVField(student.motherInfo?.email || ""),
+      escapeCSVField(String(student.motherInfo?.phoneNumber || '').trim()), // Explicit string + trim for phone
+      escapeCSVField(student.motherInfo?.occupation || ""),
+      escapeCSVField(student.guardianInfo?.name || ""),
+      escapeCSVField(student.guardianInfo?.relation || ""),
+      escapeCSVField(student.guardianInfo?.email || ""),
+      escapeCSVField(String(student.guardianInfo?.phoneNumber || '').trim()), // Explicit string + trim for phone
+      escapeCSVField(student.guardianInfo?.occupation || ""),
+      escapeCSVField(student.currentAddress || ""),
+      escapeCSVField(student.permanentAddress || ""),
+      escapeCSVField(student.transportInfo?.route || ""),
+      escapeCSVField(student.transportInfo?.vehicleNumber || ""),
+      escapeCSVField(student.transportInfo?.pickupPoint || ""),
+      escapeCSVField(student.medicalHistory?.condition || ""),
+      escapeCSVField(student.medicalHistory?.allergies?.join(";") || ""),
+      escapeCSVField(student.medicalHistory?.medications?.join(";") || ""),
+      escapeCSVField(student.documents?.map((doc) => doc.name).join(";") || "")
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) => row.join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "students_export.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    message.success("Students exported to CSV successfully");
+  };
+
   return (
     <div className="page-wrapper">
       <div className="content content-two">
@@ -156,12 +273,19 @@ const StudentGrid = () => {
             </nav>
           </div>
           <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">
-            <TooltipOption />
+            {/* <TooltipOption /> */}
+            <div className="mb-2 me-2">
+              <button
+                onClick={exportToCSV}
+                className="btn btn-light fw-medium d-inline-flex align-items-center"
+              >
+                <i className="ti ti-file-download me-2" />
+                Export to CSV
+              </button>
+            </div>
             <div className="mb-2">
               <Link to={routes.addStudent} className="btn btn-primary d-flex align-items-center">
-                <i className="ti ti
-
--square-rounded-plus me-2" />
+                <i className="ti ti-square-rounded-plus me-2" />
                 Add Student
               </Link>
             </div>
@@ -288,9 +412,7 @@ const StudentGrid = () => {
                             {item.name}
                           </h5>
                           <p>
-                            {typeof item.classId === 'object' && item.classId?.name
-                              ? item.classId.name
-                              : 'N/A'}
+                            {item.class || 'N/A'}
                           </p>
                         </div>
                       </div>

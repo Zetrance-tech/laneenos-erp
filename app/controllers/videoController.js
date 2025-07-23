@@ -60,7 +60,7 @@ export const getParentVideos = async (req, res) => {
 
     console.log("Final Video Query:", query);
 
-    // Fetch videos for the classes
+    // Fetch videos where any classId in the video's classId array matches the student's class IDs
     const videos = await Video.find(query)
       .populate("sessionId", "name sessionId")
       .populate("classId", "name id")

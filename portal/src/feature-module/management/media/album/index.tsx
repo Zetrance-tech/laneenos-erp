@@ -25,7 +25,7 @@ interface Class {
   _id: string;
   name: string;
   id: string;
-  sessionId: string | Session; 
+  sessionId: string | Session;
 }
 
 interface User {
@@ -45,7 +45,7 @@ interface Album {
   _id: string;
   key: string;
   sessionId: Session | null;
-  classId: Class | null;
+  classId: Class[] | null;
   name: string;
   description: string;
   images: Image[] | null;
@@ -54,7 +54,7 @@ interface Album {
 
 interface FormData {
   sessionId: string;
-  classId: string;
+  classId: string[];
   name: string;
   description: string;
   images: File[];
@@ -80,11 +80,12 @@ const AlbumManager: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [editAlbumId, setEditAlbumId] = useState<string | null>(null);
   const [viewAlbum, setViewAlbum] = useState<Album | null>(null);
   const [formData, setFormData] = useState<FormData>({
     sessionId: "",
-    classId: "",
+    classId: [],
     name: "",
     description: "",
     images: [],
@@ -94,7 +95,6 @@ const AlbumManager: React.FC = () => {
   const [previewImage, setPreviewImage] = useState<string>("");
   const [previewOpen, setPreviewOpen] = useState<boolean>(false);
   const [imagesToDelete, setImagesToDelete] = useState<string[]>([]);
-  
   const [filterSessionId, setFilterSessionId] = useState<string>("");
   const [filterClassId, setFilterClassId] = useState<string>("");
   const [filterClasses, setFilterClasses] = useState<Class[]>([]);
@@ -112,10 +112,16 @@ const AlbumManager: React.FC = () => {
       sorter: (a: Album, b: Album) => (a.sessionId?.name || "").localeCompare(b.sessionId?.name || ""),
     },
     {
-      title: "Class",
+      title: "Classes",
       dataIndex: "classId",
-      render: (classData: Class | null) => classData?.name || "N/A",
-      sorter: (a: Album, b: Album) => (a.classId?.name || "").localeCompare(b.classId?.name || ""),
+      render: (classes: Class[] | null) => 
+        classes && Array.isArray(classes) && classes.length > 0 
+          ? classes.map(c => c.name).join(", ") 
+          : "N/A",
+      sorter: (a: Album, b: Album) => 
+        (a.classId && a.classId.length > 0 ? a.classId[0].name : "").localeCompare(
+          b.classId && b.classId.length > 0 ? b.classId[0].name : ""
+        ),
     },
     {
       title: "Images",
@@ -300,15 +306,16 @@ const AlbumManager: React.FC = () => {
   };
 
   const handleAddAlbum = async () => {
-    if (!formData.sessionId || !formData.classId || !formData.name || !formData.description || formData.images.length === 0) {
-      toast.error("All fields are required, including at least one image");
+    if (!formData.sessionId || formData.classId.length === 0 || !formData.name || !formData.description || formData.images.length === 0) {
+      toast.error("All fields are required, including at least one class and one image");
       return;
     }
 
     try {
+      setIsSubmitting(true);
       const formDataToSend = new FormData();
       formDataToSend.append("sessionId", formData.sessionId);
-      formDataToSend.append("classId", formData.classId);
+      formData.classId.forEach(id => formDataToSend.append("classId[]", id));
       formDataToSend.append("name", formData.name);
       formDataToSend.append("description", formData.description);
       
@@ -336,13 +343,15 @@ const AlbumManager: React.FC = () => {
     } catch (error: any) {
       console.error("Error adding album:", error);
       toast.error(error.response?.data?.message || "Error adding album");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleEdit = (record: Album) => {
     setFormData({
       sessionId: record.sessionId?._id || "",
-      classId: record.classId?._id || "",
+      classId: record.classId?.map(c => c._id) || [],
       name: record.name || "",
       description: record.description || "",
       images: [],
@@ -360,11 +369,9 @@ const AlbumManager: React.FC = () => {
         url: `${API_URL}/${img.path}`,
       }));
       setFileList(existingFiles);
-      console.log('handleEdit: Initialized fileList:', existingFiles);
     }
     
     setImagesToDelete([]);
-    console.log('handleEdit: Initialized imagesToDelete as empty array');
     setIsEditModalOpen(true);
   };
 
@@ -374,35 +381,28 @@ const AlbumManager: React.FC = () => {
   };
 
   const handleUpdateAlbum = async () => {
-    if (!formData.sessionId || !formData.classId || !formData.name || !formData.description) {
-      toast.error("All fields are required");
+    if (!formData.sessionId || formData.classId.length === 0 || !formData.name || !formData.description) {
+      toast.error("All fields are required, including at least one class");
       return;
     }
 
     try {
+      setIsSubmitting(true);
       const formDataToSend = new FormData();
       formDataToSend.append("sessionId", formData.sessionId);
-      formDataToSend.append("classId", formData.classId);
+      formData.classId.forEach(id => formDataToSend.append("classId[]", id));
       formDataToSend.append("name", formData.name);
       formDataToSend.append("description", formData.description);
       
-      console.log('handleUpdateAlbum: imagesToDelete to send:', imagesToDelete);
       if (imagesToDelete.length > 0) {
         formDataToSend.append("imagesToDelete", JSON.stringify(imagesToDelete));
       }
       
       if (formData.images.length > 0) {
-        formData.images.forEach((image, index) => {
+        formData.images.forEach((image) => {
           formDataToSend.append("images", image);
-          console.log(`handleUpdateAlbum: Added image ${index}:`, image.name);
         });
       }
-
-      const formDataEntries: [string, any][] = [];
-      formDataToSend.forEach((value, key) => {
-        formDataEntries.push([key, value]);
-      });
-      console.log('handleUpdateAlbum: FormData contents:', formDataEntries);
 
       const res = await axios.put(`${API_URL}/api/album/${editAlbumId}`, formDataToSend, {
         headers: {
@@ -411,13 +411,9 @@ const AlbumManager: React.FC = () => {
         },
       });
 
-      console.log('handleUpdateAlbum: Backend response:', res.data);
-
       const populatedAlbum = await axios.get(`${API_URL}/api/album/${editAlbumId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-
-      console.log('handleUpdateAlbum: Populated album:', populatedAlbum.data);
 
       const updatedAlbum: Album = { ...populatedAlbum.data, key: populatedAlbum.data._id };
       setAlbums((prev) =>
@@ -430,12 +426,12 @@ const AlbumManager: React.FC = () => {
       setIsEditModalOpen(false);
       setEditAlbumId(null);
       setImagesToDelete([]);
-      console.log('handleUpdateAlbum: Form and state reset');
       toast.success("Album updated successfully");
     } catch (error: any) {
-      console.error("handleUpdateAlbum: Error updating album:", error);
-      console.log('handleUpdateAlbum: Error response:', error.response?.data);
+      console.error("Error updating album:", error);
       toast.error(error.response?.data?.message || "Error updating album");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -457,14 +453,21 @@ const AlbumManager: React.FC = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (name === "sessionId" && value) {
       fetchClasses(value);
-      setFormData((prev) => ({ ...prev, classId: "" }));
+      setFormData((prev) => ({ ...prev, classId: [] }));
     }
+  };
+
+  const handleSelectAllClasses = () => {
+    setFormData((prev) => ({
+      ...prev,
+      classId: classes.map(c => c._id),
+    }));
   };
 
   const resetForm = () => {
     setFormData({
       sessionId: "",
-      classId: "",
+      classId: [],
       name: "",
       description: "",
       images: [],
@@ -489,7 +492,7 @@ const AlbumManager: React.FC = () => {
         (album) =>
           album.name.toLowerCase().includes(lowerValue) ||
           (album.sessionId?.name || "").toLowerCase().includes(lowerValue) ||
-          (album.classId?.name || "").toLowerCase().includes(lowerValue) ||
+          (album.classId?.some(c => c.name.toLowerCase().includes(lowerValue)) || false) ||
           (album.createdBy?.name || "").toLowerCase().includes(lowerValue)
       );
     }
@@ -499,7 +502,7 @@ const AlbumManager: React.FC = () => {
     }
     
     if (classId) {
-      filtered = filtered.filter(album => album.classId?._id === classId);
+      filtered = filtered.filter(album => album.classId?.some(c => c._id === classId));
     }
     
     setFilteredAlbums(filtered);
@@ -513,7 +516,7 @@ const AlbumManager: React.FC = () => {
     } else {
       setFilterClasses([]);
     }
-    applyFilters(searchText, filterSessionId, "");
+    applyFilters(searchText, value, "");
   };
 
   const handleFilterClassChange = (value: string) => {
@@ -522,21 +525,12 @@ const AlbumManager: React.FC = () => {
   };
 
   const handleUploadChange = ({ fileList: newFileList }: { fileList: UploadFile[] }) => {
-    console.log('handleUploadChange: Previous fileList:', fileList.map(f => ({ uid: f.uid, name: f.name, status: f.status })));
-    console.log('handleUploadChange: New fileList:', newFileList.map(f => ({ uid: f.uid, name: f.name, status: f.status })));
-    
     const newImagesToDelete = fileList
       .filter(file => !newFileList.some(newFile => newFile.uid === file.uid))
       .filter(file => file.status === 'done')
       .map(file => file.name);
     
-    console.log('handleUploadChange: New images to delete:', newImagesToDelete);
-    
-    setImagesToDelete(prev => {
-      const updated = Array.from(new Set([...prev, ...newImagesToDelete]));
-      console.log('handleUploadChange: Updated imagesToDelete:', updated);
-      return updated;
-    });
+    setImagesToDelete(prev => Array.from(new Set([...prev, ...newImagesToDelete])));
     
     const files = newFileList
       .filter(file => file.originFileObj)
@@ -544,17 +538,11 @@ const AlbumManager: React.FC = () => {
     
     setFileList(newFileList);
     setFormData(prev => ({ ...prev, images: files }));
-    console.log('handleUploadChange: Updated formData.images:', files.map(f => f.name));
   };
 
   const handleRemove = (file: UploadFile) => {
-    console.log('handleRemove: Removed file:', { uid: file.uid, name: file.name, status: file.status });
     if (file.status === 'done') {
-      setImagesToDelete(prev => {
-        const updated = Array.from(new Set([...prev, file.name]));
-        console.log('handleRemove: Updated imagesToDelete:', updated);
-        return updated;
-      });
+      setImagesToDelete(prev => Array.from(new Set([...prev, file.name])));
     }
     return true;
   };
@@ -596,6 +584,20 @@ const AlbumManager: React.FC = () => {
     }
   }, []);
 
+  const customDropdownRender = (menu: React.ReactElement) => (
+    <div>
+      <div style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+        <div
+          style={{ cursor: 'pointer' }}
+          onClick={handleSelectAllClasses}
+        >
+          Select All Classes
+        </div>
+      </div>
+      {menu}
+    </div>
+  );
+
   return (
     <>
       <Toaster position="top-right" reverseOrder={false} />
@@ -620,7 +622,7 @@ const AlbumManager: React.FC = () => {
                 </nav>
               </div>
               <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">
-                <TooltipOption />
+                {/* <TooltipOption /> */}
                 <div className="mb-2">
                   <Button
                     type="primary"
@@ -701,84 +703,112 @@ const AlbumManager: React.FC = () => {
                 resetForm();
                 setIsAddModalOpen(false);
               }}
+              disabled={isSubmitting}
             >
               Cancel
             </Button>,
-            <Button key="submit" type="primary" onClick={handleAddAlbum}>
-              Add Album
+            <Button 
+              key="submit" 
+              type="primary" 
+              onClick={handleAddAlbum}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? <Spin size="small" /> : 'Add Album'}
             </Button>,
           ]}
         >
-          <div className="row">
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Session *</label>
-              <Select
-                placeholder="Select Session"
-                value={formData.sessionId || undefined}
-                onChange={(value: string) => handleInputChange("sessionId", value)}
-                className="w-100"
-              >
-                {sessions.map((session) => (
-                  <Option key={session._id} value={session._id}>
-                    {session.name} ({session.sessionId})
-                  </Option>
-                ))}
-              </Select>
+          {isSubmitting ? (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px' }}>
+              <Spin size="large" />
             </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Class *</label>
-              <Select
-                placeholder="Select Class"
-                value={formData.classId || undefined}
-                onChange={(value: string) => handleInputChange("classId", value)}
-                className="w-100"
-                disabled={!formData.sessionId}
-              >
-                {classes.map((classItem) => (
-                  <Option key={classItem._id} value={classItem._id}>
-                    {classItem.name} ({classItem.id})
-                  </Option>
-                ))}
-              </Select>
+          ) : (
+            <div className="row">
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Session *</label>
+                <Select
+                  placeholder="Select Session"
+                  value={formData.sessionId || undefined}
+                  onChange={(value: string) => handleInputChange("sessionId", value)}
+                  className="w-100"
+                >
+                  {sessions.map((session) => (
+                    <Option key={session._id} value={session._id}>
+                      {session.name} ({session.sessionId})
+                    </Option>
+                  ))}
+                </Select>
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Classes *</label>
+                <Select
+                  mode="multiple"
+                  placeholder="Select Classes"
+                  value={formData.classId}
+                  onChange={(value: string[]) => handleInputChange("classId", value)}
+                  className="w-100 text-black"
+                  disabled={!formData.sessionId}
+                  dropdownRender={customDropdownRender}
+                  style={{ color: 'black' }}
+                  tagRender={(props) => (
+                    <span
+                      style={{
+                        color: 'black',
+                        backgroundColor: '#f5f5f5',
+                        padding: '2px 8px',
+                        margin: '2px',
+                        borderRadius: '4px',
+                      }}
+                    >
+                      {props.label}
+                    </span>
+                  )}
+                >
+                  {classes.map((classItem) => (
+                    <Option key={classItem._id} value={classItem._id}>
+                      {classItem.name}
+                    </Option>
+                  ))}
+                </Select>
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Album Name *</label>
+                <Input
+                  value={formData.name}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    handleInputChange("name", e.target.value)
+                  }
+                  placeholder="Enter Album Name"
+                />
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Images *</label>
+                <Upload
+                  multiple
+                  listType="picture-card"
+                  fileList={fileList}
+                  onPreview={handlePreview}
+                  onChange={handleUploadChange}
+                  onRemove={handleRemove}
+                  beforeUpload={() => false}
+                  accept="image/*"
+                  maxCount={10}
+                >
+                  {fileList.length >= 10 ? null : uploadButton}
+                </Upload>
+              </div>
+              <div className="col-md-12 mb-3">
+                <label className="form-label">Description *</label>
+                <TextArea
+                  value={formData.description}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                    handleInputChange("description", e.target.value)
+                  }
+                  placeholder="Enter Description"
+                  rows={4}
+                />
+              </div>
             </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Album Name *</label>
-              <Input
-                value={formData.name}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  handleInputChange("name", e.target.value)
-                }
-                placeholder="Enter Album Name"
-              />
-            </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Images *</label>
-              <Upload
-                multiple
-                listType="picture-card"
-                fileList={fileList}
-                onPreview={handlePreview}
-                onChange={handleUploadChange}
-                onRemove={handleRemove}
-                beforeUpload={() => false}
-                accept="image/*"
-                maxCount={10}
-              >
-                {fileList.length >= 10 ? null : uploadButton}
-              </Upload>
-            </div>
-            <div className="col-md-12 mb-3">
-              <label className="form-label">Description *</label>
-              <TextArea
-                value={formData.description}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                  handleInputChange("description", e.target.value)
-                }
-                placeholder="Enter Description"
-                rows={4}
-              />
-            </div>
-          </div>
+          )}
         </Modal>
 
         <Modal
@@ -797,84 +827,112 @@ const AlbumManager: React.FC = () => {
                 resetForm();
                 setIsEditModalOpen(false);
               }}
+              disabled={isSubmitting}
             >
               Cancel
             </Button>,
-            <Button key="submit" type="primary" onClick={handleUpdateAlbum}>
-              Update Album
+            <Button 
+              key="submit" 
+              type="primary" 
+              onClick={handleUpdateAlbum}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? <Spin size="small" /> : 'Update Album'}
             </Button>,
           ]}
         >
-          <div className="row">
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Session *</label>
-              <Select
-                placeholder="Select Session"
-                value={formData.sessionId || undefined}
-                onChange={(value: string) => handleInputChange("sessionId", value)}
-                className="w-100"
-              >
-                {sessions.map((session) => (
-                  <Option key={session._id} value={session._id}>
-                    {session.name} ({session.sessionId})
-                  </Option>
-                ))}
-              </Select>
+          {isSubmitting ? (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px' }}>
+              <Spin size="large" />
             </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Class *</label>
-              <Select
-                placeholder="Select Class"
-                value={formData.classId || undefined}
-                onChange={(value: string) => handleInputChange("classId", value)}
-                className="w-100"
-                disabled={!formData.sessionId}
-              >
-                {classes.map((classItem) => (
-                  <Option key={classItem._id} value={classItem._id}>
-                    {classItem.name} ({classItem.id})
-                  </Option>
-                ))}
-              </Select>
+          ) : (
+            <div className="row">
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Session *</label>
+                <Select
+                  placeholder="Select Session"
+                  value={formData.sessionId || undefined}
+                  onChange={(value: string) => handleInputChange("sessionId", value)}
+                  className="w-100"
+                >
+                  {sessions.map((session) => (
+                    <Option key={session._id} value={session._id}>
+                      {session.name} ({session.sessionId})
+                    </Option>
+                  ))}
+                </Select>
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Classes *</label>
+                <Select
+                  mode="multiple"
+                  placeholder="Select Classes"
+                  value={formData.classId}
+                  onChange={(value: string[]) => handleInputChange("classId", value)}
+                  className="w-100 text-black"
+                  disabled={!formData.sessionId}
+                  dropdownRender={customDropdownRender}
+                  dropdownStyle={{ color: 'black' }}
+                  tagRender={(props) => (
+                    <span
+                      style={{
+                        color: 'black',
+                        backgroundColor: '#f5f5f5',
+                        padding: '2px 8px',
+                        margin: '2px',
+                        borderRadius: '4px',
+                      }}
+                    >
+                      {props.label}
+                    </span>
+                  )}
+                >
+                  {classes.map((classItem) => (
+                    <Option key={classItem._id} value={classItem._id}>
+                      {classItem.name}
+                    </Option>
+                  ))}
+                </Select>
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Album Name *</label>
+                <Input
+                  value={formData.name}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    handleInputChange("name", e.target.value)
+                  }
+                  placeholder="Enter Album Name"
+                />
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">Images</label>
+                <Upload
+                  multiple
+                  listType="picture-card"
+                  fileList={fileList}
+                  onPreview={handlePreview}
+                  onChange={handleUploadChange}
+                  onRemove={handleRemove}
+                  beforeUpload={() => false}
+                  accept="image/*"
+                  maxCount={10}
+                >
+                  {fileList.length >= 10 ? null : uploadButton}
+                </Upload>
+              </div>
+              <div className="col-md-12 mb-3">
+                <label className="form-label">Description *</label>
+                <TextArea
+                  value={formData.description}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                    handleInputChange("description", e.target.value)
+                  }
+                  placeholder="Enter Description"
+                  rows={4}
+                />
+              </div>
             </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Album Name *</label>
-              <Input
-                value={formData.name}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  handleInputChange("name", e.target.value)
-                }
-                placeholder="Enter Album Name"
-              />
-            </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Images</label>
-              <Upload
-                multiple
-                listType="picture-card"
-                fileList={fileList}
-                onPreview={handlePreview}
-                onChange={handleUploadChange}
-                onRemove={handleRemove}
-                beforeUpload={() => false}
-                accept="image/*"
-                maxCount={10}
-              >
-                {fileList.length >= 10 ? null : uploadButton}
-              </Upload>
-            </div>
-            <div className="col-md-12 mb-3">
-              <label className="form-label">Description *</label>
-              <TextArea
-                value={formData.description}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                  handleInputChange("description", e.target.value)
-                }
-                placeholder="Enter Description"
-                rows={4}
-              />
-            </div>
-          </div>
+          )}
         </Modal>
 
         <Modal
@@ -896,8 +954,15 @@ const AlbumManager: React.FC = () => {
                 <Input value={viewAlbum.sessionId?.name || "N/A"} readOnly />
               </div>
               <div className="col-md-6 mb-3">
-                <label className="form-label">Class</label>
-                <Input value={viewAlbum.classId?.name || "N/A"} readOnly />
+                <label className="form-label">Classes</label>
+                <Input
+                  value={
+                    viewAlbum.classId && viewAlbum.classId.length > 0
+                      ? viewAlbum.classId.map(c => c.name).join(", ")
+                      : "N/A"
+                  }
+                  readOnly
+                />
               </div>
               <div className="col-md-6 mb-3">
                 <label className="form-label">Album Name</label>
@@ -916,21 +981,21 @@ const AlbumManager: React.FC = () => {
                         <img
                           src={`${API_URL}/${img.path}`}
                           alt={`${viewAlbum.name} - ${index + 1}`}
-                          style={{ 
-                            width: "150px", 
-                            height: "150px", 
+                          style={{
+                            width: "150px",
+                            height: "150px",
                             objectFit: "cover",
                             borderRadius: "8px",
-                            cursor: "pointer"
+                            cursor: "pointer",
                           }}
                           onClick={() => handleViewImagePreview(`${API_URL}/${img.path}`)}
                         />
-                        <div 
+                        <div
                           className="position-absolute top-0 end-0 p-1"
                           style={{
                             backgroundColor: "rgba(0, 0, 0, 0.5)",
                             borderRadius: "0 8px 0 8px",
-                            cursor: "pointer"
+                            cursor: "pointer",
                           }}
                           onClick={() => handleViewImagePreview(`${API_URL}/${img.path}`)}
                         >
@@ -960,7 +1025,7 @@ const AlbumManager: React.FC = () => {
         >
           <Image
             alt="preview"
-            style={{ width: '100%' }}
+            style={{ width: "100%" }}
             src={previewImage}
           />
         </Modal>

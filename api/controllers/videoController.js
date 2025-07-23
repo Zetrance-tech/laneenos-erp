@@ -6,7 +6,6 @@ import { videoUpload } from "../middleware/multer.js";
 import fs from 'fs';
 import path from 'path';
 import { uploadsRoot } from "../uploadsRoot.js";
-
 const fsPromises = fs.promises;
 
 export const createVideo = async (req, res) => {
@@ -15,6 +14,7 @@ export const createVideo = async (req, res) => {
     const userId = req.user.userId;
     const { sessionId, classId, name, description } = req.body;
 
+    // Validate required fields
     if (!branchId || !userId) {
       return res.status(400).json({ message: "Branch ID or User ID is missing" });
     }
@@ -23,20 +23,29 @@ export const createVideo = async (req, res) => {
       return res.status(400).json({ message: "All fields are required" });
     }
 
+    // Parse classId as an array (handles both single string and array inputs)
+    const classIds = Array.isArray(classId) ? classId : [classId];
+
+    // Validate session existence
     const sessionExists = await Session.findOne({ _id: sessionId, branchId });
     if (!sessionExists) {
       return res.status(404).json({ message: "Session not found in this branch" });
     }
 
-    const classQuery = { _id: classId, branchId };
+    // Validate class IDs
+    const classQuery = { _id: { $in: classIds }, branchId };
     if (req.user.role === "teacher") {
       classQuery.teacherId = { $in: [userId] };
     }
-    const classExists = await Class.findOne(classQuery);
-    if (!classExists) {
-      return res.status(404).json({ message: "Class not found or you don't have access" });
+    const classesExist = await Class.find(classQuery);
+    const foundClassIds = classesExist.map(c => c._id.toString());
+
+    // Ensure all provided class IDs are valid
+    if (classesExist.length !== classIds.length || !classIds.every(id => foundClassIds.includes(id))) {
+      return res.status(404).json({ message: "One or more classes not found or you don't have access" });
     }
 
+    // Validate video file
     if (!req.file) {
       return res.status(400).json({ message: "A video file is required" });
     }
@@ -48,10 +57,11 @@ export const createVideo = async (req, res) => {
       size: req.file.size,
     };
 
+    // Create new video with array of classIds
     const newVideo = new Video({
       branchId,
       sessionId,
-      classId,
+      classId: classIds,
       name,
       description,
       video,
@@ -84,10 +94,25 @@ export const updateVideo = async (req, res) => {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
 
+    // Parse classId as an array
+    const classIds = Array.isArray(classId) ? classId : [classId];
+
     // Find the existing video
     const existingVideo = await Video.findById(videoId);
     if (!existingVideo) {
       return res.status(404).json({ message: 'Video not found' });
+    }
+
+    // Validate class IDs
+    const branchId = req.user.branchId;
+    const classQuery = { _id: { $in: classIds }, branchId };
+    if (req.user.role === "teacher") {
+      classQuery.teacherId = { $in: [req.user.userId] };
+    }
+    const classesExist = await Class.find(classQuery);
+    const foundClassIds = classesExist.map(c => c._id.toString());
+    if (classesExist.length !== classIds.length || !classIds.every(id => foundClassIds.includes(id))) {
+      return res.status(404).json({ message: "One or more classes not found or you don't have access" });
     }
 
     // Initialize video object
@@ -127,18 +152,18 @@ export const updateVideo = async (req, res) => {
         filename: req.file.filename,
         path: path.join('videos', req.file.filename).replace(/\\/g, '/'),
         mimetype: req.file.mimetype,
-        size: req.file.size
+        size: req.file.size,
       };
     }
 
     // Prepare update data
     const updateData = {
       sessionId,
-      classId,
+      classId: classIds,
       name,
       description,
       video,
-      updatedAt: new Date()
+      updatedAt: new Date(),
     };
 
     // Update the video in the database
@@ -176,7 +201,8 @@ export const deleteVideo = async (req, res) => {
     const query = { _id: id, branchId };
     if (req.user.role === "teacher") {
       const userClasses = await Class.find({ teacherId: { $in: [userId] }, branchId });
-      query.classId = { $in: userClasses.map(c => c._id) };
+      const userClassIds = userClasses.map(c => c._id);
+      query.classId = { $in: userClassIds };
     }
 
     const deletedVideo = await Video.findOneAndDelete(query);
@@ -202,7 +228,6 @@ export const deleteVideo = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 export const getAllVideos = async (req, res) => {
   try {
     const branchId = req.user.branchId;
@@ -221,14 +246,17 @@ export const getAllVideos = async (req, res) => {
 
       query.classId = { $in: teacherClassIds };
       if (classId) {
-        const isValidClass = teacherClassIds.some(id => id.toString() === classId);
+        const classIds = Array.isArray(classId) ? classId : [classId];
+        const isValidClass = classIds.every(id => teacherClassIds.some(tid => tid.toString() === id));
         if (!isValidClass) {
-          return res.status(403).json({ message: "Access denied to this class" });
+          return res.status(403).json({ message: "Access denied to one or more classes" });
         }
-        query.classId = classId;
+        query.classId = { $in: classIds };
       }
     } else {
-      if (classId) query.classId = classId;
+      if (classId) {
+        query.classId = { $in: Array.isArray(classId) ? classId : [classId] };
+      }
     }
 
     if (sessionId) query.sessionId = sessionId;
@@ -244,7 +272,6 @@ export const getAllVideos = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 export const getVideoById = async (req, res) => {
   try {
     const branchId = req.user.branchId;
@@ -254,7 +281,8 @@ export const getVideoById = async (req, res) => {
     const query = { _id: id, branchId };
     if (req.user.role === "teacher") {
       const userClasses = await Class.find({ teacherId: { $in: [userId] }, branchId });
-      query.classId = { $in: userClasses.map(c => c._id) };
+      const userClassIds = userClasses.map(c => c._id);
+      query.classId = { $in: userClassIds };
     }
 
     const video = await Video.findOne(query)
@@ -272,7 +300,6 @@ export const getVideoById = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 export const getAllVideosForSuperadmin = async (req, res) => {
   try {
     const { branchId, sessionId, classId } = req.query;
@@ -280,7 +307,9 @@ export const getAllVideosForSuperadmin = async (req, res) => {
 
     if (branchId) query.branchId = branchId;
     if (sessionId) query.sessionId = sessionId;
-    if (classId) query.classId = classId;
+    if (classId) {
+      query.classId = { $in: Array.isArray(classId) ? classId : [classId] };
+    }
 
     const videos = await Video.find(query)
       .populate("sessionId", "name sessionId")

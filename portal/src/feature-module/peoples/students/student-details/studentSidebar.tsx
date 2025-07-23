@@ -195,11 +195,14 @@ const StudentSidebar = ({ admissionNumber }: StudentSidebarProps) => {
               <dt className="col-6 fw-medium text-dark mb-3">Class</dt>
               <dd className="col-6 mb-3">{student.className}</dd>
             </dl>
-            <Link
-              to={all_routes.generateFees}
-            >
-              Add Fees
-            </Link>
+            <button className="btn btn-primary btn-sm w-100">
+              <Link 
+                className="text-white"
+                to={all_routes.generateFees}
+              >
+                Add Fees
+              </Link>
+            </button>
           </div>
         </div>
         <div className="card border-white">

@@ -1,6 +1,6 @@
 import Student from "../models/student.js";
-import Class from "../models/class.js"; 
-import Session from "../models/session.js"; 
+import Class from "../models/class.js";
+import Session from "../models/session.js";
 import Teacher from "../models/teacher.js";
 import mongoose from "mongoose";
 import User from "../models/user.js";
@@ -8,11 +8,13 @@ import Counter from "../models/counter.js";
 import StudentFee from "../models/studentFee.js";
 import path from "path";
 import fs from 'fs';
+import { uploadsRoot } from "../uploadsRoot.js";
+
 export const getNextSequence = async (type, branchId) => {
   const counter = await Counter.findOneAndUpdate(
     { type: `${type}_id`, branchId },
     { $inc: { sequence: 1 } },
-    { new: true, upsert: true, setDefaultsOnInsert: true  }
+    { new: true, upsert: true, setDefaultsOnInsert: true }
   );
   return counter.sequence;
 };
@@ -21,13 +23,13 @@ export const generateId = async (entityType, branchId) => {
   const sequence = await getNextSequence(entityType, branchId);
   switch (entityType) {
     case "class":
-      return `LN-C${sequence}`; 
+      return `LN-C${sequence}`;
     case "session":
-      return `LN-S${sequence}`; 
+      return `LN-S${sequence}`;
     case "student":
-      return `LNS-${sequence}`; 
+      return `LNS-${sequence}`;
     case "teacher":
-      return `LNE-${sequence}`; 
+      return `LNE-${sequence}`;
     default:
       throw new Error("Invalid entity type");
   }
@@ -36,7 +38,7 @@ export const generateId = async (entityType, branchId) => {
 export const getNextStudentId = async (req, res) => {
   try {
     const { branchId } = req.user;
-    const counter = await Counter.findOne({ type : "student_id", branchId });
+    const counter = await Counter.findOne({ type: "student_id", branchId });
     const sequence = counter ? counter.sequence + 1 : 1;
     const id = `LNS-${sequence}`;
     res.status(200).json({ id });
@@ -44,8 +46,9 @@ export const getNextStudentId = async (req, res) => {
     res.status(400).json({ message: error.message });
   }
 };
+
 export const getParentsCCTVAccess = async (req, res) => {
-    const { branchId } = req.user;
+  const { branchId } = req.user;
   const { sessionId, classId } = req.query;
   const { userId, role } = req.user || {};
 
@@ -61,7 +64,7 @@ export const getParentsCCTVAccess = async (req, res) => {
       return res.status(400).json({ message: "Invalid session ID or class ID format" });
     }
 
-    const session = await Session.findOne({_id:sessionId, branchId}).select("name startDate endDate");
+    const session = await Session.findOne({ _id: sessionId, branchId }).select("name startDate endDate");
     if (!session) {
       return res.status(404).json({ message: "Session not found" });
     }
@@ -71,7 +74,7 @@ export const getParentsCCTVAccess = async (req, res) => {
       return res.status(404).json({ message: "Class not found or does not belong to the specified session" });
     }
 
-    const students = await Student.find({ sessionId, classId, status: "active" , branchId})
+    const students = await Student.find({ sessionId, classId, status: "active", branchId })
       .select("name fatherInfo motherInfo")
       .lean();
 
@@ -120,7 +123,7 @@ export const getParentsCCTVAccess = async (req, res) => {
 
 export const toggleParentCCTVAccess = async (req, res) => {
   const { studentId } = req.params;
-  const { parentType } = req.body; // Expect "father" or "mother"
+  const { parentType } = req.body;
   const { userId, role, branchId } = req.user;
 
   try {
@@ -159,7 +162,7 @@ export const toggleParentCCTVAccess = async (req, res) => {
 export const updateCCTVTimes = async (req, res) => {
   const { studentId } = req.params;
   const { cctvStartTime, cctvEndTime, parentType } = req.body;
-  const { role , branchId} = req.user;
+  const { role, branchId } = req.user;
 
   try {
     if (role !== "admin") {
@@ -184,7 +187,6 @@ export const updateCCTVTimes = async (req, res) => {
       return res.status(404).json({ message: `${parentType.charAt(0).toUpperCase() + parentType.slice(1)} info not found` });
     }
 
-    // Allow empty strings for unset times
     if (cctvStartTime === "" && cctvEndTime === "") {
       student[infoField].cctvStartTime = "";
       student[infoField].cctvEndTime = "";
@@ -201,13 +203,11 @@ export const updateCCTVTimes = async (req, res) => {
       return res.status(400).json({ message: "CCTV start and end times are required if not unset" });
     }
 
-    // Validate time format (e.g., "HH:MM AM/PM") for non-empty strings
     const timeRegex = /^(0?[1-9]|1[0-2]):[0-5][0-9] (AM|PM)$/i;
     if (!timeRegex.test(cctvStartTime) || !timeRegex.test(cctvEndTime)) {
       return res.status(400).json({ message: "Invalid time format. Use HH:MM AM/PM" });
     }
 
-    // Convert times to 24-hour format for comparison
     const parseTime = (timeStr) => {
       const [time, period] = timeStr.split(" ");
       let [hours, minutes] = time.split(":").map(Number);
@@ -238,9 +238,10 @@ export const updateCCTVTimes = async (req, res) => {
     return res.status(500).json({ message: "Server error while updating CCTV times", error: error.message });
   }
 };
+
 export const getAllStudents = async (req, res) => {
   try {
-    const { role, userId, branchId } = req.user; 
+    const { role, userId, branchId } = req.user;
     let students;
 
     if (role === "teacher") {
@@ -258,7 +259,7 @@ export const getAllStudents = async (req, res) => {
         .populate("classId", "name id");
 
     } else if (role === "admin") {
-      students = await Student.find({branchId})
+      students = await Student.find({ branchId })
         .select(
           "name admissionNumber admissionDate status sessionId classId profileImage dateOfBirth gender bloodGroup religion category motherTongue languagesKnown fatherInfo motherInfo guardianInfo currentAddress permanentAddress transportInfo documents medicalHistory previousSchool profilePhoto"
         )
@@ -280,8 +281,6 @@ export const getAllStudents = async (req, res) => {
   }
 };
 
-
-// Get student by admissionNumber
 export const getStudentById = async (req, res) => {
   try {
     const { admissionNumber } = req.params;
@@ -298,9 +297,8 @@ export const getStudentById = async (req, res) => {
   }
 };
 
-// Get students by filter
 export const getStudentByFilter = async (req, res) => {
-    const { branchId } = req.user;
+  const { branchId } = req.user;
 
   try {
     const students = await Student.find({ ...req.body, branchId })
@@ -314,12 +312,13 @@ export const getStudentByFilter = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 export const getStudentByAdmissionNumber = async (req, res) => {
-    const { branchId } = req.user;
+  const { branchId } = req.user;
 
   try {
     const { admissionNumber } = req.params;
-    const student = await Student.findOne({ admissionNumber , branchId}).select("_id classId");
+    const student = await Student.findOne({ admissionNumber, branchId }).select("_id classId");
     if (!student) {
       return res.status(404).json({ message: "Student not found" });
     }
@@ -328,10 +327,10 @@ export const getStudentByAdmissionNumber = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-export const createStudent = async (req, res) => {
-    const { branchId } = req.user;
 
-  const {
+export const createStudent = async (req, res) => {
+  const { branchId } = req.user;
+  let {
     admissionDate,
     status,
     sessionId,
@@ -349,14 +348,44 @@ export const createStudent = async (req, res) => {
     permanentAddress,
     transportInfo,
     medicalHistory,
-    documents,
+    documentNames,
   } = req.body;
+
+  // Parse data field if it exists (from multipart/form-data)
+  if (req.body.data) {
+    try {
+      const parsedData = JSON.parse(req.body.data);
+      ({
+        admissionDate,
+        status,
+        sessionId,
+        classId,
+        name,
+        dateOfBirth,
+        gender,
+        bloodGroup,
+        religion,
+        category,
+        fatherInfo,
+        motherInfo,
+        guardianInfo,
+        currentAddress,
+        permanentAddress,
+        transportInfo,
+        medicalHistory,
+      } = parsedData);
+    } catch (error) {
+      console.warn("Invalid data field format:", req.body.data);
+      return res.status(400).json({ message: "Invalid data field format, expected JSON" });
+    }
+  }
 
   try {
     if (!name || !sessionId || !admissionDate || !dateOfBirth || !gender) {
       console.warn("Missing required fields:", { name, sessionId, admissionDate, dateOfBirth, gender });
       return res.status(400).json({ message: "Name, sessionId, admissionDate, dateOfBirth, and gender are required" });
     }
+
     const admissionNumber = await generateId("student", branchId);
     console.log("Generated admissionNumber:", admissionNumber);
 
@@ -384,6 +413,26 @@ export const createStudent = async (req, res) => {
       }
     }
 
+    let documents = [];
+    if (req.files && Array.isArray(req.files)) {
+      let parsedDocumentNames;
+      try {
+        parsedDocumentNames = documentNames ? JSON.parse(documentNames) : [];
+      } catch (error) {
+        console.warn("Invalid documentNames format:", documentNames);
+        return res.status(400).json({ message: "Invalid documentNames format, expected JSON array" });
+      }
+
+      documents = req.files.map((file, index) => {
+        const docName = parsedDocumentNames[index] || `document-${index + 1}`;
+        const relativePath = path.join('students', 'documents', file.filename).replace(/\\/g, '/');
+        return {
+          name: docName,
+          path: relativePath,
+        };
+      });
+    }
+
     const newStudent = new Student({
       admissionNumber,
       admissionDate,
@@ -404,7 +453,7 @@ export const createStudent = async (req, res) => {
       transportInfo,
       medicalHistory,
       documents,
-      branchId
+      branchId,
     });
 
     const savedStudent = await newStudent.save();
@@ -412,41 +461,77 @@ export const createStudent = async (req, res) => {
     res.status(201).json(savedStudent);
   } catch (error) {
     console.error("Error creating student:", error.message);
+    if (req.files && Array.isArray(req.files)) {
+      req.files.forEach((file) => {
+        const filePath = path.join(uploadsRoot, 'students', 'documents', file.filename);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      });
+    }
     res.status(400).json({ message: error.message });
   }
 };
 
-// Update student (Admin only)
 export const updateStudent = async (req, res) => {
-    const { branchId } = req.user;
+  const { branchId } = req.user;
+  let {
+    admissionDate,
+    status,
+    sessionId,
+    classId,
+    name,
+    dateOfBirth,
+    gender,
+    bloodGroup,
+    religion,
+    category,
+    fatherInfo,
+    motherInfo,
+    guardianInfo,
+    currentAddress,
+    permanentAddress,
+    transportInfo,
+    medicalHistory,
+    documentNames,
+    documentsToRemove,
+  } = req.body;
+
+  // Parse data field if it exists (from multipart/form-data)
+  if (req.body.data) {
+    try {
+      const parsedData = JSON.parse(req.body.data);
+      ({
+        admissionDate,
+        status,
+        sessionId,
+        classId,
+        name,
+        dateOfBirth,
+        gender,
+        bloodGroup,
+        religion,
+        category,
+        fatherInfo,
+        motherInfo,
+        guardianInfo,
+        currentAddress,
+        permanentAddress,
+        transportInfo,
+        medicalHistory,
+      } = parsedData);
+    } catch (error) {
+      console.warn("Invalid data field format:", req.body.data);
+      return res.status(400).json({ message: "Invalid data field format, expected JSON" });
+    }
+  }
 
   try {
-    const { admissionNumber } = req.params;
-    const {
-      admissionDate,
-      status,
-      sessionId,
-      classId,
-      name,
-      dateOfBirth,
-      gender,
-      bloodGroup,
-      religion,
-      category,
-      fatherInfo,
-      motherInfo,
-      guardianInfo,
-      currentAddress,
-      permanentAddress,
-      transportInfo,
-      medicalHistory,
-      documents,
-    } = req.body;
-
     if (!name || !sessionId || !admissionDate || !dateOfBirth || !gender) {
       console.warn("Missing required fields:", { name, sessionId, admissionDate, dateOfBirth, gender });
       return res.status(400).json({ message: "Name, sessionId, admissionDate, dateOfBirth, and gender are required" });
     }
+
     if (sessionId) {
       const session = await Session.findOne({ _id: sessionId, branchId });
       if (!session) {
@@ -467,8 +552,63 @@ export const updateStudent = async (req, res) => {
       }
     }
 
+    const student = await Student.findOne({ admissionNumber: req.params.admissionNumber, branchId });
+    if (!student) {
+      console.warn("Student not found:", req.params.admissionNumber);
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    // Handle document removal
+    let documents = student.documents || [];
+    if (documentsToRemove) {
+      let parsedDocumentsToRemove;
+      try {
+        parsedDocumentsToRemove = JSON.parse(documentsToRemove);
+      } catch (error) {
+        console.warn("Invalid documentsToRemove format:", documentsToRemove);
+        return res.status(400).json({ message: "Invalid documentsToRemove format, expected JSON array" });
+      }
+
+      if (!Array.isArray(parsedDocumentsToRemove)) {
+        return res.status(400).json({ message: "documentsToRemove must be an array" });
+      }
+
+      parsedDocumentsToRemove.forEach((pathToRemove) => {
+        const index = documents.findIndex(doc => doc.path === pathToRemove);
+        if (index !== -1) {
+          const filePath = path.join(uploadsRoot, pathToRemove);
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
+          documents.splice(index, 1);
+        }
+      });
+    }
+
+    // Handle new document uploads
+    if (req.files && Array.isArray(req.files)) {
+      let parsedDocumentNames;
+      try {
+        parsedDocumentNames = documentNames ? JSON.parse(documentNames) : [];
+      } catch (error) {
+        console.warn("Invalid documentNames format:", documentNames);
+        return res.status(400).json({ message: "Invalid documentNames format, expected JSON array" });
+      }
+
+      const newDocuments = req.files.map((file, index) => {
+        const docName = parsedDocumentNames[index] || `document-${index + 1}`;
+        const relativePath = path.join('students', 'documents', file.filename).replace(/\\/g, '/');
+        return {
+          name: docName,
+          path: relativePath,
+        };
+      });
+
+      documents = [...documents, ...newDocuments];
+    }
+
     const updatedStudent = await Student.findOneAndUpdate(
-      { admissionNumber, branchId },
+      { admissionNumber: req.params.admissionNumber, branchId },
       {
         admissionDate,
         status,
@@ -495,7 +635,7 @@ export const updateStudent = async (req, res) => {
       .populate("classId", "name id");
 
     if (!updatedStudent) {
-      console.warn("Student not found:", admissionNumber);
+      console.warn("Student not found after update:", req.params.admissionNumber);
       return res.status(404).json({ message: "Student not found" });
     }
 
@@ -503,11 +643,18 @@ export const updateStudent = async (req, res) => {
     res.status(200).json(updatedStudent);
   } catch (error) {
     console.error("Error updating student:", error.message);
+    if (req.files && Array.isArray(req.files)) {
+      req.files.forEach((file) => {
+        const filePath = path.join(uploadsRoot, 'students', 'documents', file.filename);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      });
+    }
     res.status(400).json({ message: error.message });
   }
 };
 
-// Delete student by admissionNumber (Admin only)
 export const deleteStudent = async (req, res) => {
   try {
     const { admissionNumber } = req.params;
@@ -525,9 +672,9 @@ export const deleteStudent = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-// Get students by class and session
+
 export const getStudentsByClassAndSession = async (req, res) => {
-    const { branchId } = req.user;
+  const { branchId } = req.user;
 
   try {
     const { classId, sessionId } = req.params;
@@ -539,7 +686,7 @@ export const getStudentsByClassAndSession = async (req, res) => {
 
     const classExists = await Class.findOne({ 
       _id: classId, 
-      sessionId: sessionId ,
+      sessionId: sessionId,
       branchId
     });
 
@@ -551,10 +698,10 @@ export const getStudentsByClassAndSession = async (req, res) => {
 
     const students = await Student.find({ 
       classId: classId, 
-      sessionId: sessionId ,
+      sessionId: sessionId,
       branchId
     })
-    .select("name admissionNumber gender category profileImage classId")
+    .select("name admissionNumber gender category profileImage classId");
 
     res.status(200).json({
       success: true,
@@ -576,8 +723,7 @@ export const getAllStudentsWithBranch = async (req, res) => {
     const { branchId, sessionId, classId } = req.query;
     const query = {};
 
-    // Use branchId directly as string (NO ObjectId conversion)
-    if (branchId) query.branchId = branchId; 
+    if (branchId) query.branchId = branchId;
     if (sessionId) query.sessionId = sessionId;
     if (classId) query.classId = classId;
 
@@ -596,15 +742,10 @@ export const getAllStudentsWithBranch = async (req, res) => {
   }
 };
 
-// Define the root uploads directory (one level up from api)
-// const uploadsRoot = path.join(process.cwd(), '..', 'uploads');
-
-import { uploadsRoot } from "../uploadsRoot.js";
-// Upload student profile photo
 export const uploadStudentProfilePhoto = async (req, res) => {
   try {
     console.log('Request file:', req.file);
-    const { admissionNumber } = req.params; // Using 'admissionNumber' field from Student schema
+    const { admissionNumber } = req.params;
     const { branchId } = req.user;
 
     console.log("Uploaded file:", req.file);
@@ -614,7 +755,6 @@ export const uploadStudentProfilePhoto = async (req, res) => {
 
     const student = await Student.findOne({ admissionNumber, branchId });
     if (!student) {
-      // Delete the uploaded file if student is not found to prevent orphaned files
       const filePath = path.join(uploadsRoot, 'students', req.file.filename);
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
@@ -622,7 +762,6 @@ export const uploadStudentProfilePhoto = async (req, res) => {
       return res.status(404).json({ error: "Student not found" });
     }
 
-    // Delete old profile photo if it exists
     if (student.profilePhoto && student.profilePhoto.path) {
       const oldFilePath = path.join(uploadsRoot, student.profilePhoto.path);
       if (fs.existsSync(oldFilePath)) {
@@ -632,13 +771,11 @@ export const uploadStudentProfilePhoto = async (req, res) => {
       }
     }
 
-    // Store relative path starting from uploads (e.g., students/filename.jpg)
     const relativePath = path.join('students', req.file.filename).replace(/\\/g, '/');
 
-    // Update student with new profile photo
     student.profilePhoto = {
       filename: req.file.filename,
-      path: relativePath, // Store relative path
+      path: relativePath,
       mimetype: req.file.mimetype,
       size: req.file.size,
     };
@@ -650,14 +787,13 @@ export const uploadStudentProfilePhoto = async (req, res) => {
       message: "Profile photo uploaded successfully",
       file: {
         filename: req.file.filename,
-        path: relativePath, // Return relative path
+        path: relativePath,
         mimetype: req.file.mimetype,
         size: req.file.size,
       },
     });
   } catch (error) {
     console.error("Error uploading profile photo:", error.message, error.stack);
-    // Clean up uploaded file on error
     if (req.file) {
       const filePath = path.join(uploadsRoot, 'students', req.file.filename);
       if (fs.existsSync(filePath)) {
@@ -668,10 +804,9 @@ export const uploadStudentProfilePhoto = async (req, res) => {
   }
 };
 
-// Get student profile photo
 export const getStudentProfilePhoto = async (req, res) => {
   try {
-    const { admissionNumber } = req.params; // Using 'admissionNumber' field from Student schema
+    const { admissionNumber } = req.params;
     const { branchId } = req.user;
 
     const student = await Student.findOne({ admissionNumber, branchId });
@@ -681,7 +816,7 @@ export const getStudentProfilePhoto = async (req, res) => {
 
     res.json({
       filename: student.profilePhoto.filename,
-      path: student.profilePhoto.path, // Already stored as relative path
+      path: student.profilePhoto.path,
       mimetype: student.profilePhoto.mimetype,
       size: student.profilePhoto.size,
     });
@@ -691,7 +826,6 @@ export const getStudentProfilePhoto = async (req, res) => {
   }
 };
 
-// Delete student profile photo
 export const deleteStudentProfilePhoto = async (req, res) => {
   try {
     const { admissionNumber } = req.params;
@@ -706,7 +840,6 @@ export const deleteStudentProfilePhoto = async (req, res) => {
       return res.status(404).json({ error: "No profile photo to delete" });
     }
 
-    // Delete the file from filesystem
     const filePath = path.join(uploadsRoot, student.profilePhoto.path);
     if (fs.existsSync(filePath)) {
       fs.unlink(filePath, (err) => {
@@ -714,7 +847,6 @@ export const deleteStudentProfilePhoto = async (req, res) => {
       });
     }
 
-    // Remove profilePhoto from database
     student.profilePhoto = undefined;
     await student.save();
 

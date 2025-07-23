@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom"; // Added useNavigate
+import { Link, useParams, useNavigate } from "react-router-dom";
 import ImageWithBasePath from "../../../../core/common/imageWithBasePath";
 import { all_routes } from "../../../router/all_routes";
 import StudentSidebar from "./studentSidebar";
 import StudentBreadcrumb from "./studentBreadcrumb";
 import axios from "axios";
 import { useAuth } from "../../../../context/AuthContext";
-import Modal from "antd/es/modal/Modal";
-import { Button, message } from "antd";
+import { Button, message, Modal, Space } from "antd";
+import 'antd/dist/reset.css'; // Import antd styles
+
 const API_URL = process.env.REACT_APP_URL;
 
-// Updated Student interface to match API response
+// Student interface
 interface Student {
   _id: string;
   admissionNumber: string;
@@ -37,14 +38,14 @@ interface Student {
     phoneNumber: string;
     occupation: string;
     image: string | null;
-  };
+  } | null;
   motherInfo: {
     name: string;
     email: string;
     phoneNumber: string;
     occupation: string;
     image: string | null;
-  };
+  } | null;
   guardianInfo: {
     name: string;
     relation: string;
@@ -52,17 +53,13 @@ interface Student {
     email: string;
     occupation: string;
     image: string | null;
-  };
+  } | null;
   transportInfo: {
     route: string;
     vehicleNumber: string;
     pickupPoint: string;
   };
-  documents: {
-    aadharCard: string | null;
-    medicalCondition: string | null;
-    transferCertificate: string | null;
-  };
+  documents: { name: string; path: string }[];
   medicalHistory: {
     condition: string;
     allergies: string[];
@@ -80,10 +77,12 @@ const StudentDetails = () => {
   const [student, setStudent] = useState<Student | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showDeleteModal, setShowDeleteModal] = useState(false); // State for modal
-  const [isDeleting, setIsDeleting] = useState(false); // State for delete loading
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [previewFilePath, setPreviewFilePath] = useState<string | null>(null);
   const { token } = useAuth();
-  const navigate = useNavigate(); // For redirect after deletion
+  const navigate = useNavigate();
 
   // Fetch student details by admissionNumber
   const fetchStudentDetails = async () => {
@@ -92,7 +91,7 @@ const StudentDetails = () => {
       const res = await axios.get(`${API_URL}/api/student/${admissionNumber}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setStudent(res.data); // API response matches the Student interface
+      setStudent(res.data);
       console.log("Student Data:", res.data);
     } catch (err) {
       console.error("Error fetching student details:", err);
@@ -116,8 +115,8 @@ const StudentDetails = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       setShowDeleteModal(false);
-      message.success("Student deleted successfully"); // Assuming antd message is available
-      navigate(routes.studentList); // Redirect to student list
+      message.success("Student deleted successfully");
+      navigate(routes.studentList);
     } catch (error) {
       console.error("Error deleting student:", error);
       message.error("Failed to delete student");
@@ -128,6 +127,17 @@ const StudentDetails = () => {
 
   const handleCloseModal = () => {
     setShowDeleteModal(false);
+  };
+
+  // Handle preview modal
+  const handlePreview = (filePath: string) => {
+    setPreviewFilePath(filePath);
+    setPreviewVisible(true);
+  };
+
+  const handlePreviewCancel = () => {
+    setPreviewVisible(false);
+    setPreviewFilePath(null);
   };
 
   if (loading) return <div>Loading...</div>;
@@ -146,15 +156,6 @@ const StudentDetails = () => {
             <div className="col-xxl-9 col-xl-8">
               <div className="row">
                 <div className="col-md-12">
-                  {/* <div className="d-flex justify-content-end mb-3">
-                    <button
-                      className="btn btn-danger d-flex align-items-center"
-                      onClick={() => setShowDeleteModal(true)}
-                    >
-                      <i className="ti ti-trasx me-2" />
-                      Delete Student
-                    </button>
-                  </div> */}
                   <ul className="nav nav-tabs nav-tabs-bottom mb-4">
                     <li>
                       <Link
@@ -207,14 +208,14 @@ const StudentDetails = () => {
                             <div className="d-flex align-items-center mb-3">
                               <span className="avatar avatar-lg flex-shrink-0">
                                 {/* <ImageWithBasePath
-                                  src={student.fatherInfo.image || 'assets/img/parents/parent-13.jpg'}
+                                  src={student.fatherInfo?.image || 'assets/img/parents/parent-13.jpg'}
                                   className="img-fluid rounded"
                                   alt="Father"
                                 /> */}
                               </span>
                               <div className="ms-2 overflow-hidden">
                                 <h6 className="text-truncate">
-                                  {student.fatherInfo.name}
+                                  {student.fatherInfo?.name || "Not Provided"}
                                 </h6>
                                 <p className="text-primary">Father</p>
                               </div>
@@ -223,17 +224,15 @@ const StudentDetails = () => {
                           <div className="col-sm-6 col-lg-4">
                             <div className="mb-3">
                               <p className="text-dark fw-medium mb-1">Phone</p>
-                              <p>{student.fatherInfo.phoneNumber || "N/A"}</p>
+                              <p>{student.fatherInfo?.phoneNumber || "Not Provided"}</p>
                             </div>
                           </div>
                           <div className="col-sm-6 col-lg-4">
                             <div className="d-flex align-items-center justify-content-between">
                               <div className="mb-3 overflow-hidden me-3">
-                                <p className="text-dark fw-medium mb-1">
-                                  Email
-                                </p>
+                                <p className="text-dark fw-medium mb-1">Email</p>
                                 <p className="text-truncate">
-                                  {student.fatherInfo.email || "N/A"}
+                                  {student.fatherInfo?.email || "Not Provided"}
                                 </p>
                               </div>
                             </div>
@@ -248,14 +247,14 @@ const StudentDetails = () => {
                             <div className="d-flex align-items-center mb-3">
                               <span className="avatar avatar-lg flex-shrink-0">
                                 {/* <ImageWithBasePath
-                                  src={student.motherInfo.image || 'assets/img/parents/parent-14.jpg'}
+                                  src={student.motherInfo?.image || 'assets/img/parents/parent-14.jpg'}
                                   className="img-fluid rounded"
                                   alt="Mother"
                                 /> */}
                               </span>
                               <div className="ms-2 overflow-hidden">
                                 <h6 className="text-truncate">
-                                  {student.motherInfo.name}
+                                  {student.motherInfo?.name || "Not Provided"}
                                 </h6>
                                 <p className="text-primary">Mother</p>
                               </div>
@@ -264,17 +263,15 @@ const StudentDetails = () => {
                           <div className="col-sm-6 col-lg-4">
                             <div className="mb-3">
                               <p className="text-dark fw-medium mb-1">Phone</p>
-                              <p>{student.motherInfo.phoneNumber || "N/A"}</p>
+                              <p>{student.motherInfo?.phoneNumber || "Not Provided"}</p>
                             </div>
                           </div>
                           <div className="col-sm-6 col-lg-4">
                             <div className="d-flex align-items-center justify-content-between">
                               <div className="mb-3 overflow-hidden me-3">
-                                <p className="text-dark fw-medium mb-1">
-                                  Email
-                                </p>
+                                <p className="text-dark fw-medium mb-1">Email</p>
                                 <p className="text-truncate">
-                                  {student.motherInfo.email || "N/A"}
+                                  {student.motherInfo?.email || "Not Provided"}
                                 </p>
                               </div>
                             </div>
@@ -290,10 +287,10 @@ const StudentDetails = () => {
                               <span className="avatar avatar-lg flex-shrink-0"></span>
                               <div className="ms-2 overflow-hidden">
                                 <h6 className="text-truncate">
-                                  {student.guardianInfo.name}
+                                  {student.guardianInfo?.name || "Not Provided"}
                                 </h6>
                                 <p className="text-primary">
-                                  {student.guardianInfo.relation}
+                                  {student.guardianInfo?.relation || "Guardian"}
                                 </p>
                               </div>
                             </div>
@@ -301,17 +298,15 @@ const StudentDetails = () => {
                           <div className="col-sm-6 col-lg-4">
                             <div className="mb-3">
                               <p className="text-dark fw-medium mb-1">Phone</p>
-                              <p>{student.guardianInfo.phoneNumber || "N/A"}</p>
+                              <p>{student.guardianInfo?.phoneNumber || "Not Provided"}</p>
                             </div>
                           </div>
                           <div className="col-sm-6 col-lg-4">
                             <div className="d-flex align-items-center justify-content-between">
                               <div className="mb-3 overflow-hidden me-3">
-                                <p className="text-dark fw-medium mb-1">
-                                  Email
-                                </p>
+                                <p className="text-dark fw-medium mb-1">Email</p>
                                 <p className="text-truncate">
-                                  {student.guardianInfo.email || "N/A"}
+                                  {student.guardianInfo?.email || "Not Provided"}
                                 </p>
                               </div>
                             </div>
@@ -323,48 +318,55 @@ const StudentDetails = () => {
 
                   {/* Documents */}
                   <div className="row">
-                    {/* Documents */}
                     <div className="col-md-6">
                       <div className="card flex-fill">
                         <div className="card-header">
                           <h5>Documents</h5>
                         </div>
                         <div className="card-body">
-                          {Object.entries(student.documents).some(
-                            ([_, value]) => value
-                          ) ? (
-                            Object.entries(student.documents).map(
-                              ([key, value], index) =>
-                                value ? (
-                                  <div
-                                    key={index}
-                                    className="bg-light-300 border rounded d-flex align-items-center justify-content-between mb-3 p-2"
-                                  >
-                                    <div className="d-flex align-items-center overflow-hidden">
-                                      <span className="avatar avatar-md bg-white rounded flex-shrink-0 text-default">
-                                        <i className="ti ti-pdf fs-15" />
-                                      </span>
-                                      <div className="ms-2">
-                                        <p className="text-truncate fw-medium text-dark">
-                                          {key.charAt(0).toUpperCase() +
-                                            key
-                                              .slice(1)
-                                              .replace(/([A-Z])/g, " $1")}
-                                        </p>
-                                      </div>
-                                    </div>
-                                    <Link
-                                      to={value}
-                                      className="btn btn-dark btn-icon btn-sm"
-                                      download
-                                    >
-                                      <i className="ti ti-download" />
-                                    </Link>
+                          {student.documents && student.documents.length > 0 ? (
+                            student.documents.map((doc, index) => (
+                              <div
+                                key={index}
+                                className="bg-light-300 border rounded d-flex align-items-center justify-content-between mb-3 p-2"
+                              >
+                                <div className="d-flex align-items-center overflow-hidden">
+                                  <span className="avatar avatar-md bg-white rounded flex-shrink-0 text-default">
+                                    <i className="ti ti-pdf fs-15" />
+                                  </span>
+                                  <div className="ms-2">
+                                    <p className="text-truncate fw-medium text-dark">
+                                      {doc.name}
+                                    </p>
                                   </div>
-                                ) : null
-                            )
+                                </div>
+                                <Space>
+                                  <Button
+                                    type="primary"
+                                    size="small"
+                                    icon={<i className="ti ti-eye" />}
+                                    onClick={() => handlePreview(doc.path)}
+                                  >
+                                    Preview
+                                  </Button>
+                                  <Button
+                                    type="default"
+                                    size="small"
+                                    icon={<i className="ti ti-download" />}
+                                  >
+                                    <a
+                                      href={`${API_URL}/${doc.path}`}
+                                      download
+                                      style={{ color: "inherit", textDecoration: "none" }}
+                                    >
+                                      Download
+                                    </a>
+                                  </Button>
+                                </Space>
+                              </div>
+                            ))
                           ) : (
-                            <p>No documents available</p>
+                            <p>Not Provided</p>
                           )}
                         </div>
                       </div>
@@ -385,7 +387,7 @@ const StudentDetails = () => {
                               <p className="text-dark fw-medium mb-1">
                                 Current Address
                               </p>
-                              <p>{student.currentAddress || "N/A"}</p>
+                              <p>{student.currentAddress || "Not Provided"}</p>
                             </div>
                           </div>
                           <div className="d-flex align-items-center">
@@ -396,7 +398,7 @@ const StudentDetails = () => {
                               <p className="text-dark fw-medium mb-1">
                                 Permanent Address
                               </p>
-                              <p>{student.permanentAddress || "N/A"}</p>
+                              <p>{student.permanentAddress || "Not Provided"}</p>
                             </div>
                           </div>
                         </div>
@@ -428,7 +430,7 @@ const StudentDetails = () => {
                                     )
                                   )
                                 ) : (
-                                  <p>N/A</p>
+                                  <p>Not Provided</p>
                                 )}
                               </div>
                             </div>
@@ -437,13 +439,12 @@ const StudentDetails = () => {
                                 <p className="text-dark fw-medium mb-1">
                                   Medications
                                 </p>
-                                {student.medicalHistory.medications.length >
-                                0 ? (
+                                {student.medicalHistory.medications.length > 0 ? (
                                   student.medicalHistory.medications.map(
                                     (med, index) => <p key={index}>{med}</p>
                                   )
                                 ) : (
-                                  <p>N/A</p>
+                                  <p>Not Provided</p>
                                 )}
                               </div>
                             </div>
@@ -459,28 +460,26 @@ const StudentDetails = () => {
         </div>
       </div>
 
-      {/* Ant Design Modal */}
-      {/* <Modal
-        title="Confirm Deletion"
-        visible={showDeleteModal}
-        onCancel={handleCloseModal}
-        footer={[
-          <Button key="cancel" onClick={handleCloseModal}>
-            Cancel
-          </Button>,
-          <Button
-            key="delete"
-            type="primary"
-            danger
-            onClick={handleDeleteConfirm}
-            loading={isDeleting}
-          >
-            Delete
-          </Button>,
-        ]}
+      {/* Preview Modal */}
+      <Modal
+        title="Document Preview"
+        open={previewVisible}
+        footer={null}
+        onCancel={handlePreviewCancel}
+        width={800}
+        zIndex={10000}
+        style={{ top: 20 }}
       >
-        <p>Are you sure you want to delete this student?</p>
-      </Modal> */}
+        {previewFilePath ? (
+          <iframe
+            src={`${API_URL}/${previewFilePath}`}
+            style={{ width: "100%", height: "500px", border: "none" }}
+            title="Document Preview"
+          />
+        ) : (
+          <p>No preview available</p>
+        )}
+      </Modal>
     </>
   );
 };

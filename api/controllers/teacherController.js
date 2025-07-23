@@ -6,11 +6,13 @@ import Counter from "../models/counter.js";
 import Branch from "../models/branch.js";
 import path from "path";
 import fs from "fs";
+import { uploadsRoot } from "../uploadsRoot.js";
+
 export const getNextSequence = async (type, branchId) => {
   const counter = await Counter.findOneAndUpdate(
-   { type: `${type}_id`, branchId },
+    { type: `${type}_id`, branchId },
     { $inc: { sequence: 1 } },
-    { new: true, upsert: true, setDefaultsOnInsert: true  }
+    { new: true, upsert: true, setDefaultsOnInsert: true }
   );
   return counter.sequence;
 };
@@ -47,9 +49,7 @@ export const getNextStaffId = async (req, res) => {
 
 export const createTeacher = async (req, res) => {
   const { branchId } = req.user;
-  console.log(req.user);
   const id = await generateId("teacher", branchId);
-  console.log("Teacher-id-----------------------", id)
   const {
     role,
     email,
@@ -66,7 +66,7 @@ export const createTeacher = async (req, res) => {
     workShift,
     workLocation,
     dateOfLeaving,
-    documents,
+    documentNames,
   } = req.body;
 
   if (!id) {
@@ -94,7 +94,6 @@ export const createTeacher = async (req, res) => {
       return res.status(400).json({ message: "Phone number must be exactly 10 digits" });
     }
     const lastFourDigits = phoneDigits.slice(-4);
-
     const firstName = name.split(" ")[0].toLowerCase();
     const generatedPassword = `${firstName}@${lastFourDigits}`;
 
@@ -103,11 +102,9 @@ export const createTeacher = async (req, res) => {
       return res.status(400).json({ message: "Email already registered" });
     }
 
-    if (id) {
-      const existingTeacher = await Teacher.findOne({ id, branchId });
-      if (existingTeacher) {
-        return res.status(400).json({ message: "Teacher ID already exists" });
-      }
+    const existingTeacher = await Teacher.findOne({ id, branchId });
+    if (existingTeacher) {
+      return res.status(400).json({ message: "Teacher ID already exists" });
     }
 
     const hashedPassword = await bcrypt.hash(generatedPassword, 10);
@@ -118,10 +115,41 @@ export const createTeacher = async (req, res) => {
       phone: phoneNumber,
       role: role.toLowerCase(),
       status: "active",
-      branchId
+      branchId,
     });
     await newUser.save();
-    console.log("New User: ", newUser);
+
+    let names = [];
+    if (typeof documentNames === 'string') {
+      try {
+        names = JSON.parse(documentNames);
+        // Sanitize names: ensure they are non-empty strings and not invalid like "["
+        names = names.map((name, i) => {
+          if (typeof name !== 'string' || name.trim() === '' || name === '[') {
+            return `document-${Date.now()}-${i}`;
+          }
+          return name.trim();
+        });
+      } catch (error) {
+        console.error('Error parsing documentNames:', error);
+        // Fallback to default names
+        names = req.files.map((_, i) => `document-${Date.now()}-${i}`);
+      }
+    } else if (Array.isArray(documentNames)) {
+      names = documentNames.map((name, i) => {
+        if (typeof name !== 'string' || name.trim() === '' || name === '[') {
+          return `document-${Date.now()}-${i}`;
+        }
+        return name.trim();
+      });
+    } else {
+      names = req.files.map((_, i) => `document-${Date.now()}-${i}`);
+    }
+
+    const documents = req.files.map((file, i) => ({
+      name: names[i] || `document-${Date.now()}-${i}`,
+      path: `teachers/documents/${file.filename}`,
+    }));
 
     const newTeacher = new Teacher({
       userId: newUser._id,
@@ -142,10 +170,9 @@ export const createTeacher = async (req, res) => {
       workLocation,
       dateOfLeaving,
       documents,
-      branchId
+      branchId,
     });
     await newTeacher.save();
-    console.log("NEW TEACHER ADDED");
 
     res.status(201).json({
       message: "Teacher added successfully",
@@ -153,99 +180,20 @@ export const createTeacher = async (req, res) => {
     });
   } catch (error) {
     console.error("Error adding teacher:", error.message);
-    res.status(500).json({ message: error.message });
-  }
-};
-
-
-export const getAllStaffForSuperadmin = async (req, res) => {
-  try {
-    const { branchId, sessionId, classId, role } = req.query;
-    const query = {};
-
-    if (branchId) query.branchId = branchId;
-    if (role) query.role = role;
-
-    // Add class filter if needed (assuming teachers might be associated with classes)
-    if (classId) {
-      query['class'] = classId;
+    if (req.files) {
+      req.files.forEach(file => {
+        const filePath = path.join(uploadsRoot, 'teachers', 'documents', file.filename);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      });
     }
-
-    const staff = await Teacher.find(query)
-      .populate({
-        path: 'branchId',
-        select: 'name',
-        model: Branch
-      })
-      .populate('userId', 'email')
-      .select('-__v -createdAt -updatedAt -documents');
-
-    res.status(200).json({ 
-      success: true, 
-      data: staff,
-      count: staff.length
-    });
-  } catch (error) {
-    console.error('Error fetching staff:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error',
-      error: error.message 
-    });
-  }
-};
-
-// Get all teachers
-export const getAllTeachers = async (req, res) => {
-  try {
-  const { branchId } = req.user;
-    console.log(req.user.branchId);
-
-    const teachers = await Teacher.find({branchId}).populate("userId", "name email phoneNumber role");
-    res.status(200).json(teachers);
-  } catch (error) {
-    console.error("Error fetching teachers:", error.message);
     res.status(500).json({ message: error.message });
   }
 };
-
-// Get a single teacher by ID (MongoDB _id)
-export const getTeacherById = async (req, res) => {
-  try {
-  const { branchId } = req.user;
-
-    const teacher = await Teacher.findOne({ _id: req.params.id, branchId }).populate("userId", "name email phoneNumber role");
-    if (!teacher) {
-      return res.status(404).json({ message: "Teacher not found" });
-    }
-    res.status(200).json(teacher);
-  } catch (error) {
-    console.error("Error fetching teacher:", error.message);
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// Get a single teacher by custom ID (id field)
-export const getTeacherByCustomId = async (req, res) => {
-  try {
-  const { branchId } = req.user;
-
-    const teacher = await Teacher.findOne({ id: req.params.id, branchId }).populate("userId", "name email phoneNumber role");
-    if (!teacher) {
-      return res.status(404).json({ message: "Teacher not found" });
-    }
-    res.status(200).json(teacher);
-  } catch (error) {
-    console.error("Error fetching teacher by custom ID:", error.message);
-    res.status(500).json({ message: error.message });
-  }
-};
-
-
 
 export const updateTeacher = async (req, res) => {
   const { branchId } = req.user;
-
   const {
     id,
     role,
@@ -263,11 +211,11 @@ export const updateTeacher = async (req, res) => {
     workShift,
     workLocation,
     dateOfLeaving,
-    documents,
+    documentNames,
   } = req.body;
 
   try {
-    const teacher = await Teacher.findOne({ id: req.params.id , branchId});
+    const teacher = await Teacher.findOne({ id: req.params.id, branchId });
     if (!teacher) {
       return res.status(404).json({ message: "Teacher not found" });
     }
@@ -294,7 +242,41 @@ export const updateTeacher = async (req, res) => {
     teacher.workLocation = workLocation || teacher.workLocation;
     teacher.dateOfLeaving = dateOfLeaving !== undefined ? dateOfLeaving : teacher.dateOfLeaving;
     teacher.emergencyContact = emergencyContact !== undefined ? emergencyContact : teacher.emergencyContact;
-    teacher.documents = documents || teacher.documents;
+
+    if (req.files && req.files.length > 0) {
+      let names = [];
+      if (typeof documentNames === 'string') {
+        try {
+          names = JSON.parse(documentNames);
+          // Sanitize names: ensure they are non-empty strings and not invalid like "["
+          names = names.map((name, i) => {
+            if (typeof name !== 'string' || name.trim() === '' || name === '[') {
+              return `document-${Date.now()}-${i}`;
+            }
+            return name.trim();
+          });
+        } catch (error) {
+          console.error('Error parsing documentNames:', error);
+          names = req.files.map((_, i) => `document-${Date.now()}-${i}`);
+        }
+      } else if (Array.isArray(documentNames)) {
+        names = documentNames.map((name, i) => {
+          if (typeof name !== 'string' || name.trim() === '' || name === '[') {
+            return `document-${Date.now()}-${i}`;
+          }
+          return name.trim();
+        });
+      } else {
+        names = req.files.map((_, i) => `document-${Date.now()}-${i}`);
+      }
+
+      const newDocuments = req.files.map((file, i) => ({
+        name: names[i] || `document-${Date.now()}-${i}`,
+        path: `teachers/documents/${file.filename}`,
+      }));
+
+      teacher.documents = [...(teacher.documents || []), ...newDocuments];
+    }
 
     if (email && teacher.userId) {
       await User.findOneAndUpdate({ _id: teacher.userId, branchId }, { email });
@@ -305,21 +287,103 @@ export const updateTeacher = async (req, res) => {
     res.status(200).json({ message: "Teacher updated successfully", teacher: updatedTeacher });
   } catch (error) {
     console.error("Error updating teacher:", error.message);
+    if (req.files) {
+      req.files.forEach(file => {
+        const filePath = path.join(uploadsRoot, 'teachers', 'documents', file.filename);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      });
+    }
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Other functions remain unchanged
+export const getAllStaffForSuperadmin = async (req, res) => {
+  try {
+    const { branchId, sessionId, classId, role } = req.query;
+    const query = {};
+
+    if (branchId) query.branchId = branchId;
+    if (role) query.role = role;
+
+    if (classId) {
+      query['class'] = classId;
+    }
+
+    const staff = await Teacher.find(query)
+      .populate({
+        path: 'branchId',
+        select: 'name',
+        model: Branch
+      })
+      .populate('userId', 'email')
+      .select('-__v -createdAt -updatedAt -documents');
+
+    res.status(200).json({
+      success: true,
+      data: staff,
+      count: staff.length
+    });
+  } catch (error) {
+    console.error('Error fetching staff:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+export const getAllTeachers = async (req, res) => {
+  try {
+    const { branchId } = req.user;
+    const teachers = await Teacher.find({ branchId }).populate("userId", "name email phoneNumber role");
+    res.status(200).json(teachers);
+  } catch (error) {
+    console.error("Error fetching teachers:", error.message);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const getTeacherById = async (req, res) => {
+  try {
+    const { branchId } = req.user;
+    const teacher = await Teacher.findOne({ _id: req.params.id, branchId }).populate("userId", "name email phoneNumber role");
+    if (!teacher) {
+      return res.status(404).json({ message: "Teacher not found" });
+    }
+    res.status(200).json(teacher);
+  } catch (error) {
+    console.error("Error fetching teacher:", error.message);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const getTeacherByCustomId = async (req, res) => {
+  try {
+    const { branchId } = req.user;
+    const teacher = await Teacher.findOne({ id: req.params.id, branchId }).populate("userId", "name email phoneNumber role");
+    if (!teacher) {
+      return res.status(404).json({ message: "Teacher not found" });
+    }
+    res.status(200).json(teacher);
+  } catch (error) {
+    console.error("Error fetching teacher by custom ID:", error.message);
     res.status(500).json({ message: error.message });
   }
 };
 
 export const deleteTeacher = async (req, res) => {
   try {
-  const { branchId } = req.user;
-
+    const { branchId } = req.user;
     const teacher = await Teacher.findOneAndDelete({ _id: req.params.id, branchId });
     if (!teacher) {
       return res.status(404).json({ message: "Teacher not found" });
     }
 
     await User.findOneAndDelete({ _id: teacher.userId, branchId });
-
     res.status(200).json({ message: "Teacher deleted successfully" });
   } catch (error) {
     console.error("Error deleting teacher:", error.message);
@@ -327,25 +391,21 @@ export const deleteTeacher = async (req, res) => {
   }
 };
 
-
 export const countTeacher = async (req, res) => {
   try {
     const { branchId } = req.user;
-
     const allTeachers = await mongoose.model("Teacher").find({ branchId }).populate({
       path: "userId",
       select: "status",
     });
 
     let active = 0, inactive = 0;
-
     for (const teacher of allTeachers) {
       if (teacher.userId?.status === "active") active++;
       else if (teacher.userId?.status === "inactive") inactive++;
     }
 
     const total = allTeachers.length;
-
     res.status(200).json({ total, active, inactive });
   } catch (error) {
     console.error("Error counting teachers:", error.message);
@@ -354,23 +414,17 @@ export const countTeacher = async (req, res) => {
 };
 
 
-
-// const uploadsRoot = path.join(process.cwd(), '..', 'uploads');
-import { uploadsRoot } from "../uploadsRoot.js";
-// Upload teacher profile photo
 export const uploadTeacherProfilePhoto = async (req, res) => {
   try {
-    const { id } = req.params; // Using custom 'id' field from Teacher schema
+    const { id } = req.params;
     const { branchId } = req.user;
 
-    console.log("Uploaded file:", req.file);
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
     }
 
     const teacher = await Teacher.findOne({ id, branchId });
     if (!teacher) {
-      // Delete the uploaded file if teacher is not found to prevent orphaned files
       const filePath = path.join(uploadsRoot, 'teachers', req.file.filename);
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
@@ -378,7 +432,6 @@ export const uploadTeacherProfilePhoto = async (req, res) => {
       return res.status(404).json({ error: "Teacher not found" });
     }
 
-    // Delete old profile photo if it exists
     if (teacher.profilePhoto && teacher.profilePhoto.path) {
       const oldFilePath = path.join(uploadsRoot, teacher.profilePhoto.path);
       if (fs.existsSync(oldFilePath)) {
@@ -388,32 +441,26 @@ export const uploadTeacherProfilePhoto = async (req, res) => {
       }
     }
 
-    // Store relative path starting from uploads (e.g., teachers/filename.jpg)
     const relativePath = path.join('teachers', req.file.filename).replace(/\\/g, '/');
-
-    // Update teacher with new profile photo
     teacher.profilePhoto = {
       filename: req.file.filename,
-      path: relativePath, // Store relative path
+      path: relativePath,
       mimetype: req.file.mimetype,
       size: req.file.size,
     };
 
     const savedTeacher = await teacher.save();
-    console.log("Saved teacher with profilePhoto:", savedTeacher.profilePhoto);
-
     res.json({
       message: "Profile photo uploaded successfully",
       file: {
         filename: req.file.filename,
-        path: relativePath, // Return relative path
+        path: relativePath,
         mimetype: req.file.mimetype,
         size: req.file.size,
       },
     });
   } catch (error) {
     console.error("Error uploading profile photo:", error.message, error.stack);
-    // Clean up uploaded file on error
     if (req.file) {
       const filePath = path.join(uploadsRoot, 'teachers', req.file.filename);
       if (fs.existsSync(filePath)) {
@@ -424,10 +471,9 @@ export const uploadTeacherProfilePhoto = async (req, res) => {
   }
 };
 
-// Get teacher profile photo
 export const getTeacherProfilePhoto = async (req, res) => {
   try {
-    const { id } = req.params; // Using custom 'id' field from Teacher schema
+    const { id } = req.params;
     const { branchId } = req.user;
 
     const teacher = await Teacher.findOne({ id, branchId });
@@ -437,7 +483,7 @@ export const getTeacherProfilePhoto = async (req, res) => {
 
     res.json({
       filename: teacher.profilePhoto.filename,
-      path: teacher.profilePhoto.path, // Already stored as relative path
+      path: teacher.profilePhoto.path,
       mimetype: teacher.profilePhoto.mimetype,
       size: teacher.profilePhoto.size,
     });
@@ -447,7 +493,6 @@ export const getTeacherProfilePhoto = async (req, res) => {
   }
 };
 
-// Delete teacher profile photo
 export const deleteTeacherProfilePhoto = async (req, res) => {
   try {
     const { id } = req.params;
@@ -462,7 +507,6 @@ export const deleteTeacherProfilePhoto = async (req, res) => {
       return res.status(404).json({ error: "No profile photo to delete" });
     }
 
-    // Delete the file from filesystem
     const filePath = path.join(uploadsRoot, teacher.profilePhoto.path);
     if (fs.existsSync(filePath)) {
       fs.unlink(filePath, (err) => {
@@ -470,7 +514,6 @@ export const deleteTeacherProfilePhoto = async (req, res) => {
       });
     }
 
-    // Remove profilePhoto from database
     teacher.profilePhoto = undefined;
     await teacher.save();
 
@@ -478,5 +521,77 @@ export const deleteTeacherProfilePhoto = async (req, res) => {
   } catch (error) {
     console.error("Error deleting profile photo:", error.message);
     res.status(500).json({ error: error.message });
+  }
+};
+
+export const uploadTeacherDocuments = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { branchId } = req.user;
+    const { documentNames } = req.body;
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: "No documents uploaded" });
+    }
+
+    const teacher = await Teacher.findOne({ id, branchId });
+    if (!teacher) {
+      req.files.forEach(file => {
+        const filePath = path.join(uploadsRoot, 'teachers', 'documents', file.filename);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      });
+      return res.status(404).json({ message: "Teacher not found" });
+    }
+
+    let names = [];
+    if (typeof documentNames === 'string') {
+      try {
+        names = JSON.parse(documentNames);
+        names = names.map((name, i) => {
+          if (typeof name !== 'string' || name.trim() === '' || name === '[') {
+            return `document-${Date.now()}-${i}`;
+          }
+          return name.trim();
+        });
+      } catch (error) {
+        console.error('Error parsing documentNames:', error);
+        names = req.files.map((_, i) => `document-${Date.now()}-${i}`);
+      }
+    } else if (Array.isArray(documentNames)) {
+      names = documentNames.map((name, i) => {
+        if (typeof name !== 'string' || name.trim() === '' || name === '[') {
+          return `document-${Date.now()}-${i}`;
+        }
+        return name.trim();
+      });
+    } else {
+      names = req.files.map((_, i) => `document-${Date.now()}-${i}`);
+    }
+
+    const newDocuments = req.files.map((file, i) => ({
+      name: names[i] || `document-${Date.now()}-${i}`,
+      path: `teachers/documents/${file.filename}`,
+    }));
+
+    teacher.documents = [...(teacher.documents || []), ...newDocuments];
+    const savedTeacher = await teacher.save();
+
+    res.status(200).json({
+      message: "Documents uploaded successfully",
+      documents: newDocuments,
+    });
+  } catch (error) {
+    console.error("Error uploading teacher documents:", error.message);
+    if (req.files) {
+      req.files.forEach(file => {
+        const filePath = path.join(uploadsRoot, 'teachers', 'documents', file.filename);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      });
+    }
+    res.status(500).json({ message: error.message });
   }
 };

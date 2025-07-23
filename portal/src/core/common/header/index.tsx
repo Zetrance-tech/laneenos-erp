@@ -153,7 +153,7 @@ const Header = () => {
             {/* /Search */}
 
             <div className="d-flex align-items-center">
-              <div className="dropdown me-2">
+              {/* <div className="dropdown me-2">
                 <Link
                   to="#"
                   className="btn btn-outline-light fw-normal bg-white d-flex align-items-center p-2"
@@ -183,7 +183,7 @@ const Header = () => {
                     Academic Year : 2021 / 2022
                   </Link>
                 </div>
-              </div>
+              </div> */}
 
               <div className="pe-1">
                 {!location.pathname.includes("layout-dark") && (
@@ -210,7 +210,7 @@ const Header = () => {
                 }`}
                 id="notification_item"
               >
-                <Link
+                {/* <Link
                   onClick={toggleNotification}
                   to="#"
                   className="btn btn-outline-light bg-white btn-icon position-relative me-1"
@@ -218,7 +218,7 @@ const Header = () => {
                 >
                   <i className="ti ti-bell" />
                   <span className="notification-status-dot" />
-                </Link>
+                </Link> */}
                 <div className="dropdown-menu dropdown-menu-end notification-dropdown p-4">
                   <div className="d-flex align-items-center justify-content-between border-bottom p-0 pb-3 mb-3">
                     <h4 className="notification-title">Notifications (2)</h4>

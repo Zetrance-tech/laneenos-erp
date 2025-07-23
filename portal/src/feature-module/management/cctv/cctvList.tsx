@@ -421,7 +421,7 @@ const ParentCCTVList: React.FC = () => {
             </nav>
           </div>
           <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">
-            <TooltipOption />
+            {/* <TooltipOption /> */}
           </div>
         </div>
         <div className="row">

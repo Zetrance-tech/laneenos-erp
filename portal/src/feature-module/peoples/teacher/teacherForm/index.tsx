@@ -8,6 +8,7 @@ import { Contract, Shift, gender } from "../../../../core/common/selectoption/se
 import CommonSelect from "../../../../core/common/commonSelect";
 import toast, { Toaster } from "react-hot-toast";
 import { useAuth } from "../../../../context/AuthContext";
+
 interface Option {
   value: string;
   label: string;
@@ -51,6 +52,7 @@ const TeacherForm: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id?: string }>();
   const isEditMode = !!id;
+  const { token } = useAuth();
 
   const initialFormData: TeacherFormData = {
     id: "",
@@ -79,7 +81,6 @@ const TeacherForm: React.FC = () => {
   const [documentPreviews, setDocumentPreviews] = useState<Array<string | null>>([null]);
   const [nextStaffId, setNextStaffId] = useState<string>("");
   const [hasFetchedId, setHasFetchedId] = useState<boolean>(false);
-  const {token} = useAuth();
 
   const fetchNextStaffId = async () => {
     console.log("fetchNextStaffId started");
@@ -150,7 +151,7 @@ const TeacherForm: React.FC = () => {
     } else if (!hasFetchedId) {
       fetchNextStaffId();
     }
-  }, [id, isEditMode, hasFetchedId]);
+  }, [id, isEditMode, hasFetchedId, token]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -178,7 +179,7 @@ const TeacherForm: React.FC = () => {
         if (newPreviews[index]) {
           URL.revokeObjectURL(newPreviews[index]!);
         }
-        newPreviews[index] = file && file.type.startsWith("image/") ? URL.createObjectURL(file) : null;
+        newPreviews[index] = null; // No preview for PDFs
         return newPreviews;
       });
     }
@@ -219,8 +220,9 @@ const TeacherForm: React.FC = () => {
     if (!formData.joiningDate) errors.push("Joining Date is required");
     if (!formData.address) errors.push("Address is required");
     formData.documents.forEach((doc, index) => {
-      if (doc.name && !doc.file) errors.push(`Document file for "${doc.name}" is required`);
+      if (doc.name && !doc.file && !isEditMode) errors.push(`Document file for "${doc.name}" is required`);
       if (doc.file && !doc.name) errors.push(`Document name for file "${doc.file?.name}" is required`);
+      if (doc.name && (doc.name.trim() === "" || doc.name === "[")) errors.push(`Document name at index ${index + 1} is invalid`);
     });
 
     if (errors.length > 0) {
@@ -236,61 +238,93 @@ const TeacherForm: React.FC = () => {
     console.log("handleSubmit started");
     if (!validateForm()) return;
 
-    const documentsForBackend = formData.documents
-      .filter((doc) => doc.name && doc.file)
-      .map((doc) => ({
-        name: doc.name,
-        url: doc.file ? `placeholder/${doc.file.name}` : null,
-      }));
+    const formDataToSend = new FormData();
+    const docsWithFiles = formData.documents.filter((d) => d.file);
+    const documentNames = docsWithFiles.map((d) => d.name.trim() || `document-${Date.now()}-${docsWithFiles.indexOf(d)}`);
 
-    const payload = {
-      id: formData.id,
-      role: formData.role,
-      name: formData.name,
-      email: formData.email,
-      phoneNumber: formData.phoneNumber,
-      dateOfBirth: formData.dateOfBirth
-        ? dayjs(formData.dateOfBirth, "DD-MM-YYYY").toISOString()
-        : "",
-      gender: formData.gender,
-      address: formData.address,
-      joiningDate: formData.joiningDate
-        ? dayjs(formData.joiningDate, "DD-MM-YYYY").toISOString()
-        : "",
-      experienceYears: Number(formData.experienceYears),
-      payroll: {
-        epfNo: formData.payroll.epfNo,
-        basicSalary: Number(formData.payroll.basicSalary),
-      },
-      contractType: formData.contractType,
-      workShift: formData.workShift,
-      workLocation: formData.workLocation,
-      dateOfLeaving: formData.dateOfLeaving
-        ? dayjs(formData.dateOfLeaving, "DD-MM-YYYY").toISOString()
-        : null,
-      emergencyContact: formData.emergencyContact,
-      documents: documentsForBackend,
-    };
+    formDataToSend.append("id", formData.id);
+    formDataToSend.append("role", formData.role);
+    formDataToSend.append("name", formData.name);
+    formDataToSend.append("email", formData.email);
+    formDataToSend.append("phoneNumber", formData.phoneNumber);
+    formDataToSend.append("dateOfBirth", formData.dateOfBirth ? dayjs(formData.dateOfBirth, "DD-MM-YYYY").toISOString() : "");
+    formDataToSend.append("gender", formData.gender);
+    formDataToSend.append("address", formData.address);
+    formDataToSend.append("joiningDate", formData.joiningDate ? dayjs(formData.joiningDate, "DD-MM-YYYY").toISOString() : "");
+    formDataToSend.append("experienceYears", formData.experienceYears.toString());
+    formDataToSend.append("payroll[epfNo]", formData.payroll.epfNo);
+    formDataToSend.append("payroll[basicSalary]", formData.payroll.basicSalary.toString());
+    formDataToSend.append("contractType", formData.contractType);
+    formDataToSend.append("workShift", formData.workShift);
+    formDataToSend.append("workLocation", formData.workLocation);
+    if (formData.dateOfLeaving) {
+      formDataToSend.append("dateOfLeaving", dayjs(formData.dateOfLeaving, "DD-MM-YYYY").toISOString());
+    }
+    formDataToSend.append("emergencyContact", formData.emergencyContact);
+    formDataToSend.append("documentNames", JSON.stringify(documentNames));
+    docsWithFiles.forEach((doc) => {
+      formDataToSend.append("documents", doc.file!);
+    });
 
     try {
       setLoading(true);
       setError(null);
 
       if (isEditMode) {
-        const response = await axios.put(`${API_URL}/api/teacher/${id}`, payload, {
+        // For updates, upload documents separately to /api/teacher/:id/documents
+        if (docsWithFiles.length > 0) {
+          const docFormData = new FormData();
+          docsWithFiles.forEach((doc) => {
+            docFormData.append("documents", doc.file!);
+          });
+          docFormData.append("documentNames", JSON.stringify(documentNames));
+          await axios.post(`${API_URL}/api/teacher/${id}/documents`, docFormData, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "multipart/form-data",
+            },
+          });
+        }
+        // Update teacher details
+        const response = await axios.put(`${API_URL}/api/teacher/${id}`, {
+          id: formData.id,
+          role: formData.role,
+          name: formData.name,
+          email: formData.email,
+          phoneNumber: formData.phoneNumber,
+          dateOfBirth: formData.dateOfBirth ? dayjs(formData.dateOfBirth, "DD-MM-YYYY").toISOString() : "",
+          gender: formData.gender,
+          address: formData.address,
+          joiningDate: formData.joiningDate ? dayjs(formData.joiningDate, "DD-MM-YYYY").toISOString() : "",
+          experienceYears: Number(formData.experienceYears),
+          payroll: {
+            epfNo: formData.payroll.epfNo,
+            basicSalary: Number(formData.payroll.basicSalary),
+          },
+          contractType: formData.contractType,
+          workShift: formData.workShift,
+          workLocation: formData.workLocation,
+          dateOfLeaving: formData.dateOfLeaving ? dayjs(formData.dateOfLeaving, "DD-MM-YYYY").toISOString() : null,
+          emergencyContact: formData.emergencyContact,
+        }, {
           headers: { Authorization: `Bearer ${token}` },
         });
         console.log("Updated teacher:", response.data);
-        toast.success("Updated teacher Successfully");
+        toast.success("Updated teacher successfully");
         setSubmittedTeacherId(id);
       } else {
-        const response = await axios.post(`${API_URL}/api/teacher/create`, payload, {
-          headers: { Authorization: `Bearer ${token}` },
+        // For creation, include documents in the create request
+        const response = await axios.post(`${API_URL}/api/teacher/create`, formDataToSend, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
+          },
         });
         console.log("Created teacher:", response.data);
-        toast.success("Added teacher Successfully");
+        toast.success("Added teacher successfully");
         setSubmittedTeacherId(response.data.teacher.id);
 
+        // Reset form
         setFormData({
           id: "",
           role: "teacher",
@@ -455,7 +489,7 @@ const TeacherForm: React.FC = () => {
                             />
                           </div>
                         </div>
-                        <div className="col-xxl col-xl-3 col-md-6">
+                        <div className="col-xxl col-xl-3 col-md6">
                           <div className="mb-3">
                             <label className="form-label">Gender *</label>
                             <CommonSelect
@@ -555,7 +589,7 @@ const TeacherForm: React.FC = () => {
                       </button>
                     </div>
                     <div className="card-body pb-1">
-                      <div className="row row-cols-xxl-5 row-cols-md-6">
+                      <div className="itemscope">
                         {formData.documents.map((doc, index) => (
                           <div key={index} className="col-xxl col-xl-6 col-md-6 mb-3">
                             <div className="d-flex align-items-start">
@@ -575,26 +609,16 @@ const TeacherForm: React.FC = () => {
                                   <input
                                     type="file"
                                     className="form-control"
-                                    accept=".pdf,.jpg,.jpeg,.png"
+                                    accept=".pdf"
                                     onChange={(e) => handleDocumentChange(index, "file", e.target.files?.[0] || null)}
                                   />
                                 </div>
                                 {doc.file && (
                                   <div className="mt-2">
                                     <small className="text-muted">Selected: {doc.file.name}</small>
-                                    {documentPreviews[index] ? (
-                                      <img
-                                        src={documentPreviews[index]!}
-                                        alt={`${doc.name} Preview`}
-                                        style={{ maxWidth: "100px", height: "auto", display: "block", marginTop: "5px" }}
-                                      />
-                                    ) : (
-                                      <small className="d-block text-muted mt-1">
-                                        {doc.file.type.startsWith("application/pdf")
-                                          ? "PDF selected (no preview available)"
-                                          : "Preview not available"}
-                                      </small>
-                                    )}
+                                    <small className="d-block text-muted mt-1">
+                                      PDF selected (no preview available)
+                                    </small>
                                   </div>
                                 )}
                               </div>

@@ -8,47 +8,45 @@ import TeacherModal from '../teacherModal';
 import CommonSelect from '../../../../core/common/commonSelect';
 import TooltipOption from '../../../../core/common/tooltipOption';
 import axios from 'axios';
-import { Spin } from 'antd';
+import { Spin, Select, message, Modal } from 'antd';
 import { useAuth } from '../../../../context/AuthContext';
 
+const { Option } = Select;
 const API_URL = process.env.REACT_APP_URL;
 
 interface Teacher {
   _id: string;
+  userId: string;
+  role: string;
+  branchId: string;
   id: string;
   name: string;
   email: string;
+  phoneNumber: string;
   dateOfBirth: string;
   gender: string;
-  phoneNumber: string;
-  role: string;
-  address: {
-    street: string;
-    city: string;
-    state: string;
-    postalCode: string;
-    country: string;
-  };
+  address: string;
+  emergencyContact: string;
   joiningDate: string;
-  qualifications: any[];
   experienceYears: number;
-  subjects: string[];
+  documents: { name: string; path: string }[];
+  payroll: {
+    epfNo: string;
+    basicSalary: number;
+  };
   contractType: string;
   workShift: string;
   workLocation: string;
-  languagesSpoken: string[];
-  emergencyContact: string;
-  bio: string;
+  dateOfLeaving?: string | null;
   createdAt: string;
   updatedAt: string;
-  userId: {
-    _id: string;
-    name: string;
-    email: string;
-    phoneNumber?: string;
+  profilePhoto?: {
+    filename: string;
+    path: string;
+    mimetype: string;
+    size: number;
   };
-  status?: string;
-  profileImage?: string; // Add this field
+  profileImage?: string; // Derived field for UI
 }
 
 interface Option {
@@ -74,7 +72,8 @@ const TeacherGrid = () => {
   const [error, setError] = useState<string | null>(null);
   const [teacherToDelete, setTeacherToDelete] = useState<string | null>(null);
   const [selectedRole, setSelectedRole] = useState<string>("");
-  const {token} = useAuth();
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const { token } = useAuth();
 
   // Function to fetch profile photo for a specific teacher
   const fetchTeacherProfilePhoto = async (teacherId: string): Promise<string> => {
@@ -140,12 +139,23 @@ const TeacherGrid = () => {
       });
       setTeachers(teachers.filter((teacher) => teacher._id !== teacherToDelete));
       setFilteredTeachers(filteredTeachers.filter((teacher) => teacher._id !== teacherToDelete));
+      message.success("Teacher deleted successfully");
       setTeacherToDelete(null);
-      console.log("Teacher deleted successfully");
+      setIsModalVisible(false);
     } catch (err) {
-      setError("Failed to delete teacher");
       console.error("Error deleting teacher:", err);
+      message.error("Failed to delete teacher");
     }
+  };
+
+  const showDeleteModal = (teacherId: string) => {
+    setTeacherToDelete(teacherId);
+    setIsModalVisible(true);
+  };
+
+  const handleCancel = () => {
+    setIsModalVisible(false);
+    setTeacherToDelete(null);
   };
 
   const handleApplyClick = () => {
@@ -157,6 +167,73 @@ const TeacherGrid = () => {
   const handleResetFilters = () => {
     setSelectedRole("");
     setFilteredTeachers(teachers);
+  };
+
+  const exportToCSV = () => {
+    const headers = [
+      "ID",
+      "Name",
+      "Email",
+      "Phone Number",
+      "Date of Birth",
+      "Gender",
+      "Role",
+      "Address",
+      "Emergency Contact",
+      "Joining Date",
+      "Experience Years",
+      "Contract Type",
+      "Work Shift",
+      "Work Location",
+      "Date of Leaving",
+      "EPF No",
+      "Basic Salary",
+      "Documents",
+    ];
+
+    const escapeCSVField = (field: any) => {
+      if (field === null || field === undefined) return "";
+      let str = String(field).trim(); // Trim leading/trailing spaces and convert to string
+      str = str.replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const rows = filteredTeachers.map((teacher) => [
+      escapeCSVField(teacher.id),
+      escapeCSVField(teacher.name),
+      escapeCSVField(teacher.email),
+      escapeCSVField(String(teacher.phoneNumber || '').trim()), // Explicit string + trim for phone
+      escapeCSVField(new Date(teacher.dateOfBirth).toLocaleDateString("en-US")),
+      escapeCSVField(teacher.gender),
+      escapeCSVField(teacher.role),
+      escapeCSVField(teacher.address || ""),
+      escapeCSVField(String(teacher.emergencyContact || '').trim()), // Explicit string + trim for emergency contact
+      escapeCSVField(new Date(teacher.joiningDate).toLocaleDateString("en-US")),
+      escapeCSVField(teacher.experienceYears),
+      escapeCSVField(teacher.contractType),
+      escapeCSVField(teacher.workShift),
+      escapeCSVField(teacher.workLocation),
+      escapeCSVField(teacher.dateOfLeaving ? new Date(teacher.dateOfLeaving).toLocaleDateString("en-US") : ""),
+      escapeCSVField(teacher.payroll?.epfNo || ""),
+      escapeCSVField(teacher.payroll?.basicSalary || ""),
+      escapeCSVField(teacher.documents?.map((doc) => doc.name).join(";") || ""),
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) => row.join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "teachers_export.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    message.success("Teachers exported to CSV successfully");
   };
 
   return (
@@ -179,7 +256,16 @@ const TeacherGrid = () => {
               </nav>
             </div>
             <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">
-              <TooltipOption />
+              {/* <TooltipOption /> */}
+              <div className="mb-2 me-2">
+                <button
+                  onClick={exportToCSV}
+                  className="btn btn-light fw-medium d-inline-flex align-items-center"
+                >
+                  <i className="ti ti-file-download me-2" />
+                  Export to CSV
+                </button>
+              </div>
               <div className="mb-2">
                 <Link
                   to={routes.addTeacher}
@@ -195,6 +281,22 @@ const TeacherGrid = () => {
           <div className="bg-white p-3 border rounded-1 d-flex align-items-center justify-content-between flex-wrap mb-4 pb-0">
             <h4 className="mb-3">Staffs Grid</h4>
             <div className="d-flex align-items-center flex-wrap">
+              <div className="me-3 mb-3">
+                <Select
+                  style={{ width: 200 }}
+                  placeholder="Select Role"
+                  value={selectedRole}
+                  onChange={(value) => setSelectedRole(value)}
+                  allowClear
+                  onClear={() => setSelectedRole("")}
+                >
+                  {roleOptions.map((option) => (
+                    <Option key={option.value} value={option.value}>
+                      {option.label}
+                    </Option>
+                  ))}
+                </Select>
+              </div>
               <div className="d-flex align-items-center bg-white border rounded-2 p-1 mb-3 me-2">
                 <Link
                   to={routes.teacherList}
@@ -229,12 +331,10 @@ const TeacherGrid = () => {
                       </Link>
                       <div className="d-flex align-items-center">
                         <span
-                          className={`badge badge-soft-${
-                            teacher.status === "Inactive" ? "danger" : "success"
-                          } d-inline-flex align-items-center me-1`}
+                          className={`badge badge-soft-${teacher.dateOfLeaving ? "danger" : "success"} d-inline-flex align-items-center me-1`}
                         >
                           <i className="ti ti-circle-filled fs-5 me-1" />
-                          {teacher.status || "Active"}
+                          {teacher.dateOfLeaving ? "Inactive" : "Active"}
                         </span>
                         <div className="dropdown">
                           <Link
@@ -256,16 +356,14 @@ const TeacherGrid = () => {
                               </Link>
                             </li>
                             <li>
-                              <button
+                              <Link
                                 className="dropdown-item rounded-1"
-                                type="button"
-                                data-bs-toggle="modal"
-                                data-bs-target="#delete-modal"
-                                onClick={() => setTeacherToDelete(teacher._id)}
+                                to="#"
+                                onClick={() => showDeleteModal(teacher._id)}
                               >
                                 <i className="ti ti-trash-x me-2" />
                                 Delete
-                              </button>
+                              </Link>
                             </li>
                           </ul>
                         </div>
@@ -305,7 +403,7 @@ const TeacherGrid = () => {
                       <div>
                         <div className="mb-2">
                           <p className="mb-0">Email</p>
-                          <p className="text-dark">{teacher.userId.email}</p>
+                          <p className="text-dark">{teacher.email}</p>
                         </div>
                         <div>
                           <p className="mb-0">Phone</p>
@@ -335,50 +433,18 @@ const TeacherGrid = () => {
         </div>
       </div>
 
-      {/* Delete Confirmation Modal */}
-      <div
-        className="modal fade"
-        id="delete-modal"
-        tabIndex={-1}
-        aria-labelledby="deleteModalLabel"
-        aria-hidden="true"
+      <Modal
+        title="Confirm Deletion"
+        open={isModalVisible}
+        onOk={handleDeleteTeacher}
+        onCancel={handleCancel}
+        okText="Delete"
+        cancelText="Cancel"
+        zIndex={10000}
+        okButtonProps={{ danger: true }}
       >
-        <div className="modal-dialog modal-dialog-centered">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h5 className="modal-title" id="deleteModalLabel">
-                Confirm Deletion
-              </h5>
-              <button
-                type="button"
-                className="btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              ></button>
-            </div>
-            <div className="modal-body">
-              Are you sure you want to delete this teacher? This action cannot be undone.
-            </div>
-            <div className="modal-footer">
-              <button
-                type="button"
-                className="btn btn-light"
-                data-bs-dismiss="modal"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-danger"
-                data-bs-dismiss="modal"
-                onClick={handleDeleteTeacher}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+        <p>Are you sure you want to delete this teacher? This action cannot be undone.</p>
+      </Modal>
 
       <TeacherModal />
     </>

@@ -143,7 +143,7 @@ const ScheduleClasses = () => {
               </nav>
             </div>
             <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">
-            <TooltipOption />
+            {/* <TooltipOption /> */}
               <div className="mb-2">
                 <Link
                   to="#"

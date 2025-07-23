@@ -11,11 +11,13 @@ const videoSchema = new mongoose.Schema({
     ref: "Session", 
     required: true 
   },
-  classId: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: "Class", 
-    required: true 
-  },
+    classId: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Class",
+        required: true,
+      },
+    ],
   name: { 
     type: String, 
     required: true 
