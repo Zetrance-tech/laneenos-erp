@@ -294,7 +294,7 @@ export const createAdvertisement = async (req, res) => {
     const userId = req.user.userId;
     let { sessionId, classId, name, description, status } = req.body;
 
-    if (!sessionId || !classId || !name || !description || !status) {
+    if (!sessionId || !classId || !name || !status) {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
@@ -360,7 +360,7 @@ export const updateAdvertisement = async (req, res) => {
     let { sessionId, classId, name, description, status } = req.body;
     const advertisementId = req.params.id;
 
-    if (!sessionId || !classId || !name || !description || !status) {
+    if (!sessionId || !classId || !name || !status) {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
 

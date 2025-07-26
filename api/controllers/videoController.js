@@ -19,7 +19,7 @@ export const createVideo = async (req, res) => {
       return res.status(400).json({ message: "Branch ID or User ID is missing" });
     }
 
-    if (!sessionId || !classId || !name || !description) {
+    if (!sessionId || !classId || !name) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
@@ -90,7 +90,7 @@ export const updateVideo = async (req, res) => {
     const videoId = req.params.id;
 
     // Validate required fields
-    if (!sessionId || !classId || !name || !description || !videoId) {
+    if (!sessionId || !classId || !name || !videoId) {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
 

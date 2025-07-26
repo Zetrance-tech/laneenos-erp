@@ -321,7 +321,7 @@ export const studentUpload = multer({
 
 export const studentDocUpload = multer({
   storage: studentDocStorage,
-  limits: { fileSize: 10 * 1024 * 1024, files: 5 }, // 10MB per file, max 5 files
+  limits: { fileSize: 10 * 1024 * 1024, files: 10 }, // 10MB per file, max 5 files
   fileFilter: pdfFileFilter
 }).array('documents'); // Allows multiple files under 'documents' field; optional (handles 0 files)
 
@@ -333,25 +333,25 @@ export const teacherUpload = multer({
 
 export const teacherDocUpload = multer({
   storage: teacherDocStorage,
-  limits: { fileSize: 10 * 1024 * 1024, files: 5 },
+  limits: { fileSize: 10 * 1024 * 1024, files: 10 },
   fileFilter: pdfFileFilter
 }).array('documents');
 
 export const albumUpload = multer({
   storage: albumStorage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB for albums
+  limits: { fileSize: 15 * 1024 * 1024 }, // 10MB for albums
   fileFilter: imageFileFilter
 });
 
 export const advertisementUpload = multer({
   storage: advertisementStorage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB for advertisements
+  limits: { fileSize: 15 * 1024 * 1024 }, // 5MB for advertisements
   fileFilter: imageFileFilter
 });
 
 export const storyUpload = multer({
   storage: storyStorage,
-  limits: { fileSize: 5 * 1024 * 1024, files: 1 }, // 5MB for stories, max 1 file
+  limits: { fileSize: 15 * 1024 * 1024, files: 1 }, // 5MB for stories, max 1 file
   fileFilter: pdfFileFilter
 });
 

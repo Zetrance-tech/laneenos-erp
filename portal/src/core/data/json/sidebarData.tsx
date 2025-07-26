@@ -310,10 +310,17 @@ export const SidebarData = (userRole: string) => {
             //   subLink5: routes.studentTimeTable,
             // },
             {
+              label: "Students Report",
+              link: routes.studentReport,
+              subLink1: routes.addStudent,
+              subLink2: routes.editStudent,
+            },
+            {
               label: "Student Promotion",
               link: routes.studentPromotion,
               allowedRoles: ["admin", "teacher"],
             },
+
           ],
         },
           // {
@@ -350,6 +357,8 @@ export const SidebarData = (userRole: string) => {
               subLink2: routes.editTeacher,
             },
             { label: "Staff List", link: routes.teacherList },
+            { label: "Staff Report", link: routes.teacherReport },
+            
              // {
             //   label: "Teacher Details",
             //   link: routes.teacherDetails,
@@ -552,25 +561,59 @@ export const SidebarData = (userRole: string) => {
         //   allowedRoles: ["admin"],
         // },
         {
-          label: "Attendance",
+          label: "Student Attendance",
           icon: "ti ti-calendar-share",
           submenu: true,
           showSubRoute: false,
           allowedRoles: ["admin", "teacher"],
           submenuItems: [
             { 
-              label: "Student Attendance", 
+              label: "Mark Student Attendance", 
               link: routes.studentAttendance,
               allowedRoles: ["admin", "teacher"],
             },
+            { 
+              label: "Student Attendance Report", 
+              link: routes.studentAttendanceReport,
+              allowedRoles: ["admin", "teacher"],
+            },
             // { 
-            //   label: "Teacher Attendance", 
-            //   link: routes.teacherAttendance,
+            //   label: "Staff Attendance", 
+            //   link: routes.staffAttendance,
             //   allowedRoles: ["admin"],
             // },
+            // { 
+            //   label: "Staff Attendance Report", 
+            //   link: routes.teacherAttendanceReport,
+            //   allowedRoles: ["admin"],
+            // },
+          ],
+        },
+        {
+          label: "Staff Attendance",
+          icon: "ti ti-calendar-share",
+          submenu: true,
+          showSubRoute: false,
+          allowedRoles: ["admin", "teacher"],
+          submenuItems: [
+            // { 
+            //   label: "Student Attendance", 
+            //   link: routes.studentAttendance,
+            //   allowedRoles: ["admin", "teacher"],
+            // },
+            // { 
+            //   label: "Student Attendance Report", 
+            //   link: routes.studentAttendanceReport,
+            //   allowedRoles: ["admin", "teacher"],
+            // },
             { 
-              label: "Staff Attendance", 
+              label: "Mark Staff Attendance", 
               link: routes.staffAttendance,
+              allowedRoles: ["admin"],
+            },
+            { 
+              label: "Staff Attendance Report", 
+              link: routes.teacherAttendanceReport,
               allowedRoles: ["admin"],
             },
           ],

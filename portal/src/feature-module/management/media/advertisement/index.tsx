@@ -126,12 +126,6 @@ const AdvertisementManager: React.FC = () => {
           b.classId && b.classId.length > 0 ? b.classId[0].name : ""
         ),
     },
-    // {
-    //   title: "Status",
-    //   dataIndex: "status",
-    //   render: (status: string) => status.charAt(0).toUpperCase() + status.slice(1),
-    //   sorter: (a: Advertisement, b: Advertisement) => a.status.localeCompare(b.status),
-    // },
     {
           title: "Status",
           dataIndex: "status",
@@ -327,7 +321,7 @@ const AdvertisementManager: React.FC = () => {
   };
 
   const handleAddAdvertisement = async () => {
-    if (!formData.sessionId || formData.classId.length === 0 || !formData.name || !formData.description || !formData.status || !formData.image) {
+    if (!formData.sessionId || formData.classId.length === 0 || !formData.name || !formData.status || !formData.image) {
       toast.error("All fields are required, including at least one class and an image");
       return;
     }
@@ -830,9 +824,10 @@ const AdvertisementManager: React.FC = () => {
                 >
                   {fileList.length >= 1 ? null : uploadButton}
                 </Upload>
+                <div style={{ fontSize: '12px', color: '#888' }}>Max file size: 15 MB</div>
               </div>
               <div className="col-md-12 mb-3">
-                <label className="form-label">Description *</label>
+                <label className="form-label">Description</label>
                 <TextArea
                   value={formData.description}
                   onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
@@ -965,7 +960,7 @@ const AdvertisementManager: React.FC = () => {
                 </Upload>
               </div>
               <div className="col-md-12 mb-3">
-                <label className="form-label">Description *</label>
+                <label className="form-label">Description</label>
                 <TextArea
                   value={formData.description}
                   onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
@@ -1056,7 +1051,7 @@ const AdvertisementManager: React.FC = () => {
               </div>
               <div className="col-md-12 mb-3">
                 <label className="form-label">Description</label>
-                <TextArea value={viewAdvertisement.description || "N/A"} readOnly rows={4} />
+                <TextArea value={viewAdvertisement.description || " "} readOnly rows={4} />
               </div>
             </div>
           )}

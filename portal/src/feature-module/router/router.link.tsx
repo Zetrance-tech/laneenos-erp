@@ -47,6 +47,7 @@ import Error404 from "../pages/error/error-404";
 import Error500 from "../pages/error/error-500";
 import Preference from "../settings/websiteSettings/preference";
 import UnderMaintenance from "../pages/underMaintenance";
+import AttendanceReport from "../hrm/attendance/student-attendance-report"
 import Todo from "../application/todo";
 import Email from "../application/email";
 import Chat from "../application/chat";
@@ -127,6 +128,7 @@ import ExamAttendance from "../academic/examinations/exam-attendance";
 import StudentPromotion from "../peoples/students/student-promotion";
 import TeacherGrid from "../peoples/teacher/teacher-grid";
 import TeacherForm from "../peoples/teacher/teacherForm";
+import StudentReport from "../peoples/students/student-report";
 import ClassTimetable from "../academic/class-timetable";
 import Payroll from "../hrm/payroll";
 import Holiday from "../hrm/holidays";
@@ -235,15 +237,13 @@ import SuperAdminDashboard from "../mainMenu/superAdminDashboard";
 import FeesReport from "../report/fees-report/feesReport";
 import LeaveReport from "../report/leave-report/leaveReport";
 import GradeReport from "../report/grade-report/gradeReport";
-import StudentReport from "../report/student-report/studentReport";
 import ClassReport from "../report/class-report/classReport";
-import AttendanceReport from "../report/attendance-report/attendanceReport";
+// import AttendanceReport from "../report/attendance-report/attendanceReport";
 import ContactMessages from "../support/contactMessages";
 import Events from "../announcements/events";
 import Profile from "../pages/profile";
 import StudentAttendanceType from "../report/attendance-report/studentAttendanceType";
-import StaffReport from "../report/attendance-report/staffReport";
-import TeacherReport from "../report/attendance-report/teacherReport";
+import StaffReport from "../peoples/teacher/teacher-report";
 import StaffDayWise from "../report/attendance-report/staffDayWise";
 import TeacherDayWise from "../report/attendance-report/teacherDayWise";
 import StudentDayWise from "../report/attendance-report/studentDayWise";
@@ -275,6 +275,7 @@ import AlbumManager from "../management/media/album";
 import AdvertisementManager from "../management/media/advertisement";
 import StoriesManager from "../management/media/stories";
 import VideoManager from "../management/media/videos";
+import StaffAttendanceReport from "../hrm/attendance/teacher-attendance-report";
 const routes = all_routes;
 interface StudentLeaves {
   admissionNumber: string; // Updated prop name to match API field
@@ -914,10 +915,16 @@ export const publicRoutes = [
     path: routes.gradeReport,
     element: <GradeReport />,
   },
+  // {
+  //   path: routes.studentReport,
+  //   element: <StudentReport />,
+  // },
+  
   {
-    path: routes.studentReport,
-    element: <StudentReport />,
+    path: routes.teacherReport,
+    element: <StaffReport/>,
   },
+  
   {
     path: routes.classReport,
     element: <ClassReport />,
@@ -948,7 +955,7 @@ export const publicRoutes = [
   },
   {
     path: routes.teacherReport,
-    element: <TeacherReport />,
+    element: <StaffReport />,
   },
   {
     path: routes.staffReport,
@@ -977,6 +984,10 @@ export const protectedPublicRoutes = [
   {
     path: routes.studentGrid,
     element: <StudentGrid />,
+  },
+  {
+    path: routes.studentReport,
+    element: <StudentReport />,
   },
   {
     path: routes.adminDashboard,
@@ -1039,6 +1050,14 @@ export const protectedPublicRoutes = [
   {
     path: routes.studentResult,
     element: <StudentResult />,
+  },
+  {
+    path: routes.studentAttendanceReport,
+    element: <AttendanceReport />,
+  },
+  {
+    path: routes.teacherAttendanceReport,
+    element: <StaffAttendanceReport />,
   },
   {
     path: routes.addBranch,

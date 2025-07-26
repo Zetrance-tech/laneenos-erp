@@ -299,7 +299,7 @@ const VideoManager: React.FC = () => {
   };
 
   const handleAddVideo = async () => {
-    if (!formData.sessionId || formData.classId.length === 0 || !formData.name || !formData.description || !formData.video) {
+    if (!formData.sessionId || formData.classId.length === 0 || !formData.name || !formData.video) {
       toast.error("All fields are required, including at least one class and a video");
       return;
     }
@@ -781,9 +781,11 @@ const VideoManager: React.FC = () => {
                 >
                   {fileList.length >= 1 ? null : uploadButton}
                 </Upload>
+                <div style={{ fontSize: '12px', color: '#888' }}>Max Video size: 40MB</div>
+
               </div>
               <div className="col-md-12 mb-3">
-                <label className="form-label">Description *</label>
+                <label className="form-label">Description</label>
                 <TextArea
                   value={formData.description}
                   onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
@@ -905,7 +907,7 @@ const VideoManager: React.FC = () => {
                 </Upload>
               </div>
               <div className="col-md-12 mb-3">
-                <label className="form-label">Description *</label>
+                <label className="form-label">Description</label>
                 <TextArea
                   value={formData.description}
                   onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
@@ -991,7 +993,7 @@ const VideoManager: React.FC = () => {
               </div>
               <div className="col-md-12 mb-3">
                 <label className="form-label">Description</label>
-                <TextArea value={viewVideo.description || "N/A"} readOnly rows={4} />
+                <TextArea value={viewVideo.description || " "} readOnly rows={4} />
               </div>
             </div>
           )}

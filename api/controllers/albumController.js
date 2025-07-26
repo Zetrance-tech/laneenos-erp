@@ -19,7 +19,7 @@ export const createAlbum = async (req, res) => {
       return res.status(400).json({ message: "Branch ID or User ID is missing" });
     }
 
-    if (!Array.isArray(classIds) || classIds.length === 0 || !sessionId || !name || !description) {
+    if (!Array.isArray(classIds) || classIds.length === 0 || !sessionId || !name) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
@@ -82,7 +82,7 @@ export const updateAlbum = async (req, res) => {
     const { sessionId, classId: classIds, name, description, imagesToDelete } = req.body;
     const albumId = req.params.id;
 
-    if (!sessionId || !Array.isArray(classIds) || classIds.length === 0 || !name || !description || !albumId) {
+    if (!sessionId || !Array.isArray(classIds) || classIds.length === 0 || !name || !albumId) {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
 

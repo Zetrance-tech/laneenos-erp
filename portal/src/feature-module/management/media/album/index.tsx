@@ -306,7 +306,7 @@ const AlbumManager: React.FC = () => {
   };
 
   const handleAddAlbum = async () => {
-    if (!formData.sessionId || formData.classId.length === 0 || !formData.name || !formData.description || formData.images.length === 0) {
+    if (!formData.sessionId || formData.classId.length === 0 || !formData.name || formData.images.length === 0) {
       toast.error("All fields are required, including at least one class and one image");
       return;
     }
@@ -795,9 +795,11 @@ const AlbumManager: React.FC = () => {
                 >
                   {fileList.length >= 10 ? null : uploadButton}
                 </Upload>
+                <div style={{ fontSize: '12px', color: '#888' }}>Max file size: 15 MB</div>
+                <div style={{ fontSize: '12px', color: '#888' }}>Max Number of files: 10</div>
               </div>
               <div className="col-md-12 mb-3">
-                <label className="form-label">Description *</label>
+                <label className="form-label">Description</label>
                 <TextArea
                   value={formData.description}
                   onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
@@ -921,7 +923,7 @@ const AlbumManager: React.FC = () => {
                 </Upload>
               </div>
               <div className="col-md-12 mb-3">
-                <label className="form-label">Description *</label>
+                <label className="form-label">Description</label>
                 <TextArea
                   value={formData.description}
                   onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
@@ -1010,7 +1012,7 @@ const AlbumManager: React.FC = () => {
               </div>
               <div className="col-md-12 mb-3">
                 <label className="form-label">Description</label>
-                <TextArea value={viewAlbum.description || "N/A"} readOnly rows={4} />
+                <TextArea value={viewAlbum.description || " "} readOnly rows={4} />
               </div>
             </div>
           )}

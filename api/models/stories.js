@@ -24,7 +24,6 @@ classId: [
   },
   description: {
     type: String,
-    required: true,
   },
   pdfs: [{
     filename: String,

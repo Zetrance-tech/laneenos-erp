@@ -315,7 +315,6 @@ const StoriesManager: React.FC = () => {
       !formData.sessionId ||
       formData.classId.length === 0 ||
       !formData.name ||
-      !formData.description ||
       !formData.pdf
     ) {
       toast.error("All fields are required, including at least one class and a PDF file");
@@ -853,9 +852,10 @@ const StoriesManager: React.FC = () => {
                     </div>
                   )}
                 </Upload>
+                <div style={{ fontSize: '12px', color: '#888' }}>Max PDF size: 15MB</div>
               </div>
               <div className="col-md-12 mb-3">
-                <label className="form-label">Description *</label>
+                <label className="form-label">Description</label>
                 <TextArea
                   value={formData.description}
                   onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
@@ -983,7 +983,7 @@ const StoriesManager: React.FC = () => {
                 </Upload>
               </div>
               <div className="col-md-12 mb-3">
-                <label className="form-label">Description *</label>
+                <label className="form-label">Description</label>
                 <TextArea
                   value={formData.description}
                   onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
@@ -1079,7 +1079,7 @@ const StoriesManager: React.FC = () => {
               <div className="col-md-12 mb-3">
                 <label className="form-label">Description</label>
                 <TextArea
-                  value={viewStory.description || "N/A"}
+                  value={viewStory.description || " "}
                   readOnly
                   rows={4}
                 />

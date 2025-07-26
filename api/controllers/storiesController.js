@@ -18,7 +18,7 @@ export const createStory = async (req, res) => {
       return res.status(400).json({ message: 'Branch ID or User ID is missing' });
     }
 
-    if (!sessionId || !classId || !name || !description) {
+    if (!sessionId || !classId || !name) {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
@@ -93,7 +93,7 @@ export const updateStory = async (req, res) => {
     const { sessionId, classId, name, description, pdfsToDelete } = req.body;
     const storyId = req.params.id;
 
-    if (!sessionId || !classId || !name || !description || !storyId) {
+    if (!sessionId || !classId || !name || !storyId) {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
 
