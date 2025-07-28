@@ -69,49 +69,6 @@ export const SidebarData = (userRole: string) => {
           showSubRoute: false,
           allowedRoles: [normalizedUserRole],
         },
-          // {
-        //   label: "Application",
-        //   icon: "ti ti-layout-list",
-        //   submenu: true,
-        //   showSubRoute: false,
-        //   submenuItems: [
-        //     {
-        //       label: "Chat",
-        //       link: routes.chat,
-        //       showSubRoute: false,
-        //     },
-        //     {
-        //       label: "Call",
-        //       link: routes.audioCall,
-        //       showSubRoute: false,
-        //     },
-        //     {
-        //       label: "Calendar",
-        //       link: routes.calendar,
-        //       showSubRoute: false,
-        //     },
-        //     {
-        //       label: "Email",
-        //       link: routes.email,
-        //       showSubRoute: false,
-        //     },
-        //     {
-        //       label: "To Do",
-        //       link: routes.todo,
-        //       showSubRoute: false,
-        //     },
-        //     {
-        //       label: "Notes",
-        //       link: routes.notes,
-        //       showSubRoute: false,
-        //     },
-        //     {
-        //       label: "File Manager",
-        //       link: routes.fileManager,
-        //       showSubRoute: false,
-        //     },
-        //   ],
-        // },
       ],
     },
     {
@@ -189,41 +146,6 @@ export const SidebarData = (userRole: string) => {
             { label: "All Classes", link: routes.classes },
           ],
         },
-        // {
-        //   label: "Class Room",
-        //   link: routes.classRoom,
-        //   icon: "ti ti-building",
-        //   showSubRoute: false,
-        //   submenu: false,
-        // },
-        // {
-        //   label: "Class Routine",
-        //   link: routes.classRoutine,
-        //   icon: "ti ti-bell-school",
-        //   showSubRoute: false,
-        //   submenu: false,
-        // },
-        // {
-        //   label: "Section",
-        //   link: routes.classSection,
-        //   icon: "ti ti-square-rotated-forbid-2",
-        //   showSubRoute: false,
-        //   submenu: false,
-        // },
-        // {
-        //   label: "Subject",
-        //   link: routes.classSubject,
-        //   icon: "ti ti-book",
-        //   showSubRoute: false,
-        //   submenu: false,
-        // },
-        // {
-        //   label: "Syllabus",
-        //   link: routes.classSyllabus,
-        //   icon: "ti ti-book-upload",
-        //   showSubRoute: false,
-        //   submenu: false,
-        // },
         {
           label: "Planner",
           link: routes.classTimetable,
@@ -256,26 +178,6 @@ export const SidebarData = (userRole: string) => {
           submenu: false,
           allowedRoles: ["admin"],
         },
-        // {
-        //   label: "Examinations",
-        //   icon: "ti ti-hexagonal-prism-plus",
-        //   submenu: true,
-        //   showSubRoute: false,
-        //   submenuItems: [
-        //     { label: "Exam", link: routes.exam },
-        //     { label: "Exam Schedule", link: routes.examSchedule },
-        //     { label: "Grade", link: routes.grade },
-        //     { label: "Exam Attendance", link: routes.examAttendance },
-        //     { label: "Exam Results", link: routes.examResult },
-        //   ],
-        // },
-        // {
-        //   label: "Reasons",
-        //   link: routes.AcademicReason,
-        //   icon: "ti ti-lifebuoy",
-        //   showSubRoute: false,
-        //   submenu: false,
-        // },
       ],
     },
     {
@@ -309,40 +211,15 @@ export const SidebarData = (userRole: string) => {
             //   subLink4: routes.studentLeaves,
             //   subLink5: routes.studentTimeTable,
             // },
-            {
-              label: "Students Report",
-              link: routes.studentReport,
-              subLink1: routes.addStudent,
-              subLink2: routes.editStudent,
-            },
-            {
-              label: "Student Promotion",
-              link: routes.studentPromotion,
-              allowedRoles: ["admin", "teacher"],
-            },
+            
+            // {
+            //   label: "Student Promotion",
+            //   link: routes.studentPromotion,
+            //   allowedRoles: ["admin", "teacher"],
+            // },
 
           ],
         },
-          // {
-        //   label: "Parents",
-        //   icon: "ti ti-user-bolt",
-        //   showSubRoute: false,
-        //   submenu: true,
-        //   submenuItems: [
-        //     { label: "All Parents", link: routes.parentGrid },
-        //     { label: "Parents List", link: routes.parentList },
-        //   ],
-        // },
-        // {
-        //   label: "Guardians",
-        //   icon: "ti ti-user-shield",
-        //   showSubRoute: false,
-        //   submenu: true,
-        //   submenuItems: [
-        //     { label: "All Guardians", link: routes.guardiansGrid },
-        //     { label: "Guardians List", link: routes.guardiansList },
-        //   ],
-        // },
         {
           label: "Staff",
           icon: "ti ti-users",
@@ -357,17 +234,7 @@ export const SidebarData = (userRole: string) => {
               subLink2: routes.editTeacher,
             },
             { label: "Staff List", link: routes.teacherList },
-            { label: "Staff Report", link: routes.teacherReport },
-            
-             // {
-            //   label: "Teacher Details",
-            //   link: routes.teacherDetails,
-            //   allowedRoles: ["admin", "teacher"],
-            //   subLink1: routes.teacherLibrary,
-            //   subLink2: routes.teacherSalary,
-            //   subLink3: routes.teacherLeaves,
-            // },
-            // { label: "Routine", link: routes.teachersRoutine, allowedRoles: ["admin", "teacher"], },
+          
           ],
         },
         {
@@ -443,18 +310,6 @@ export const SidebarData = (userRole: string) => {
             },
           ],
         },
-        // {
-        //   label: "Library",
-        //   icon: "ti ti-notebook",
-        //   submenu: true,
-        //   showSubRoute: false,
-        //   submenuItems: [
-        //     { label: "Library Members", link: routes.libraryMembers },
-        //     { label: "Books", link: routes.libraryBooks },
-        //     { label: "Issue Book", link: routes.libraryIssueBook },
-        //     { label: "Return", link: routes.libraryReturn },
-        //   ],
-        // },
         {
           label: "Expenses",
           link: routes.expenses,
@@ -494,37 +349,6 @@ export const SidebarData = (userRole: string) => {
             { label: "Videos", link: routes.videos },
           ],
         },
-        // {
-        //   label: "Players",
-        //   link: routes.playerList,
-        //   icon: "ti ti-play-football",
-        //   showSubRoute: false,
-        //   submenu: false,
-        // },
-        // {
-        //   label: "Hostel",
-        //   icon: "ti ti-building-fortress",
-        //   submenu: true,
-        //   showSubRoute: false,
-        //   submenuItems: [
-        //     { label: "Hostel List", link: routes.hostelList },
-        //     { label: "Hostel Rooms", link: routes.hostelRoom },
-        //     { label: "Room Type", link: routes.hostelType },
-        //   ],
-        // },
-        // {
-        //   label: "Transport",
-        //   icon: "ti ti-bus",
-        //   submenu: true,
-        //   showSubRoute: false,
-        //   submenuItems: [
-        //     { label: "Routes", link: routes.transportRoutes },
-        //     { label: "Pickup Points", link: routes.transportPickupPoints },
-        //     { label: "Vehicle Drivers", link: routes.transportVehicleDrivers },
-        //     { label: "Vehicle", link: routes.transportVehicle },
-        //     { label: "Assign Vehicle", link: routes.transportAssignVehicle },
-        //   ],
-        // },
       ],
     },
     {
@@ -534,89 +358,21 @@ export const SidebarData = (userRole: string) => {
       allowedRoles: ["admin", "teacher"],
       showSubRoute: false,
       submenuItems: [
-        // {
-        //   label: "Staffs",
-        //   link: routes.staff,
-        //   subLink1: routes.addStaff,
-        //   subLink2: routes.editStaff,
-        //   icon: "ti ti-users-group",
-        //   showSubRoute: false,
-        //   submenu: false,
-        //   allowedRoles: ["admin"],
-        // },
-        // {
-        //   label: "Departments",
-        //   link: routes.departments,
-        //   icon: "ti ti-layout-distribute-horizontal",
-        //   showSubRoute: false,
-        //   submenu: false,
-        //   allowedRoles: ["admin"],
-        // },
-        // {
-        //   label: "Designation",
-        //   link: routes.designation,
-        //   icon: "ti ti-user-exclamation",
-        //   showSubRoute: false,
-        //   submenu: false,
-        //   allowedRoles: ["admin"],
-        // },
         {
           label: "Student Attendance",
           icon: "ti ti-calendar-share",
-          submenu: true,
+          submenu: false,
           showSubRoute: false,
           allowedRoles: ["admin", "teacher"],
-          submenuItems: [
-            { 
-              label: "Mark Student Attendance", 
-              link: routes.studentAttendance,
-              allowedRoles: ["admin", "teacher"],
-            },
-            { 
-              label: "Student Attendance Report", 
-              link: routes.studentAttendanceReport,
-              allowedRoles: ["admin", "teacher"],
-            },
-            // { 
-            //   label: "Staff Attendance", 
-            //   link: routes.staffAttendance,
-            //   allowedRoles: ["admin"],
-            // },
-            // { 
-            //   label: "Staff Attendance Report", 
-            //   link: routes.teacherAttendanceReport,
-            //   allowedRoles: ["admin"],
-            // },
-          ],
+          link: routes.studentAttendance,
         },
         {
           label: "Staff Attendance",
           icon: "ti ti-calendar-share",
-          submenu: true,
+          submenu: false,
           showSubRoute: false,
-          allowedRoles: ["admin", "teacher"],
-          submenuItems: [
-            // { 
-            //   label: "Student Attendance", 
-            //   link: routes.studentAttendance,
-            //   allowedRoles: ["admin", "teacher"],
-            // },
-            // { 
-            //   label: "Student Attendance Report", 
-            //   link: routes.studentAttendanceReport,
-            //   allowedRoles: ["admin", "teacher"],
-            // },
-            { 
-              label: "Mark Staff Attendance", 
-              link: routes.staffAttendance,
-              allowedRoles: ["admin"],
-            },
-            { 
-              label: "Staff Attendance Report", 
-              link: routes.teacherAttendanceReport,
-              allowedRoles: ["admin"],
-            },
-          ],
+          link: routes.staffAttendance,
+          allowedRoles: ["admin"],
         },
         {
           label: "Leaves",
@@ -629,22 +385,64 @@ export const SidebarData = (userRole: string) => {
             { label: "Approve Request", link: routes.approveRequest },
           ],
         },
-        // {
-        //   label: "Holidays",
-        //   link: routes.holidays,
-        //   icon: "ti ti-briefcase",
-        //   showSubRoute: false,
-        //   allowedRoles: ["admin"],
-        //   submenu: false,
-        // },
-        // {
-        //   label: "Payroll",
-        //   link: routes.payroll,
-        //   icon: "ti ti-moneybag",
-        //   showSubRoute: false,
-        //   submenu: false,
-        //   allowedRoles: ["admin"],
-        // },
+       
+      ],
+    },
+    {
+      label: "REPORTS",
+      submenuOpen: true,
+      submenuHdr: "Reports",
+      allowedRoles: ["admin", "teacher"],
+      showSubRoute: false,
+      submenuItems: [
+        {
+          label: "Student",
+          icon: "ti ti-calendar-share",
+          submenu: true,
+          showSubRoute: false,
+          allowedRoles: ["admin", "teacher"],
+          submenuItems: [
+            {
+              label: "Student Report",
+              link: routes.studentReport,
+              subLink1: routes.addStudent,
+              subLink2: routes.editStudent,
+            },
+            { 
+              label: "Student Attendance Report", 
+              link: routes.studentAttendanceReport,
+              allowedRoles: ["admin", "teacher"],
+            },
+          ],
+        },
+        {
+          label: "Staff",
+          icon: "ti ti-calendar-share",
+          submenu: true,
+          showSubRoute: false,
+          allowedRoles: ["admin"],
+          submenuItems: [
+            { 
+              label: "Staff Report", 
+              allowedRoles: ["admin"],
+              link: routes.teacherReport 
+            },
+            { 
+              label: "Staff Attendance Report", 
+              link: routes.teacherAttendanceReport,
+              allowedRoles: ["admin"],
+            },
+          ],
+        },
+        {
+          label: "Fees",
+          icon: "ti ti-calendar-share",
+          showSubRoute: false,
+          allowedRoles: ["admin"],
+          link:routes.feeReport
+        },
+        
+        
       ],
     },
     {

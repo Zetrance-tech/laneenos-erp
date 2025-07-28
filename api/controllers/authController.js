@@ -90,7 +90,7 @@ import User from "../models/user.js";
 import { generateToken } from "../utils/jwt.js";
 import bcrypt from "bcryptjs";
 import Student from "../models/student.js";
-
+import Branch from "../models/branch.js";
 // Signup Controller (Restricted to Parent and Teacher)
 export const signup = async (req, res) => {
   const { name, email, password, phone, role } = req.body;
@@ -383,5 +383,79 @@ export const editAdmin = async (req, res) => {
     res.status(200).json({ message: "Admin updated successfully", admin: { name, email, phone, status } });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+export const getAdminProfile = async (req, res) => {
+  try {
+    const { userId } = req.user; // Assume this is set by authentication middleware
+
+    const user = await User.findById(userId)
+      .populate({
+        path: 'branchId',
+        select: 'name', // Only fetch branch name
+        model: Branch,
+      });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (user.role !== 'admin' && user.role !== 'superadmin') {
+      return res.status(403).json({ message: 'Access restricted to admin users' });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone || '',
+        role: user.role,
+        status: user.status,
+        lastLogin: user.lastLogin,
+        photo: user.photo || '',
+        branchId: user.branchId?._id || null,
+        branchName: user.branchId?.name || '',
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching admin profile:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+// Controller to handle admin profile photo upload
+export const uploadAdminProfilePhoto = async (req, res) => {
+  try {
+    const { userId } = req.user;
+    const user = await User.findById(userId);
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (user.role !== 'admin' && user.role !== 'superadmin') {
+      return res.status(403).json({ message: 'Access restricted to admin users' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    const photoPath = `admins/${req.file.filename}`;
+    
+    // Optionally, update the user model with the photo path (requires adding a photo field to userSchema)
+    user.photo = photoPath;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile photo uploaded successfully',
+      photoPath,
+    });
+  } catch (error) {
+    console.error('Error uploading admin profile photo:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };

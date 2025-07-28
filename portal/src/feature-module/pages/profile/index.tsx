@@ -1,577 +1,179 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, ChangeEvent } from "react";
 import { Link } from "react-router-dom";
-import ImageWithBasePath from "../../../core/common/imageWithBasePath";
 import { all_routes } from "../../router/all_routes";
 import { OverlayTrigger, Tooltip } from "react-bootstrap";
-type PasswordField =
-  | "oldPassword"
-  | "newPassword"
-  | "confirmPassword"
-  | "currentPassword";
+import { useAuth } from "../../../context/AuthContext";
+import axios from "axios";
+import { Spin, message, Descriptions, Upload, Button } from "antd";
+import { UploadOutlined } from "@ant-design/icons";
 
-const Profile = () => {
-  const route = all_routes;
-  const [passwordVisibility, setPasswordVisibility] = useState({
-    oldPassword: false,
-    newPassword: false,
-    confirmPassword: false,
-    currentPassword: false,
-  });
+const API_URL = process.env.REACT_APP_URL;
 
-  const togglePasswordVisibility = (field: PasswordField) => {
-    setPasswordVisibility((prevState) => ({
-      ...prevState,
-      [field]: !prevState[field],
-    }));
+interface AdminData {
+  name: string;
+  email: string;
+  phone?: string;
+  role: string;
+  status: string;
+  lastLogin?: string;
+  photo?: string;
+  branchId?: string;
+  branchName?: string;
+}
+
+const Profilesettings: React.FC = () => {
+  const routes = all_routes;
+  const { token, user } = useAuth();
+  const [adminData, setAdminData] = useState<AdminData | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [photo, setPhoto] = useState<string>("assets/img/teachers/teacher-01.jpg");
+
+  const fetchAdminProfile = async () => {
+    try {
+      setIsLoading(true);
+      const response = await axios.get(`${API_URL}/api/auth/profile`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data: AdminData = response.data.data;
+      setAdminData(data);
+      setPhoto(data.photo ? `${API_URL}/${data.photo}` : "assets/img/teachers/teacher-01.jpg");
+    } catch (error) {
+      console.error("Error fetching admin profile:", error);
+      message.error("Failed to fetch profile data");
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  const handlePhotoChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const formData = new FormData();
+      formData.append("profilePhoto", file);
+      try {
+        setIsLoading(true);
+        const response = await axios.post(`${API_URL}/api/auth/upload-photo`, formData, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
+          },
+        });
+        message.success("Profile photo uploaded successfully");
+        await fetchAdminProfile();
+      } catch (error) {
+        console.error("Error uploading photo:", error);
+        message.error("Failed to upload profile photo");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (user?.role === "admin" || user?.role === "superadmin") {
+      fetchAdminProfile();
+    }
+  }, [user]);
+
+  if (user?.role !== "admin" && user?.role !== "superadmin") {
+    return <div>Access Denied: Admin privileges required</div>;
+  }
+
   return (
-    <div>
-      <>
-        {/* Page Wrapper */}
-        <div className="page-wrapper">
-          <div className="content">
-            <div className="d-md-flex d-block align-items-center justify-content-between border-bottom pb-3">
-              <div className="my-auto mb-2">
-                <h3 className="page-title mb-1">Profile</h3>
-                <nav>
-                  <ol className="breadcrumb mb-0">
-                    <li className="breadcrumb-item">
-                      <Link to={route.adminDashboard}>Dashboard</Link>
-                    </li>
-                    <li className="breadcrumb-item">
-                      <Link to="#">Settings</Link>
-                    </li>
-                    <li className="breadcrumb-item active" aria-current="page">
-                      Profile
-                    </li>
-                  </ol>
-                </nav>
-              </div>
-              <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">
-                <div className="pe-1 mb-2">
-                  <OverlayTrigger
-                    placement="top"
-                    overlay={<Tooltip id="tooltip-top">Refresh</Tooltip>}
-                  >
-                    <Link
-                      to="#"
-                      className="btn btn-outline-light bg-white btn-icon me-1"
+    <div className="page-wrapper">
+      <div className="content">
+        <div className="d-md-flex d-block align-items-center justify-content-between border-bottom pb-3">
+          <div className="my-auto mb-2">
+            <h3 className="page-title mb-1">Profile Settings</h3>
+            <nav>
+              <ol className="breadcrumb mb-0">
+                <li className="breadcrumb-item">
+                  <Link to={routes.adminDashboard}>Dashboard</Link>
+                </li>
+                <li className="breadcrumb-item">
+                  <Link to="#">Settings</Link>
+                </li>
+                <li className="breadcrumb-item active" aria-current="page">
+                  Profile Settings
+                </li>
+              </ol>
+            </nav>
+          </div>
+          <div className="d-flex my-xl-auto right-content align-items-center flex-wrap">
+            <div className="pe-1 mb-2">
+              <OverlayTrigger
+                placement="top"
+                overlay={<Tooltip id="tooltip-top">Refresh</Tooltip>}
+              >
+                <button
+                  className="btn btn-outline-light bg-white btn-icon me-1"
+                  onClick={fetchAdminProfile}
+                >
+                  <i className="ti ti-refresh" />
+                </button>
+              </OverlayTrigger>
+            </div>
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "200px" }}>
+            <Spin size="large" />
+          </div>
+        ) : (
+          <div className="row">
+            <div className="col-xxl-10 col-xl-9">
+              <div className="card">
+                <div className="card-header p-3">
+                  <h5>Profile Photo</h5>
+                </div>
+                <div className="card-body p-3 pb-0">
+                  <div className="text-center mb-3">
+                    <img
+                      src={photo}
+                      alt="Profile"
+                      style={{ width: "120px", height: "120px", borderRadius: "50%", objectFit: "cover" }}
+                    />
+                  </div>
+                  <div className="text-center mb-4">
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={handlePhotoChange}
+                      className="form-control w-auto mx-auto"
+                    />
+                  </div>
+
+                  {adminData && (
+                    <Descriptions
+                      bordered
+                      column={1}
+                      size="middle"
+                      title="Admin Details"
                     >
-                      <i className="ti ti-refresh" />
-                    </Link>
-                  </OverlayTrigger>
+                      <Descriptions.Item label="Name">{adminData.name}</Descriptions.Item>
+                      <Descriptions.Item label="Email">{adminData.email}</Descriptions.Item>
+                      <Descriptions.Item label="Phone">{adminData.phone || "N/A"}</Descriptions.Item>
+                      <Descriptions.Item label="Role">{adminData.role}</Descriptions.Item>
+                      <Descriptions.Item label="Status">{adminData.status}</Descriptions.Item>
+                      {adminData.lastLogin && (
+                        <Descriptions.Item label="Last Login">
+                          {new Date(adminData.lastLogin).toLocaleString()}
+                        </Descriptions.Item>
+                      )}
+                      {adminData.branchName && (
+                        <Descriptions.Item label="Branch Name">{adminData.branchName}</Descriptions.Item>
+                      )}
+                    </Descriptions>
+                  )}
                 </div>
-              </div>
-            </div>
-            <div className="d-md-flex d-block mt-3">
-              <div className="settings-right-sidebar me-md-3 border-0">
-                <div className="card">
-                  <div className="card-header">
-                    <h5>Personal Information</h5>
-                  </div>
-                  <div className="card-body ">
-                    <div className="settings-profile-upload">
-                      <span className="profile-pic">
-                        <ImageWithBasePath
-                          src="assets/img/profiles/avatar-27.jpg"
-                          alt="Profile"
-                        />
-                      </span>
-                      <div className="title-upload">
-                        <h5>Edit Your Photo</h5>
-                        <Link to="#" className="me-2">
-                          Delete{" "}
-                        </Link>
-                        <Link to="#" className="text-primary">
-                          Update
-                        </Link>
-                      </div>
-                    </div>
-                    <div className="profile-uploader profile-uploader-two mb-0">
-                      <span className="upload-icon">
-                        <i className="ti ti-upload" />
-                      </span>
-                      <div className="drag-upload-btn bg-transparent me-0 border-0">
-                        <p className="upload-btn">
-                          <span>Click to Upload</span> or drag and drop
-                        </p>
-                        <h6>JPG or PNG</h6>
-                        <h6>(Max 450 x 450 px)</h6>
-                      </div>
-                      <input
-                        type="file"
-                        className="form-control"
-                        multiple
-                        id="image_sign"
-                      />
-                      <div id="frames" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex-fill ps-0 border-0">
-                <form>
-                  <div className="d-md-flex">
-                    <div className="flex-fill">
-                      <div className="card">
-                        <div className="card-header d-flex justify-content-between align-items-center">
-                          <h5>Personal Information</h5>
-                          <Link
-                            to="#"
-                            className="btn btn-primary btn-sm"
-                            data-bs-toggle="modal"
-                            data-bs-target="#edit_personal_information"
-                          >
-                            <i className="ti ti-edit me-2" />
-                            Edit
-                          </Link>
-                        </div>
-                        <div className="card-body pb-0">
-                          <div className="d-block d-xl-flex">
-                            <div className="mb-3 flex-fill me-xl-3 me-0">
-                              <label className="form-label">First Name</label>
-                              <input
-                                type="text"
-                                className="form-control"
-                                placeholder="Enter First Name"
-                              />
-                            </div>
-                            <div className="mb-3 flex-fill">
-                              <label className="form-label">Last Name</label>
-                              <input
-                                type="text"
-                                className="form-control"
-                                placeholder="Enter Last Name"
-                              />
-                            </div>
-                          </div>
-                          <div className="mb-3">
-                            <label className="form-label">Email Address</label>
-                            <input
-                              type="email"
-                              className="form-control"
-                              placeholder="Enter Email"
-                            />
-                          </div>
-                          <div className="d-block d-xl-flex">
-                            <div className="mb-3 flex-fill me-xl-3 me-0">
-                              <label className="form-label">User Name</label>
-                              <input
-                                type="email"
-                                className="form-control"
-                                placeholder="Enter User Name"
-                              />
-                            </div>
-                            <div className="mb-3 flex-fill">
-                              <label className="form-label">Phone Number</label>
-                              <input
-                                type="email"
-                                className="form-control"
-                                placeholder="Enter Phone Number"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="card">
-                        <div className="card-header d-flex justify-content-between align-items-center">
-                          <h5>Address Information</h5>
-                          <Link
-                            to="#"
-                            className="btn btn-primary btn-sm"
-                            data-bs-toggle="modal"
-                            data-bs-target="#edit_address_information"
-                          >
-                            <i className="ti ti-edit me-2" />
-                            Edit
-                          </Link>
-                        </div>
-                        <div className="card-body pb-0">
-                          <div className="mb-3">
-                            <label className="form-label">Address</label>
-                            <input
-                              type="text"
-                              className="form-control"
-                              placeholder="Enter Address"
-                            />
-                          </div>
-                          <div className="d-block d-xl-flex">
-                            <div className="mb-3 flex-fill me-xl-3 me-0">
-                              <label className="form-label">Country</label>
-                              <input
-                                type="text"
-                                className="form-control"
-                                placeholder="Enter Country"
-                              />
-                            </div>
-                            <div className="mb-3 flex-fill">
-                              <label className="form-label">
-                                State / Province
-                              </label>
-                              <input
-                                type="email"
-                                className="form-control"
-                                placeholder="Enter State"
-                              />
-                            </div>
-                          </div>
-                          <div className="d-block d-xl-flex">
-                            <div className="mb-3 flex-fill me-xl-3 me-0">
-                              <label className="form-label">City</label>
-                              <input
-                                type="email"
-                                className="form-control"
-                                placeholder="City"
-                              />
-                            </div>
-                            <div className="mb-3 flex-fill">
-                              <label className="form-label">Postal Code</label>
-                              <input
-                                type="email"
-                                className="form-control"
-                                placeholder="Enter Postal Code"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="card">
-                        <div className="card-header d-flex justify-content-between align-items-center">
-                          <h5>Password</h5>
-                          <Link
-                            to="#"
-                            className="btn btn-primary btn-sm"
-                            data-bs-toggle="modal"
-                            data-bs-target="#change_password"
-                          >
-                            Change
-                          </Link>
-                        </div>
-                        <div className="card-body pb-0">
-                          <div className="mb-3 mb-3">
-                            <label className="form-label">
-                              Current Password
-                            </label>
-                            <div className="pass-group d-flex">
-                              <input
-                                type={
-                                  passwordVisibility.currentPassword
-                                    ? "text"
-                                    : "password"
-                                }
-                                className="pass-input form-control"
-                              />
-                              <span
-                                className={`ti toggle-passwords ${
-                                  passwordVisibility.currentPassword
-                                    ? "ti-eye"
-                                    : "ti-eye-off"
-                                }`}
-                                onClick={() =>
-                                  togglePasswordVisibility("currentPassword")
-                                }
-                              ></span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </form>
               </div>
             </div>
           </div>
-        </div>
-        {/* /Page Wrapper */}
-        {/* Edit Profile */}
-        <div className="modal fade" id="edit_personal_information">
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h4 className="modal-title">Edit Personal Information</h4>
-                <button
-                  type="button"
-                  className="btn-close custom-btn-close"
-                  data-bs-dismiss="modal"
-                  aria-label="Close"
-                >
-                  <i className="ti ti-x" />
-                </button>
-              </div>
-              <form>
-                <div className="modal-body">
-                  <div className="row">
-                    <div className="col-md-12">
-                      <div className="mb-3">
-                        <label className="form-label">First Name</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Enter First Name"
-                        />
-                      </div>
-                      <div className="mb-3">
-                        <label className="form-label">Last Name</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Enter Last Name"
-                        />
-                      </div>
-                      <div className="mb-3">
-                        <label className="form-label">User Name</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Enter User Name"
-                        />
-                      </div>
-                      <div className="mb-3">
-                        <label className="form-label">Email</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Enter Email"
-                        />
-                      </div>
-                      <div className="mb-3">
-                        <label className="form-label">Phone Number</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Enter Phone Number"
-                        />
-                      </div>
-                      <div className="mb-0">
-                        <label className="form-label">Bio</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Enter Bio"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="modal-footer">
-                  <Link
-                    to="#"
-                    className="btn btn-light me-2"
-                    data-bs-dismiss="modal"
-                  >
-                    Cancel
-                  </Link>
-                  <Link
-                    to="#"
-                    className="btn btn-primary"
-                    data-bs-dismiss="modal"
-                  >
-                    Save Changes
-                  </Link>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-        {/* /Edit Profile */}
-        {/* Edit Profile */}
-        <div className="modal fade" id="edit_address_information">
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h4 className="modal-title">Edit Address Information</h4>
-                <button
-                  type="button"
-                  className="btn-close custom-btn-close"
-                  data-bs-dismiss="modal"
-                  aria-label="Close"
-                >
-                  <i className="ti ti-x" />
-                </button>
-              </div>
-              <form>
-                <div className="modal-body">
-                  <div className="row">
-                    <div className="col-md-12">
-                      <div className="mb-3">
-                        <label className="form-label">Address</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Enter Address"
-                        />
-                      </div>
-                      <div className="mb-3">
-                        <label className="form-label">Country</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Enter Country"
-                        />
-                      </div>
-                      <div className="mb-3">
-                        <label className="form-label">State/Province</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Enter State/Province"
-                        />
-                      </div>
-                      <div className="mb-3">
-                        <label className="form-label">City</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Enter City"
-                        />
-                      </div>
-                      <div className="mb-0">
-                        <label className="form-label">Postal Code</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Enter Postal Code"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="modal-footer">
-                  <Link
-                    to="#"
-                    className="btn btn-light me-2"
-                    data-bs-dismiss="modal"
-                  >
-                    Cancel
-                  </Link>
-                  <Link
-                    to="#"
-                    className="btn btn-primary"
-                    data-bs-dismiss="modal"
-                  >
-                    Save Changes
-                  </Link>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-        {/* /Edit Profile */}
-        {/* Change Password */}
-        <div className="modal fade" id="change_password">
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h4 className="modal-title">Change Password</h4>
-                <button
-                  type="button"
-                  className="btn-close custom-btn-close"
-                  data-bs-dismiss="modal"
-                  aria-label="Close"
-                >
-                  <i className="ti ti-x" />
-                </button>
-              </div>
-              <form>
-                <div className="modal-body">
-                  <div className="row">
-                    <div className="col-md-12">
-                      <div className="mb-3">
-                        <label className="form-label">Current Password</label>
-                        <div className="pass-group d-flex">
-                          <input
-                            type={
-                              passwordVisibility.oldPassword
-                                ? "text"
-                                : "password"
-                            }
-                            className="pass-input form-control"
-                          />
-                          <span
-                            className={`ti toggle-passwords ${
-                              passwordVisibility.oldPassword
-                                ? "ti-eye"
-                                : "ti-eye-off"
-                            }`}
-                            onClick={() =>
-                              togglePasswordVisibility("oldPassword")
-                            }
-                          ></span>
-                        </div>
-                      </div>
-                      <div className="mb-3">
-                        <label className="form-label">New Password</label>
-                        <div className="pass-group d-flex">
-                          <input
-                            type={
-                              passwordVisibility.newPassword
-                                ? "text"
-                                : "password"
-                            }
-                            className="pass-input form-control"
-                          />
-                          <span
-                            className={`ti toggle-passwords ${
-                              passwordVisibility.newPassword
-                                ? "ti-eye"
-                                : "ti-eye-off"
-                            }`}
-                            onClick={() =>
-                              togglePasswordVisibility("newPassword")
-                            }
-                          ></span>
-                        </div>
-                      </div>
-                      <div className="mb-0">
-                        <label className="form-label">Confirm Password</label>
-                        <div className="pass-group d-flex">
-                          <input
-                            type={
-                              passwordVisibility.confirmPassword
-                                ? "text"
-                                : "password"
-                            }
-                            className="pass-input form-control"
-                          />
-                          <span
-                            className={`ti toggle-passwords ${
-                              passwordVisibility.confirmPassword
-                                ? "ti-eye"
-                                : "ti-eye-off"
-                            }`}
-                            onClick={() =>
-                              togglePasswordVisibility("confirmPassword")
-                            }
-                          ></span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="modal-footer">
-                  <Link
-                    to="#"
-                    className="btn btn-light me-2"
-                    data-bs-dismiss="modal"
-                  >
-                    Cancel
-                  </Link>
-                  <Link
-                    to="#"
-                    className="btn btn-primary"
-                    data-bs-dismiss="modal"
-                  >
-                    Save Changes
-                  </Link>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-        {/* /Change Password */}
-      </>
+        )}
+      </div>
     </div>
   );
 };
 
-export default Profile;
+export default Profilesettings;

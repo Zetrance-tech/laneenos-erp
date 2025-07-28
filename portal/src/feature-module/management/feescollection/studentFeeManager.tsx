@@ -97,6 +97,22 @@ interface EditFeeDetail {
 
 const API_URL = process.env.REACT_APP_URL || "http://localhost:5000";
 
+// Month mapping for converting abbreviated to full month names
+const monthMap: { [key: string]: string } = {
+  Apr: "April",
+  May: "May",
+  Jun: "June",
+  Jul: "July",
+  Aug: "August",
+  Sep: "September",
+  Oct: "October",
+  Nov: "November",
+  Dec: "December",
+  Jan: "January",
+  Feb: "February",
+  Mar: "March",
+};
+
 const StudentFeeManager: React.FC = () => {
   const routes = all_routes;
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -127,15 +143,27 @@ const StudentFeeManager: React.FC = () => {
     }),
     [token]
   );
+
   const handleAssignFees = async () => {
-  setLoading(true);
-  await fetchFeeTemplatesForStudent();
-  setShowAssignModal(true);
-  setLoading(false);
-};
+    setLoading(true);
+    await fetchFeeTemplatesForStudent();
+    setShowAssignModal(true);
+    setLoading(false);
+  };
+
   const months = [
-    "Apr", "May", "Jun", "Jul", "Aug", "Sep",
-    "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+    "January",
+    "February",
+    "March",
   ];
 
   const fetchSessions = useCallback(async () => {
@@ -256,94 +284,96 @@ const StudentFeeManager: React.FC = () => {
   }, [selectedStudentId, config]);
 
   const fetchStudentFees = useCallback(async () => {
-  if (!selectedStudentId) {
-    console.log("No student ID selected, skipping fetchStudentFees");
-    return;
-  }
-  setLoading(true);
-  setError(null);
-  console.log("Fetching student fees for ID:", selectedStudentId);
-  console.log("Request URL:", `${API_URL}/api/studentFees/${selectedStudentId}/fees`);
-  console.log("Request config:", config);
-
-  try {
-    const response = await axios.get<StudentFee>(
-      `${API_URL}/api/studentFees/${selectedStudentId}/fees`,
-      { ...config, timeout: 5000 }
-    );
-    console.log("Response received:", response.data);
-
-    if (!response.data || !Array.isArray(response.data.fees)) {
-      throw new Error("Invalid response format: fees array is missing or not an array");
+    if (!selectedStudentId) {
+      console.log("No student ID selected, skipping fetchStudentFees");
+      return;
     }
+    setLoading(true);
+    setError(null);
+    console.log("Fetching student fees for ID:", selectedStudentId);
+    console.log("Request URL:", `${API_URL}/api/studentFees/${selectedStudentId}/fees`);
+    console.log("Request config:", config);
 
-    // Map fees to include month and ensure valid status
-    const updatedFees = response.data.fees.map((monthlyFee) => {
-      if (!monthlyFee.month || !Array.isArray(monthlyFee.fees)) {
-        console.warn("Invalid monthly fee structure:", monthlyFee);
+    try {
+      const response = await axios.get<StudentFee>(
+        `${API_URL}/api/studentFees/${selectedStudentId}/fees`,
+        { ...config, timeout: 5000 }
+      );
+      console.log("Response received:", response.data);
+
+      if (!response.data || !Array.isArray(response.data.fees)) {
+        throw new Error("Invalid response format: fees array is missing or not an array");
+      }
+
+      // Map fees to include month and ensure valid status
+      const updatedFees = response.data.fees.map((monthlyFee) => {
+        if (!monthlyFee.month || !Array.isArray(monthlyFee.fees)) {
+          console.warn("Invalid monthly fee structure:", monthlyFee);
+          return {
+            ...monthlyFee,
+            fees: [],
+            month: monthMap[monthlyFee.month] || monthlyFee.month || "Unknown",
+            status: monthlyFee.status || "pending",
+          };
+        }
         return {
           ...monthlyFee,
-          fees: [],
-          month: monthlyFee.month || "Unknown",
-          status: monthlyFee.status || "pending",
+          fees: monthlyFee.fees.map((fee) => ({
+            ...fee,
+            month: monthMap[monthlyFee.month] || monthlyFee.month,
+            status: fee.status || "pending",
+            originalAmount: fee.originalAmount || fee.amount,
+          })),
+          month: monthMap[monthlyFee.month] || monthlyFee.month,
         };
-      }
-      return {
-        ...monthlyFee,
-        fees: monthlyFee.fees.map((fee) => ({
-          ...fee,
-          month: monthlyFee.month,
-          status: fee.status || "pending",
-          originalAmount: fee.originalAmount || fee.amount,
-        })),
-      };
-    });
-
-    if (updatedFees.length === 0 || updatedFees.every((mf) => mf.fees.length === 0)) {
-      console.warn("No valid fees found after processing");
-      setError("No valid fee details found for the selected student.");
-      toast.error("No valid fee details found for the selected student.");
-      setStudentFees({ student: response.data.student, fees: [] });
-      return; // Removed setShowAssignModal(true) and fetchFeeTemplatesForStudent()
-    }
-
-    setStudentFees({
-      student: response.data.student,
-      fees: updatedFees,
-    });
-
-    // Set default edit month to the first month with fees
-    const firstMonthWithFees = updatedFees.find((mf) => mf.fees.length > 0)?.month;
-    if (firstMonthWithFees) {
-      setSelectedEditMonth(firstMonthWithFees);
-    }
-  } catch (err) {
-    let errorMessage = "An unexpected error occurred while fetching student fees";
-    if (axios.isAxiosError(err)) {
-      console.error("Axios error:", {
-        status: err.response?.status,
-        statusText: err.response?.statusText,
-        data: err.response?.data,
-        message: err.message,
       });
-      if (err.response?.status === 404) {
-        errorMessage = "No valid fee details found for the selected student.";
-      } else if (err.response?.status === 401) {
-        errorMessage = "Unauthorized access. Please check your credentials.";
-      } else {
-        errorMessage = err.response?.data?.message || err.message || errorMessage;
+
+      if (updatedFees.length === 0 || updatedFees.every((mf) => mf.fees.length === 0)) {
+        console.warn("No valid fees found after processing");
+        setError("No valid fee details found for the selected student.");
+        toast.error("No valid fee details found for the selected student.");
+        setStudentFees({ student: response.data.student, fees: [] });
+        return;
       }
-    } else {
-      console.error("Non-Axios error:", err);
-      errorMessage = (err as Error).message || errorMessage;
+
+      setStudentFees({
+        student: response.data.student,
+        fees: updatedFees,
+      });
+
+      // Set default edit month to the first month with fees
+      const firstMonthWithFees = updatedFees.find((mf) => mf.fees.length > 0)?.month;
+      if (firstMonthWithFees) {
+        setSelectedEditMonth(firstMonthWithFees);
+      }
+    } catch (err) {
+      let errorMessage = "An unexpected error occurred while fetching student fees";
+      if (axios.isAxiosError(err)) {
+        console.error("Axios error:", {
+          status: err.response?.status,
+          statusText: err.response?.statusText,
+          data: err.response?.data,
+          message: err.message,
+        });
+        if (err.response?.status === 404) {
+          errorMessage = "No valid fee details found for the selected student.";
+        } else if (err.response?.status === 401) {
+          errorMessage = "Unauthorized access. Please check your credentials.";
+        } else {
+          errorMessage = err.response?.data?.message || err.message || errorMessage;
+        }
+      } else {
+        console.error("Non-Axios error:", err);
+        errorMessage = (err as Error).message || errorMessage;
+      }
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+      console.log("Finished fetching student fees");
     }
-    setError(errorMessage);
-    toast.error(errorMessage);
-  } finally {
-    setLoading(false);
-    console.log("Finished fetching student fees");
-  }
-}, [selectedStudentId, config]);
+  }, [selectedStudentId, config]);
+
   // --- New Function to Assign Fee Template ---
   const handleAssignTemplate = async () => {
     if (!selectedTemplateId) {
@@ -622,7 +652,7 @@ const StudentFeeManager: React.FC = () => {
   // Filter fees to show only April
   const aprilFees = studentFees
     ? studentFees.fees
-        .filter((monthlyFee) => monthlyFee.month === "Apr")
+        .filter((monthlyFee) => monthlyFee.month === "April")
         .flatMap((monthlyFee) => monthlyFee.fees)
     : [];
 
@@ -741,9 +771,9 @@ const StudentFeeManager: React.FC = () => {
         const showField =
           hasData ||
           (record.feesGroup.periodicity === "Yearly" || record.feesGroup.periodicity === "One Time"
-            ? month === "Apr"
+            ? month === "April"
             : record.feesGroup.periodicity === "Quarterly"
-            ? ["Apr", "Jul", "Oct", "Jan"].includes(month)
+            ? ["April", "July", "October", "January"].includes(month)
             : record.feesGroup.periodicity === "Monthly");
         return showField ? (
           <div style={record.feesGroup._id === "total" ? { fontWeight: "bold", color: "blue" } : {}}>
@@ -774,9 +804,9 @@ const StudentFeeManager: React.FC = () => {
       const showField =
         hasData ||
         (fee.feesGroup.periodicity === "Yearly" || fee.feesGroup.periodicity === "One Time"
-          ? month === "Apr"
+          ? month === "April"
           : fee.feesGroup.periodicity === "Quarterly"
-          ? ["Apr", "Jul", "Oct", "Jan"].includes(month)
+          ? ["April", "July", "October", "January"].includes(month)
           : fee.feesGroup.periodicity === "Monthly");
       return showField ? sum + (fee.netPayables[month] || 0) : sum;
     }, 0);
@@ -889,31 +919,31 @@ const StudentFeeManager: React.FC = () => {
                     {error}
                   </p>
                   <div>
-      {error === "No valid fee details found for the selected student." && (
-        <Button
-          type="primary"
-          size="small"
-          onClick={handleAssignFees}
-          className="mt-2 me-2"
-        >
-          Assign Fees
-        </Button>
-      )}
-      <Button
-        type="primary"
-        size="small"
-        onClick={() => {
-          setError(null);
-          if (selectedStudentId) fetchStudentFees();
-          else if (selectedClass && selectedSession) fetchStudentsForClass();
-          else if (selectedSession) fetchClassesForSession();
-          else fetchSessions();
-        }}
-        className="mt-2"
-      >
-        Retry
-      </Button>
-    </div>
+                    {error === "No valid fee details found for the selected student." && (
+                      <Button
+                        type="primary"
+                        size="small"
+                        onClick={handleAssignFees}
+                        className="mt-2 me-2"
+                      >
+                        Assign Fees
+                      </Button>
+                    )}
+                    <Button
+                      type="primary"
+                      size="small"
+                      onClick={() => {
+                        setError(null);
+                        if (selectedStudentId) fetchStudentFees();
+                        else if (selectedClass && selectedSession) fetchStudentsForClass();
+                        else if (selectedSession) fetchClassesForSession();
+                        else fetchSessions();
+                      }}
+                      className="mt-2"
+                    >
+                      Retry
+                    </Button>
+                  </div>
                 </div>
               ) : selectedStudentId && studentFees ? (
                 <div className="p-3">

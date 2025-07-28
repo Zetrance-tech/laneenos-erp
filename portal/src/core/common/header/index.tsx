@@ -13,6 +13,8 @@ import {
 import { useState, useEffect } from "react";
 import { all_routes } from "../../../feature-module/router/all_routes";
 import { useAuth } from "../../../context/AuthContext";
+import axios from "axios";
+const API_URL = process.env.REACT_APP_URL;
 
 interface User {
   _id?: string;
@@ -31,7 +33,8 @@ const Header = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
-  
+  const [profile, setProfile] = useState<User | null>(null);
+  const [photo, setPhoto] = useState<string>("");
   const dataTheme = useSelector((state: any) => state.themeSetting.dataTheme);
   const dataLayout = useSelector((state: any) => state.themeSetting.dataLayout);
   const mobileSidebar = useSelector(
@@ -70,7 +73,25 @@ const Header = () => {
       dispatch(toggleMiniSidebar());
     }
   };
+useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await axios.get(`${API_URL}/api/auth/profile`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const data = response.data.data;
+        setProfile(data);
+        setPhoto(data.photo ? `${API_URL}/${data.photo}` : "assets/img/teachers/teacher-01.jpg");
+      } catch (error) {
+        console.error("Failed to fetch profile", error);
+      }
+    };
 
+    fetchProfile();
+  }, []);
   const handleToggleClick = () => {
     if (dataTheme === "default_data_theme") {
       dispatch(setDataTheme("dark_data_theme"));
@@ -260,12 +281,10 @@ const Header = () => {
                       <div className="border-bottom mb-3 pb-3">
                         <Link to={routes.activity}>
                           <div className="d-flex">
-                            <span className="avatar avatar-lg me-2 flex-shrink-0">
-                              <ImageWithBasePath
-                                src="assets/img/profiles/avatar-27.jpg"
-                                alt="Profile"
-                              />
-                            </span>
+                            <span className="avatar avatar-md rounded">
+  <img src={photo} alt="Img" className="img-fluid" />
+</span>
+
                             <div className="flex-grow-1">
                               <p className="mb-1">
                                 <span className="text-dark fw-semibold">
@@ -385,21 +404,23 @@ const Header = () => {
                   data-bs-toggle="dropdown"
                 >
                   <span className="avatar avatar-md rounded">
-                    <ImageWithBasePath
-                      src="assets/img/profiles/avatar-27.jpg"
+                    {/* <ImageWithBasePath
+                      src="assets/img/teachers/teacher-01.jpg"
                       alt="Img"
                       className="img-fluid"
-                    />
+                    /> */}
+                    <img src={photo} alt="Img" className="img-fluid" />
                   </span>
                 </Link>
                 <div className="dropdown-menu">
                   <div className="d-block">
                     <div className="d-flex align-items-center p-2">
                       <span className="avatar avatar-md me-2 online avatar-rounded">
-                        <ImageWithBasePath
-                          src="assets/img/profiles/avatar-27.jpg"
+                        {/* <ImageWithBasePath
+                          src="assets/img/teachers/teacher-01.jpg"
                           alt="img"
-                        />
+                        /> */}
+                        <img src={photo} alt="Img" className="img-fluid" />
                       </span>
                       <div>
                         <h6>{user?.name || "User"}</h6>
@@ -414,13 +435,13 @@ const Header = () => {
                       <i className="ti ti-user-circle me-2" />
                       My Profile
                     </Link>
-                    <Link
+                    {/* <Link
                       className="dropdown-item d-inline-flex align-items-center p-2"
                       to={routes.profilesettings}
                     >
                       <i className="ti ti-settings me-2" />
                       Settings
-                    </Link>
+                    </Link> */}
                     <hr className="m-0" />
                     <Link
                       className="dropdown-item d-inline-flex align-items-center p-2"

@@ -5,7 +5,7 @@ import Branch from '../models/branch.js'; // Import Branch model
 import Student from '../models/student.js'; // Import Student model
 import Teacher from '../models/teacher.js'; // Import Teacher model
 import Class from '../models/class.js'; // Import Class model
-
+import User from '../models/user.js';
 // Define the root uploads directory (one level up from api)
 const uploadsRoot = path.join(process.cwd(), '..', 'uploads');
 
@@ -17,6 +17,7 @@ const createUploadDirs = () => {
     path.join(uploadsRoot, 'students', 'documents'), // New directory for student documents
     path.join(uploadsRoot, 'teachers'),
     path.join(uploadsRoot, 'teachers', 'documents'),
+    path.join(uploadsRoot, 'admins'),
     path.join(uploadsRoot, 'albums'),
     path.join(uploadsRoot, 'advertisements'),
     path.join(uploadsRoot, 'stories'),
@@ -121,7 +122,26 @@ const studentDocStorage = multer.diskStorage({
   }
 });
 
-
+const adminStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(uploadsRoot, 'admins'));
+  },
+  filename: async (req, file, cb) => {
+    try {
+      const { userId, branchId } = req.user;
+      const branch = await Branch.findById(branchId);
+      const user = await User.findById(userId);
+      const branchName = branch ? sanitizeFilename(branch.name) : 'unknown';
+      const adminEmail = user ? sanitizeFilename(user.email.split('@')[0]) : 'unknown';
+      const filename = `admin-profile-photo-${branchName}-${adminEmail}${path.extname(file.originalname)}`;
+      cb(null, filename);
+    } catch (error) {
+      console.error('Error generating admin filename:', error);
+      const fallbackFilename = `admin-profile-photo-${Date.now()}${path.extname(file.originalname)}`;
+      cb(null, fallbackFilename);
+    }
+  }
+});
 
 // Teacher profile photo storage (unchanged)
 const teacherStorage = multer.diskStorage({
@@ -318,7 +338,11 @@ export const studentUpload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB for students
   fileFilter: imageFileFilter
 });
-
+export const adminUpload = multer({
+  storage: adminStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB for admin photos
+  fileFilter: imageFileFilter
+});
 export const studentDocUpload = multer({
   storage: studentDocStorage,
   limits: { fileSize: 10 * 1024 * 1024, files: 10 }, // 10MB per file, max 5 files

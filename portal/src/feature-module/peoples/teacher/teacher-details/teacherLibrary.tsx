@@ -63,19 +63,19 @@ const TeacherLibrary = () => {
                         Staff Details
                       </Link>
                     </li>
-                    <li>
+                    {/* <li>
                       <Link to={routes.teachersRoutine.replace(":id", id || "")} className="nav-link">
                         <i className="ti ti-table-options me-2" />
                         Routine
                       </Link>
-                    </li>
+                    </li> */}
                     <li>
                       <Link to={routes.teacherLeaves.replace(":id", id || "")} className="nav-link">
                         <i className="ti ti-calendar-due me-2" />
                         Attendance
                       </Link>
                     </li>
-                    <li>
+                    {/* <li>
                       <Link to={routes.teacherSalary.replace(":id", id || "")} className="nav-link">
                         <i className="ti ti-report-money me-2" />
                         Salary
@@ -86,7 +86,7 @@ const TeacherLibrary = () => {
                         <i className="ti ti-bookmark-edit me-2" />
                         Library
                       </Link>
-                    </li>
+                    </li> */}
                   </ul>
                   {/* /List */}
                   <div className="card">

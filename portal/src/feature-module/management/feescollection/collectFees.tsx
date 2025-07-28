@@ -87,6 +87,7 @@ interface GeneratedFee {
     admissionNumber: string;
   };
   fees: FeeDetail[];
+  periodicity: string;
   amount: number;
   amountPaid: number;
   netPayable: number;
@@ -97,6 +98,7 @@ interface GeneratedFee {
   month?: string;
   paymentDetails: PaymentDetail[];
   excessAmount: number;
+  quarterlyGroupId?: string;
 }
 
 interface FeeTableRow {
@@ -126,6 +128,42 @@ interface CollectFeesResponse {
 
 const API_URL = process.env.REACT_APP_URL;
 
+// Define month mapping
+const monthMapping: { [key: string]: string } = {
+  Apr: "April",
+  May: "May",
+  Jun: "June",
+  Jul: "July",
+  Aug: "August",
+  Sep: "September",
+  Oct: "October",
+  Nov: "November",
+  Dec: "December",
+  Jan: "January",
+  Feb: "February",
+  Mar: "March",
+};
+
+// Update quarters with full month names
+const quarters = [
+  { value: "Q1", label: "Quarter 1 (April, May, June)", months: ["April", "May", "June"] },
+  { value: "Q2", label: "Quarter 2 (July, August, September)", months: ["July", "August", "September"] },
+  { value: "Q3", label: "Quarter 3 (October, November, December)", months: ["October", "November", "December"] },
+  { value: "Q4", label: "Quarter 4 (January, February, March)", months: ["January", "February", "March"] },
+];
+
+// Update months array with full names
+const months = [
+  "April", "May", "June", "July", "August", "September",
+  "October", "November", "December", "January", "February", "March"
+];
+const quarterToMonth = (q: string) =>
+  ({
+    Q1: "Apr",
+    Q2: "Jul",
+    Q3: "Oct",
+    Q4: "Jan",
+  }[q] || q);
 const CollectStudentFees: React.FC = () => {
   const routes = all_routes;
   const { token } = useAuth();
@@ -139,25 +177,16 @@ const CollectStudentFees: React.FC = () => {
   const [monthlyFees, setMonthlyFees] = useState<FeeTableRow[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [isDetailsModalVisible, setIsDetailsModalVisible] =
-    useState<boolean>(false);
-  const [selectedFeeDetails, setSelectedFeeDetails] =
-    useState<GeneratedFee | null>(null);
-  const [isCollectModalVisible, setIsCollectModalVisible] =
-    useState<boolean>(false);
-  const [selectedFeeRow, setSelectedFeeRow] = useState<FeeTableRow | null>(
-    null
-  );
+  const [isDetailsModalVisible, setIsDetailsModalVisible] = useState<boolean>(false);
+  const [selectedFeeDetails, setSelectedFeeDetails] = useState<GeneratedFee | null>(null);
+  const [isCollectModalVisible, setIsCollectModalVisible] = useState<boolean>(false);
+  const [selectedFeeRow, setSelectedFeeRow] = useState<FeeTableRow | null>(null);
   const [paymentMode, setPaymentMode] = useState<
     "Cash" | "BankTransfer" | "Cheque" | "CardPayment" | "Wallet" | "IMPS"
   >("Cash");
-  const [collectionDate, setCollectionDate] = useState<moment.Moment | null>(
-    moment("2025-06-23")
-  );
+  const [collectionDate, setCollectionDate] = useState<moment.Moment | null>(moment("2025-06-23"));
   const [transactionNo, setTransactionNo] = useState<string>("");
-  const [transactionDate, setTransactionDate] = useState<moment.Moment | null>(
-    null
-  );
+  const [transactionDate, setTransactionDate] = useState<moment.Moment | null>(null);
   const [chequeNo, setChequeNo] = useState<string>("");
   const [chequeDate, setChequeDate] = useState<moment.Moment | null>(null);
   const [bankName, setBankName] = useState<string>("");
@@ -167,12 +196,13 @@ const CollectStudentFees: React.FC = () => {
   const [excessAmount, setExcessAmount] = useState<number>(0);
   const [amountPaid, setAmountPaid] = useState<number>(0);
   const [isEditingPayment, setIsEditingPayment] = useState<boolean>(false);
-  const [editingPaymentId, setEditingPaymentId] = useState<string | undefined>(
-    undefined
-  );
+  const [editingPaymentId, setEditingPaymentId] = useState<string | undefined>(undefined);
   const [nextPaymentId, setNextPaymentId] = useState("");
   const [includeDiscount, setIncludeDiscount] = useState<boolean>(false);
   const [discountAmount, setDiscountAmount] = useState<number>(0);
+  const [quarterlyStudentIds, setQuarterlyStudentIds] = useState<Set<string>>(new Set());
+  const [allFees, setAllFees] = useState<GeneratedFee[]>([]);
+
   const config = {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -183,10 +213,7 @@ const CollectStudentFees: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get<Session[]>(
-        `${API_URL}/api/session/get`,
-        config
-      );
+      const response = await axios.get<Session[]>(`${API_URL}/api/session/get`, config);
       setSessions(response.data || []);
     } catch (err) {
       const errorMessage = axios.isAxiosError(err)
@@ -202,10 +229,7 @@ const CollectStudentFees: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get<Class[]>(
-        `${API_URL}/api/class/session/${selectedSession}`,
-        config
-      );
+      const response = await axios.get<Class[]>(`${API_URL}/api/class/session/${selectedSession}`, config);
       setClasses(response.data || []);
     } catch (err) {
       const errorMessage = axios.isAxiosError(err)
@@ -226,7 +250,6 @@ const CollectStudentFees: React.FC = () => {
         config
       );
       setStudents(response.data?.data || []);
-      console.log(students);
     } catch (err) {
       const errorMessage = axios.isAxiosError(err)
         ? err.response?.data?.message || err.message
@@ -236,17 +259,16 @@ const CollectStudentFees: React.FC = () => {
       setLoading(false);
     }
   };
+
   const fetchPreviewPaymentId = async () => {
     try {
-      const response = await axios.get(
-        `${API_URL}/api/studentFees/preview-next-id`,
-        config
-      );
+      const response = await axios.get(`${API_URL}/api/studentFees/preview-next-id`, config);
       setNextPaymentId(response.data.paymentId);
     } catch (err) {
       setNextPaymentId("Generating...");
     }
   };
+
   const fetchFeesForMonth = async (studentId: string, month?: string) => {
     if (!studentId || !selectedSession) return [];
     setLoading(true);
@@ -256,12 +278,42 @@ const CollectStudentFees: React.FC = () => {
         ? `${API_URL}/api/studentFees/${studentId}/fees-by-month/${month}`
         : `${API_URL}/api/studentFees/${studentId}/fees-by-session/${selectedSession}`;
       const response = await axios.get<GeneratedFee[]>(url, config);
-      console.log(response.data);
-      return response.data || [];
+      // Map abbreviated month names to full names in the response
+      const updatedFees = response.data.map(fee => ({
+        ...fee,
+        month: fee.month ? monthMapping[fee.month] || fee.month : fee.month,
+      }));
+      return updatedFees || [];
     } catch (err) {
       const errorMessage = axios.isAxiosError(err)
         ? err.response?.data?.message || err.message
-        : `Failed to fetch fees for ${month ? `month ${month}` : "session"}`;
+        : `Failed to fetch fees for ${month ? `month ${monthMapping[month] || month}` : "session"}`;
+      setError(errorMessage);
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchAllFeesForStudent = async (studentId: string) => {
+    if (!studentId || !selectedSession) return [];
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await axios.get<GeneratedFee[]>(
+        `${API_URL}/api/studentFees/${studentId}/fees-by-session/${selectedSession}`,
+        config
+      );
+      // Map abbreviated month names to full names
+      const updatedFees = response.data.map(fee => ({
+        ...fee,
+        month: fee.month ? monthMapping[fee.month] || fee.month : fee.month,
+      }));
+      return updatedFees || [];
+    } catch (err) {
+      const errorMessage = axios.isAxiosError(err)
+        ? err.response?.data?.message || err.message
+        : "Failed to fetch fees for student";
       setError(errorMessage);
       return [];
     } finally {
@@ -274,11 +326,88 @@ const CollectStudentFees: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const studentFees: FeeTableRow[] = [];
       const student = students.find((s) => s._id === selectedStudent);
-      if (student) {
-        const fees = await fetchFeesForMonth(student._id, selectedMonth);
-        fees.forEach((fee) => {
+      if (!student) return;
+
+      // Fetch all fees for the student
+      const allStudentFees = await fetchAllFeesForStudent(student._id);
+      setAllFees(allStudentFees);
+
+      // Check if student has quarterly fees
+      const hasQuarterlyFees = allStudentFees.some(fee => 
+        fee.periodicity === "Quarterly" && fee.quarterlyGroupId
+      );
+
+      // Update quarterly student tracking
+      const newQuarterlyStudentIds = new Set(quarterlyStudentIds);
+      if (hasQuarterlyFees) {
+        newQuarterlyStudentIds.add(student._id);
+      } else {
+        newQuarterlyStudentIds.delete(student._id);
+      }
+      setQuarterlyStudentIds(newQuarterlyStudentIds);
+
+      let filteredFees = allStudentFees;
+
+      // Apply month/quarter filter if selected
+      if (selectedMonth) {
+        if (hasQuarterlyFees) {
+          // For quarterly students, selectedMonth should be quarter value (Q1, Q2, etc.)
+          const quarter = quarters.find(q => q.value === selectedMonth);
+          if (quarter) {
+            filteredFees = allStudentFees.filter(fee => 
+              quarter.months.some(month => month === fee.month)
+            );
+          }
+        } else {
+          // For monthly students, filter by exact month
+          filteredFees = allStudentFees.filter(fee => fee.month === selectedMonth);
+        }
+      }
+
+      const studentFees: FeeTableRow[] = [];
+
+      if (hasQuarterlyFees) {
+        // Group quarterly fees by quarterlyGroupId
+        const quarterlyGroups = new Map<string, GeneratedFee[]>();
+        
+        filteredFees.forEach(fee => {
+          if (fee.quarterlyGroupId) {
+            if (!quarterlyGroups.has(fee.quarterlyGroupId)) {
+              quarterlyGroups.set(fee.quarterlyGroupId, []);
+            }
+            quarterlyGroups.get(fee.quarterlyGroupId)!.push(fee);
+          }
+        });
+
+        // Create rows for each quarterly group
+        quarterlyGroups.forEach((groupFees, quarterlyGroupId) => {
+          const representativeFee = groupFees[0];
+          const quarter = quarters.find(q => 
+            q.months.some(month => month === representativeFee.month)
+          );
+          
+          const row: FeeTableRow = {
+            key: `${student._id}-${quarterlyGroupId}`,
+            student: {
+              _id: student._id,
+              name: student.name,
+              admissionNumber: student.admissionNumber,
+            },
+            month: quarter?.value || representativeFee.month || "N/A",
+            totalAmount: groupFees.reduce((sum, fee) => sum + (fee.amount || 0), 0),
+            totalNetPayable: groupFees.reduce((sum, fee) => sum + (fee.netPayable || fee.amount - (fee.discount || 0)), 0),
+            amountPaid: groupFees.reduce((sum, fee) => sum + (fee.amountPaid || 0), 0),
+            balanceAmount: groupFees.reduce((sum, fee) => sum + (fee.balanceAmount || 0), 0),
+            dueDate: representativeFee.dueDate,
+            status: representativeFee.status || "pending",
+            feeDetails: groupFees,
+          };
+          studentFees.push(row);
+        });
+      } else {
+        // Handle monthly fees
+        filteredFees.forEach((fee) => {
           if (fee.month) {
             const row: FeeTableRow = {
               key: `${student._id}-${fee.month}`,
@@ -289,8 +418,7 @@ const CollectStudentFees: React.FC = () => {
               },
               month: fee.month,
               totalAmount: fee.amount || 0,
-              totalNetPayable:
-                fee.netPayable || fee.amount - (fee.discount || 0),
+              totalNetPayable: fee.netPayable || fee.amount - (fee.discount || 0),
               amountPaid: fee.amountPaid || 0,
               balanceAmount: fee.balanceAmount || 0,
               dueDate: fee.dueDate,
@@ -300,10 +428,12 @@ const CollectStudentFees: React.FC = () => {
             studentFees.push(row);
           }
         });
-        if (fees.length > 0) {
-          setExcessAmount(fees[0].excessAmount || 0);
-        }
       }
+
+      if (allStudentFees.length > 0) {
+        setExcessAmount(allStudentFees[0].excessAmount || 0);
+      }
+
       setMonthlyFees(studentFees);
     } catch (err) {
       const errorMessage = axios.isAxiosError(err)
@@ -317,9 +447,7 @@ const CollectStudentFees: React.FC = () => {
 
   const handleCollectFees = async () => {
     if (!selectedFeeRow || !collectionDate || !amountPaid) {
-      toast.error(
-        "Please fill in all required fields: collection date, amount paid"
-      );
+      toast.error("Please fill in all required fields: collection date, amount paid");
       return;
     }
     setLoading(true);
@@ -327,32 +455,27 @@ const CollectStudentFees: React.FC = () => {
     try {
       const totalAmount = amountPaid + (includeExcessFee ? excessAmount : 0);
       const paymentDetails: PaymentDetail = {
-        paymentId: editingPaymentId || "", // Will be generated by backend if new payment
+        paymentId: editingPaymentId || "",
         modeOfPayment: paymentMode,
         collectionDate: collectionDate.toISOString(),
         amountPaid,
-        ...(paymentMode !== "Cash" &&
-          paymentMode !== "Cheque" &&
-          transactionNo && { transactionNo }),
-        ...(paymentMode !== "Cash" &&
-          paymentMode !== "Cheque" &&
-          transactionDate && {
-            transactionDate: transactionDate.toISOString(),
-          }),
+        ...(paymentMode !== "Cash" && paymentMode !== "Cheque" && transactionNo && { transactionNo }),
+        ...(paymentMode !== "Cash" && paymentMode !== "Cheque" && transactionDate && {
+          transactionDate: transactionDate.toISOString(),
+        }),
         ...(paymentMode === "Cheque" && chequeNo && { chequeNo }),
-        ...(paymentMode === "Cheque" &&
-          chequeDate && { chequeDate: chequeDate.toISOString() }),
-        ...(["BankTransfer", "IMPS", "Cheque"].includes(paymentMode) &&
-          bankName && { bankName }),
+        ...(paymentMode === "Cheque" && chequeDate && { chequeDate: chequeDate.toISOString() }),
+        ...(["BankTransfer", "IMPS", "Cheque"].includes(paymentMode) && bankName && { bankName }),
         ...(remarks && { remarks }),
         ...(internalNotes && { internalNotes }),
-        ...(includeExcessFee && excessAmount > 0 && { excessAmount }), // Include excessAmount in paymentDetails
+        ...(includeExcessFee && excessAmount > 0 && { excessAmount }),
       };
 
       const payload = {
         studentId: selectedFeeRow.student._id,
         sessionId: selectedSession,
-        month: selectedFeeRow.month,
+        // month: selectedFeeRow.month in monthMapping ? Object.keys(monthMapping).find(key => monthMapping[key] === selectedFeeRow.month) || selectedFeeRow.month : selectedFeeRow.month,
+        month: quarters.some(q => q.value === selectedFeeRow.month) ? quarterToMonth(selectedFeeRow.month):Object.keys(monthMapping).find(key => monthMapping[key] === selectedFeeRow.month) || selectedFeeRow.month,
         paymentDetails,
         excessAmount: includeExcessFee ? excessAmount : 0,
         discount: discountAmount,
@@ -376,9 +499,7 @@ const CollectStudentFees: React.FC = () => {
 
       toast.success(
         response.data.message ||
-          (isEditingPayment
-            ? "Payment details updated successfully"
-            : "Fees collected successfully")
+          (isEditingPayment ? "Payment details updated successfully" : "Fees collected successfully")
       );
       if (response.data.paymentId) {
         setEditingPaymentId(response.data.paymentId);
@@ -391,7 +512,7 @@ const CollectStudentFees: React.FC = () => {
               ...fee,
               amountPaid: updatedFee.amountPaid,
               balanceAmount: updatedFee.balanceAmount,
-              feeDetails: [updatedFee],
+              feeDetails: [{ ...updatedFee, month: updatedFee.month ? monthMapping[updatedFee.month] || updatedFee.month : updatedFee.month }],
               status: updatedFee.status,
             };
           }
@@ -404,15 +525,14 @@ const CollectStudentFees: React.FC = () => {
     } catch (err) {
       const errorMessage = axios.isAxiosError(err)
         ? err.response?.data?.message || err.message
-        : isEditingPayment
-        ? "Failed to update payment details"
-        : "Failed to collect fees";
+        : isEditingPayment ? "Failed to update payment details" : "Failed to collect fees";
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
   };
+
   const resetCollectForm = () => {
     setPaymentMode("Cash");
     setCollectionDate(moment("2025-06-23"));
@@ -463,20 +583,25 @@ const CollectStudentFees: React.FC = () => {
 
   useEffect(() => {
     if (selectedStudent && selectedSession) {
+      setSelectedMonth("");
       fetchAllStudentFees();
     } else {
       setMonthlyFees([]);
     }
-  }, [selectedStudent, selectedSession, selectedMonth]);
+  }, [selectedStudent, selectedSession]);
+
+  useEffect(() => {
+    if (selectedStudent && selectedSession) {
+      fetchAllStudentFees();
+    }
+  }, [selectedMonth]);
 
   const handleViewDetails = (record: FeeTableRow) => {
     if (!record.feeDetails || record.feeDetails.length === 0) {
       toast.error("No fee details available for this month");
       return;
     }
-    const selectedStudentDetail = students.find(
-      (s) => s._id === record.student._id
-    );
+    const selectedStudentDetail = students.find((s) => s._id === record.student._id);
     setSelectedFeeDetails(record.feeDetails[0] || null);
     setIsDetailsModalVisible(true);
   };
@@ -486,7 +611,7 @@ const CollectStudentFees: React.FC = () => {
     fetchPreviewPaymentId();
     setCollectionDate(moment("2025-06-23"));
     setExcessAmount(record.feeDetails[0]?.excessAmount || 0);
-    setAmountPaid(record.balanceAmount || 0); // Pre-fill with balance amount
+    setAmountPaid(record.balanceAmount || 0);
     setIsCollectModalVisible(true);
     setIsEditingPayment(false);
   };
@@ -497,14 +622,12 @@ const CollectStudentFees: React.FC = () => {
       toast.error("No payment details available to edit");
       return;
     }
-    const payment = feeDetail.paymentDetails[0]; // Assuming single payment per fee for simplicity
+    const payment = feeDetail.paymentDetails[0];
     setSelectedFeeRow(record);
     setPaymentMode(payment.modeOfPayment);
     setCollectionDate(moment(payment.collectionDate));
     setTransactionNo(payment.transactionNo || "");
-    setTransactionDate(
-      payment.transactionDate ? moment(payment.transactionDate) : null
-    );
+    setTransactionDate(payment.transactionDate ? moment(payment.transactionDate) : null);
     setChequeNo(payment.chequeNo || "");
     setChequeDate(payment.chequeDate ? moment(payment.chequeDate) : null);
     setBankName(payment.bankName || "");
@@ -528,22 +651,28 @@ const CollectStudentFees: React.FC = () => {
       render: (student: { name: string; admissionNumber: string }) => (
         <div>
           <div>{student?.name || "N/A"}</div>
-          <small className="text-muted">
-            ({student?.admissionNumber || "N/A"})
-          </small>
+          <small className="text-muted">({student?.admissionNumber || "N/A"})</small>
         </div>
       ),
-      sorter: (a: FeeTableRow, b: FeeTableRow) =>
-        a.student.name.localeCompare(b.student.name),
+      sorter: (a: FeeTableRow, b: FeeTableRow) => a.student.name.localeCompare(b.student.name),
     },
     {
-      title: "Month",
+      title: quarterlyStudentIds.has(selectedStudent) ? "Quarter" : "Month",
       dataIndex: "month",
-      render: (month: string) => (
-        <span style={{ color: "black" }}>{month || "N/A"}</span>
-      ),
-      sorter: (a: FeeTableRow, b: FeeTableRow) =>
-        a.month.localeCompare(b.month),
+      render: (month: string) => {
+        if (quarterlyStudentIds.has(selectedStudent)) {
+          const quarter = quarters.find(q => q.value === month);
+          return (
+            <span style={{ color: "black" }}>
+              {quarter ? quarter.label : month || "N/A"}
+            </span>
+          );
+        }
+        return (
+          <span style={{ color: "black" }}>{month || "N/A"}</span>
+        );
+      },
+      sorter: (a: FeeTableRow, b: FeeTableRow) => a.month.localeCompare(b.month),
     },
     {
       title: "Total Fees",
@@ -551,8 +680,7 @@ const CollectStudentFees: React.FC = () => {
       render: (totalAmount: number | null) => (
         <span>{totalAmount !== null ? `₹${totalAmount.toFixed(2)}` : "-"}</span>
       ),
-      sorter: (a: FeeTableRow, b: FeeTableRow) =>
-        (a.totalAmount || 0) - (b.totalAmount || 0),
+      sorter: (a: FeeTableRow, b: FeeTableRow) => (a.totalAmount || 0) - (b.totalAmount || 0),
     },
     {
       title: "Amount Paid",
@@ -569,8 +697,7 @@ const CollectStudentFees: React.FC = () => {
           )}
         </div>
       ),
-      sorter: (a: FeeTableRow, b: FeeTableRow) =>
-        (a.amountPaid || 0) - (b.amountPaid || 0),
+      sorter: (a: FeeTableRow, b: FeeTableRow) => (a.amountPaid || 0) - (b.amountPaid || 0),
     },
     {
       title: "Balance",
@@ -578,8 +705,7 @@ const CollectStudentFees: React.FC = () => {
       render: (balanceAmount: number) => (
         <span>{balanceAmount ? `₹${balanceAmount.toFixed(2)}` : "-"}</span>
       ),
-      sorter: (a: FeeTableRow, b: FeeTableRow) =>
-        (b.balanceAmount || 0) - (a.balanceAmount || 0),
+      sorter: (a: FeeTableRow, b: FeeTableRow) => (b.balanceAmount || 0) - (a.balanceAmount || 0),
     },
     {
       title: "Due Date",
@@ -599,15 +725,10 @@ const CollectStudentFees: React.FC = () => {
       render: (status?: string) => (
         <span
           className={`badge ${
-            status === "paid"
-              ? "bg-success"
-              : status === "partially_paid"
-              ? "bg-info"
-              : status === "pending"
-              ? "bg-warning"
-              : status
-              ? "bg-danger"
-              : "bg-secondary"
+            status === "paid" ? "bg-success" :
+            status === "partially_paid" ? "bg-info" :
+            status === "pending" ? "bg-warning" :
+            status ? "bg-danger" : "bg-secondary"
           }`}
           aria-label={`Status: ${status || "Not Generated"}`}
         >
@@ -676,104 +797,85 @@ const CollectStudentFees: React.FC = () => {
     },
   ];
 
-  const renderPaymentDetails = (
-  paymentDetails: PaymentDetail[],
-  excessAmount: number
-) => {
-  if (!paymentDetails || paymentDetails.length === 0) return null;
+  const renderPaymentDetails = (paymentDetails: PaymentDetail[], excessAmount: number) => {
+    if (!paymentDetails || paymentDetails.length === 0) return null;
 
-  return paymentDetails.map((detail, index) => {
-    const relevantFields: { label: string; value: string | undefined }[] = [
-      { label: "Payment ID", value: detail.paymentId },
-      { label: "Mode of Payment", value: detail.modeOfPayment },
-      {
-        label: "Collection Date",
-        value: detail.collectionDate
-          ? moment(detail.collectionDate).format("MMM DD, YYYY")
-          : undefined,
-      },
-      {
-        label: "Amount Paid",
-        value: detail.amountPaid
-          ? `₹${detail.amountPaid.toFixed(2)}`
-          : undefined,
-      },
-    ];
+    return paymentDetails.map((detail, index) => {
+      const relevantFields: { label: string; value: string | undefined }[] = [
+        { label: "Payment ID", value: detail.paymentId },
+        { label: "Mode of Payment", value: detail.modeOfPayment },
+        {
+          label: "Collection Date",
+          value: detail.collectionDate ? moment(detail.collectionDate).format("MMM DD, YYYY") : undefined,
+        },
+        {
+          label: "Amount Paid",
+          value: detail.amountPaid ? `₹${detail.amountPaid.toFixed(2)}` : undefined,
+        },
+      ];
 
-    if (
-      detail.modeOfPayment !== "Cash" &&
-      detail.modeOfPayment !== "Cheque"
-    ) {
-      if (detail.transactionNo)
-        relevantFields.push({
-          label: "Transaction No",
-          value: detail.transactionNo,
-        });
-      if (detail.transactionDate)
-        relevantFields.push({
-          label: "Transaction Date",
-          value: moment(detail.transactionDate).format("MMM DD, YYYY"),
-        });
-    }
+      if (detail.modeOfPayment !== "Cash" && detail.modeOfPayment !== "Cheque") {
+        if (detail.transactionNo)
+          relevantFields.push({ label: "Transaction No", value: detail.transactionNo });
+        if (detail.transactionDate)
+          relevantFields.push({
+            label: "Transaction Date",
+            value: moment(detail.transactionDate).format("MMM DD, YYYY"),
+          });
+      }
 
-    if (detail.modeOfPayment === "Cheque") {
-      if (detail.chequeNo)
-        relevantFields.push({ label: "Cheque No", value: detail.chequeNo });
-      if (detail.chequeDate)
-        relevantFields.push({
-          label: "Cheque Date",
-          value: moment(detail.chequeDate).format("MMM DD, YYYY"),
-        });
-    }
+      if (detail.modeOfPayment === "Cheque") {
+        if (detail.chequeNo)
+          relevantFields.push({ label: "Cheque No", value: detail.chequeNo });
+        if (detail.chequeDate)
+          relevantFields.push({
+            label: "Cheque Date",
+            value: moment(detail.chequeDate).format("MMM DD, YYYY"),
+          });
+      }
 
-    if (["BankTransfer", "IMPS", "Cheque"].includes(detail.modeOfPayment)) {
-      if (detail.bankName)
-        relevantFields.push({ label: "Bank Name", value: detail.bankName });
-    }
+      if (["BankTransfer", "IMPS", "Cheque"].includes(detail.modeOfPayment)) {
+        if (detail.bankName)
+          relevantFields.push({ label: "Bank Name", value: detail.bankName });
+      }
 
-    if (detail.remarks)
-      relevantFields.push({ label: "Remarks", value: detail.remarks });
+      if (detail.remarks)
+        relevantFields.push({ label: "Remarks", value: detail.remarks });
 
-    if (detail.internalNotes)
-      relevantFields.push({
-        label: "Internal Notes",
-        value: detail.internalNotes,
-      });
+      if (detail.internalNotes)
+        relevantFields.push({ label: "Internal Notes", value: detail.internalNotes });
 
-    return (
-      <div
-        key={index}
-        style={{
-          
-          borderRadius: "8px",
-          padding: "10px",
-          marginBottom: "16px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-        }}
-      >
-        <h6 style={{ marginBottom: "12px", color: "#333", fontSize: "16px" }}>
-          Payment {index + 1}
-        </h6>
-
-        <Descriptions
-          bordered
-          size="small"
-          column={1}
-          labelStyle={{ fontWeight: 500, width: 160 }}
+      return (
+        <div
+          key={index}
+          style={{
+            borderRadius: "8px",
+            padding: "10px",
+            marginBottom: "16px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+          }}
         >
-          {relevantFields.map(
-            (field, idx) =>
+          <h6 style={{ marginBottom: "12px", color: "#333", fontSize: "16px" }}>
+            Payment {index + 1}
+          </h6>
+          <Descriptions
+            bordered
+            size="small"
+            column={1}
+            labelStyle={{ fontWeight: 500, width: 160 }}
+          >
+            {relevantFields.map((field, idx) =>
               field.value && (
                 <Descriptions.Item key={idx} label={field.label}>
                   {field.value}
                 </Descriptions.Item>
               )
-          )}
-        </Descriptions>
-      </div>
-    );
-  });
-};
+            )}
+          </Descriptions>
+        </div>
+      );
+    });
+  };
 
   return (
     <div className="page-wrapper">
@@ -843,35 +945,27 @@ const CollectStudentFees: React.FC = () => {
                   showSearch
                   optionFilterProp="label"
                   filterOption={(input, option) =>
-                    option?.label
-                      ?.toLowerCase()
-                      .includes(input.toLowerCase()) || false
+                    option?.label?.toLowerCase().includes(input.toLowerCase()) || false
                   }
                 />
               </Form.Item>
-              <Form.Item label="Month">
+              <Form.Item label={quarterlyStudentIds.has(selectedStudent) ? "Quarter" : "Month"}>
                 <Select
-                  placeholder="Filter by month"
+                  placeholder={quarterlyStudentIds.has(selectedStudent) ? "Filter by quarter" : "Filter by month"}
                   value={selectedMonth || undefined}
                   onChange={(value: string) => setSelectedMonth(value)}
                   style={{ width: 200 }}
-                  options={[
-                    "Apr",
-                    "May",
-                    "Jun",
-                    "Jul",
-                    "Aug",
-                    "Sep",
-                    "Oct",
-                    "Nov",
-                    "Dec",
-                    "Jan",
-                    "Feb",
-                    "Mar",
-                  ].map((month) => ({
-                    value: month,
-                    label: month,
-                  }))}
+                  options={
+                    quarterlyStudentIds.has(selectedStudent)
+                      ? quarters.map((quarter) => ({
+                          value: quarter.value,
+                          label: quarter.label,
+                        }))
+                      : months.map((month) => ({
+                          value: month,
+                          label: month,
+                        }))
+                  }
                   disabled={!selectedStudent || loading}
                   allowClear
                 />
@@ -916,7 +1010,14 @@ const CollectStudentFees: React.FC = () => {
                     {selectedStudent
                       ? students.find((s) => s._id === selectedStudent)?.name
                       : "Student"}
-                    {selectedMonth ? ` - ${selectedMonth}` : " - All Months"}
+                    {selectedMonth 
+                      ? quarterlyStudentIds.has(selectedStudent)
+                        ? ` - ${quarters.find(q => q.value === selectedMonth)?.label || selectedMonth}`
+                        : ` - ${selectedMonth}`
+                      : quarterlyStudentIds.has(selectedStudent) 
+                        ? " - All Quarters" 
+                        : " - All Months"
+                    }
                   </h5>
                   <Table
                     dataSource={monthlyFees}
@@ -986,59 +1087,51 @@ const CollectStudentFees: React.FC = () => {
                               </p>
                             </div>
                           </div>
-
                           <Row gutter={16}>
-  <Col span={12}>
-    <Descriptions
-      column={1}
-      size="small"
-      labelStyle={{ fontWeight: 500 }}
-      bordered
-    >
-      <Descriptions.Item label="Student Name">
-        {selectedFeeDetails.student.name}
-      </Descriptions.Item>
-      <Descriptions.Item label="Admission Number">
-        {selectedFeeDetails.student.admissionNumber}
-      </Descriptions.Item>
-      <Descriptions.Item label="Class">
-        {classes.find(
-          (c) =>
-            c._id ===
-            students.find((s) => s._id === selectedFeeDetails.student._id)
-              ?.classId
-        )?.name || "N/A"}
-      </Descriptions.Item>
-    </Descriptions>
-  </Col>
-
-  <Col span={12}>
-    <Descriptions
-      column={1}
-      size="small"
-      labelStyle={{ fontWeight: 500 }}
-      bordered
-    >
-      <Descriptions.Item label="Father's Name">
-        {students.find((s) => s._id === selectedFeeDetails.student._id)
-          ?.fatherInfo?.name || "N/A"}
-      </Descriptions.Item>
-      <Descriptions.Item label="Mother's Name">
-        {students.find((s) => s._id === selectedFeeDetails.student._id)
-          ?.motherInfo?.name || "N/A"}
-      </Descriptions.Item>
-    </Descriptions>
-  </Col>
-</Row>
-
+                            <Col span={12}>
+                              <Descriptions
+                                column={1}
+                                size="small"
+                                labelStyle={{ fontWeight: 500 }}
+                                bordered
+                              >
+                                <Descriptions.Item label="Student Name">
+                                  {selectedFeeDetails.student.name}
+                                </Descriptions.Item>
+                                <Descriptions.Item label="Admission Number">
+                                  {selectedFeeDetails.student.admissionNumber}
+                                </Descriptions.Item>
+                                <Descriptions.Item label="Class">
+                                  {classes.find(
+                                    (c) =>
+                                      c._id ===
+                                      students.find((s) => s._id === selectedFeeDetails.student._id)?.classId
+                                  )?.name || "N/A"}
+                                </Descriptions.Item>
+                              </Descriptions>
+                            </Col>
+                            <Col span={12}>
+                              <Descriptions
+                                column={1}
+                                size="small"
+                                labelStyle={{ fontWeight: 500 }}
+                                bordered
+                              >
+                                <Descriptions.Item label="Father's Name">
+                                  {students.find((s) => s._id === selectedFeeDetails.student._id)?.fatherInfo?.name || "N/A"}
+                                </Descriptions.Item>
+                                <Descriptions.Item label="Mother's Name">
+                                  {students.find((s) => s._id === selectedFeeDetails.student._id)?.motherInfo?.name || "N/A"}
+                                </Descriptions.Item>
+                              </Descriptions>
+                            </Col>
+                          </Row>
                         </div>
-
                         <Row gutter={24}>
                           <Col
                             span={
                               (selectedFeeDetails.status === "paid" ||
-                                selectedFeeDetails.status ===
-                                  "partially_paid") &&
+                                selectedFeeDetails.status === "partially_paid") &&
                               selectedFeeDetails.paymentDetails?.length > 0
                                 ? 12
                                 : 24
@@ -1047,86 +1140,51 @@ const CollectStudentFees: React.FC = () => {
                             <Table
                               dataSource={selectedFeeDetails.fees}
                               columns={feeColumns}
-                              rowKey={(record, index) =>
-                                `${selectedFeeDetails._id}-${index}`
-                              }
+                              rowKey={(record, index) => `${selectedFeeDetails._id}-${index}`}
                               pagination={false}
                               footer={() => {
-                                const totalAmount =
-                                  selectedFeeDetails.amount || 0;
-                                const excessAmount =
-                                  selectedFeeDetails.excessAmount || 0;
-                                const amountPaid =
-                                  selectedFeeDetails.amountPaid || 0;
-                                const balanceAmount =
-                                  selectedFeeDetails.balanceAmount || 0;
+                                const totalAmount = selectedFeeDetails.amount || 0;
+                                const excessAmount = selectedFeeDetails.excessAmount || 0;
+                                const amountPaid = selectedFeeDetails.amountPaid || 0;
+                                const balanceAmount = selectedFeeDetails.balanceAmount || 0;
                                 const month = selectedFeeDetails.month || "N/A";
                                 const gstRate = 0.18;
-
                                 const gstAmountTotal = totalAmount * gstRate;
-                                const baseAmountTotal =
-                                  totalAmount - gstAmountTotal;
-
+                                const baseAmountTotal = totalAmount - gstAmountTotal;
                                 const gstAmountPaid = amountPaid * gstRate;
-                                const baseAmountPaid =
-                                  amountPaid - gstAmountPaid;
+                                const baseAmountPaid = amountPaid - gstAmountPaid;
 
                                 return (
                                   <div className="text-right">
                                     <div className="mt-2">
-                                      <strong >Month: {month}</strong>
+                                      <strong>Month: {month}</strong>
                                     </div>
-
                                     <div className="mt-2">
                                       <strong>
                                         Total Fees: ₹{totalAmount.toFixed(2)}{" "}
-                                        {/* <span
-                                          style={{
-                                            fontWeight: "normal",
-                                            fontSize: "13px",
-                                          }}
-                                        >
-                                          (₹{baseAmountTotal.toFixed(2)} + ₹
-                                          {gstAmountTotal.toFixed(2)} GST @18%)
-                                        </span> */}
                                       </strong>
                                     </div>
-
                                     {amountPaid > 0 && (
                                       <div className="mt-2">
                                         <strong>
                                           Amount Paid: ₹{amountPaid.toFixed(2)}{" "}
-                                          <span
-                                            style={{
-                                              fontWeight: "normal",
-                                              fontSize: "13px",
-                                            }}
-                                          >
-                                            {/* (₹{baseAmountPaid.toFixed(2)} + ₹
-                                            {gstAmountPaid.toFixed(2)} GST @18%) */}
-                                          </span>
                                         </strong>
                                       </div>
                                     )}
                                     {(selectedFeeDetails.discount || 0) > 0 && (
-                                      <div  className="mt-2">
+                                      <div className="mt-2">
                                         <strong>
-                                          Discount Amount: ₹
-                                          {(
-                                            selectedFeeDetails.discount || 0
-                                          ).toFixed(2)}
+                                          Discount Amount: ₹{(selectedFeeDetails.discount || 0).toFixed(2)}
                                         </strong>
                                       </div>
                                     )}
                                     {balanceAmount > 0 && (
                                       <div className="mt-2">
                                         <strong>
-                                          Balance Amount: ₹
-                                          {balanceAmount.toFixed(2)}
+                                          Balance Amount: ₹{balanceAmount.toFixed(2)}
                                         </strong>
                                       </div>
                                     )}
-
                                     {excessAmount > 0 && (
                                       <div className="mt-2">
                                         <strong>
@@ -1134,40 +1192,23 @@ const CollectStudentFees: React.FC = () => {
                                         </strong>
                                       </div>
                                     )}
-
                                     <div className="mt-2">
                                       <strong>
                                         Status:{" "}
                                         <span
                                           className={`badge ${
-                                            selectedFeeDetails.status === "paid"
-                                              ? "bg-success"
-                                              : selectedFeeDetails.status ===
-                                                "partially_paid"
-                                              ? "bg-info"
-                                              : selectedFeeDetails.status ===
-                                                "pending"
-                                              ? "bg-warning"
-                                              : selectedFeeDetails.status
-                                              ? "bg-danger"
-                                              : "bg-secondary"
+                                            selectedFeeDetails.status === "paid" ? "bg-success" :
+                                            selectedFeeDetails.status === "partially_paid" ? "bg-info" :
+                                            selectedFeeDetails.status === "pending" ? "bg-warning" :
+                                            selectedFeeDetails.status ? "bg-danger" : "bg-secondary"
                                           }`}
-                                          aria-label={`Status: ${
-                                            selectedFeeDetails.status ||
-                                            "Not Generated"
-                                          }`}
+                                          aria-label={`Status: ${selectedFeeDetails.status || "Not Generated"}`}
                                         >
                                           {selectedFeeDetails.status
                                             ? selectedFeeDetails.status
                                                 .replace("_", " ")
                                                 .split(" ")
-                                                .map(
-                                                  (word) =>
-                                                    word
-                                                      .charAt(0)
-                                                      .toUpperCase() +
-                                                    word.slice(1)
-                                                )
+                                                .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
                                                 .join(" ")
                                             : "Not Generated"}
                                         </span>
@@ -1182,19 +1223,7 @@ const CollectStudentFees: React.FC = () => {
                             selectedFeeDetails.status === "partially_paid") &&
                             selectedFeeDetails.paymentDetails?.length > 0 && (
                               <Col span={12}>
-                                {/* <h5
-                                  style={{
-                                    marginBottom: "16px",
-                                    color: "#333",
-                                    fontSize: "18px",
-                                  }}
-                                >
-                                  Payment Details
-                                </h5> */}
-                                {renderPaymentDetails(
-                                  selectedFeeDetails.paymentDetails,
-                                  selectedFeeDetails.excessAmount
-                                )}
+                                {renderPaymentDetails(selectedFeeDetails.paymentDetails, selectedFeeDetails.excessAmount)}
                               </Col>
                             )}
                         </Row>
@@ -1204,12 +1233,8 @@ const CollectStudentFees: React.FC = () => {
                   <Modal
                     title={
                       isEditingPayment
-                        ? `Edit Payment - ${
-                            selectedFeeRow?.student.name || "Unknown"
-                          } (${selectedFeeRow?.month || "N/A"})`
-                        : `Collect Fees - ${
-                            selectedFeeRow?.student.name || "Unknown"
-                          } (${selectedFeeRow?.month || "N/A"})`
+                        ? `Edit Payment - ${selectedFeeRow?.student.name || "Unknown"} (${selectedFeeRow?.month || "N/A"})`
+                        : `Collect Fees - ${selectedFeeRow?.student.name || "Unknown"} (${selectedFeeRow?.month || "N/A"})`
                     }
                     open={isCollectModalVisible}
                     onOk={handleCollectFees}
@@ -1225,7 +1250,6 @@ const CollectStudentFees: React.FC = () => {
                     style={{ top: 50 }}
                   >
                     <Form layout="vertical">
-                      {/* Collection Date and Payment ID */}
                       <Row gutter={16}>
                         <Col span={12}>
                           <Form.Item label="Collection Date" required>
@@ -1234,9 +1258,7 @@ const CollectStudentFees: React.FC = () => {
                               onChange={(date) => setCollectionDate(date)}
                               format="YYYY-MM-DD"
                               style={{ width: "100%", zIndex: 10001 }}
-                              getPopupContainer={(trigger) =>
-                                trigger.parentElement || document.body
-                              }
+                              getPopupContainer={(trigger) => trigger.parentElement || document.body}
                             />
                           </Form.Item>
                         </Col>
@@ -1251,8 +1273,6 @@ const CollectStudentFees: React.FC = () => {
                           </Form.Item>
                         </Col>
                       </Row>
-
-                      {/* Payment Mode */}
                       <Form.Item label="Mode of Payment" required>
                         <Radio.Group
                           value={paymentMode}
@@ -1266,17 +1286,13 @@ const CollectStudentFees: React.FC = () => {
                           <Radio value="IMPS">IMPS</Radio>
                         </Radio.Group>
                       </Form.Item>
-
-                      {/* Conditional Fields Based on Mode */}
                       {paymentMode !== "Cash" && paymentMode !== "Cheque" && (
                         <Row gutter={16}>
                           <Col span={12}>
                             <Form.Item label="Transaction No">
                               <Input
                                 value={transactionNo}
-                                onChange={(e) =>
-                                  setTransactionNo(e.target.value)
-                                }
+                                onChange={(e) => setTransactionNo(e.target.value)}
                                 placeholder="Enter transaction number"
                               />
                             </Form.Item>
@@ -1288,18 +1304,13 @@ const CollectStudentFees: React.FC = () => {
                                 onChange={(date) => setTransactionDate(date)}
                                 format="YYYY-MM-DD"
                                 style={{ width: "100%", zIndex: 10001 }}
-                                getPopupContainer={(trigger) =>
-                                  trigger.parentElement || document.body
-                                }
+                                getPopupContainer={(trigger) => trigger.parentElement || document.body}
                               />
                             </Form.Item>
                           </Col>
                         </Row>
                       )}
-
-                      {["BankTransfer", "IMPS", "Cheque"].includes(
-                        paymentMode
-                      ) && (
+                      {["BankTransfer", "IMPS", "Cheque"].includes(paymentMode) && (
                         <Row gutter={16}>
                           <Col span={12}>
                             <Form.Item label="Bank Name">
@@ -1312,7 +1323,6 @@ const CollectStudentFees: React.FC = () => {
                           </Col>
                         </Row>
                       )}
-
                       {paymentMode === "Cheque" && (
                         <Row gutter={16}>
                           <Col span={12}>
@@ -1331,15 +1341,12 @@ const CollectStudentFees: React.FC = () => {
                                 onChange={(date) => setChequeDate(date)}
                                 format="YYYY-MM-DD"
                                 style={{ width: "100%", zIndex: 10001 }}
-                                getPopupContainer={(trigger) =>
-                                  trigger.parentElement || document.body
-                                }
+                                getPopupContainer={(trigger) => trigger.parentElement || document.body}
                               />
                             </Form.Item>
                           </Col>
                         </Row>
                       )}
-
                       <Row gutter={16}>
                         <Col span={24}>
                           <Form.Item label="Original Fee Amount">
@@ -1367,23 +1374,22 @@ const CollectStudentFees: React.FC = () => {
                                     setDiscountAmount(0);
                                   }}
                                 />
+                                {includeDiscount && discountAmount > 0 && (
+          <span>
+            &nbsp;(Amount after discount: ₹{((selectedFeeRow?.totalAmount || 0) - discountAmount).toFixed(2)})
+          </span>
+        )}
                               </span>
                             }
                           >
                             <Input
                               type="number"
                               value={discountAmount}
-                              onChange={(e) =>
-                                setDiscountAmount(Number(e.target.value))
-                              }
+                              onChange={(e) => setDiscountAmount(Number(e.target.value))}
                               placeholder="Enter discount"
                               min={0}
                               disabled={!includeDiscount}
-                              style={{
-                                backgroundColor: !includeDiscount
-                                  ? "#f5f5f5"
-                                  : "#fff",
-                              }}
+                              style={{ backgroundColor: !includeDiscount ? "#f5f5f5" : "#fff" }}
                               addonBefore="₹"
                             />
                           </Form.Item>
@@ -1395,10 +1401,10 @@ const CollectStudentFees: React.FC = () => {
                                 Late Fee&nbsp;
                                 <Checkbox
                                   checked={includeExcessFee}
-                                  onChange={(e) =>{
+                                  onChange={(e) => {
                                     const checked = e.target.checked;
-                                    setIncludeExcessFee(e.target.checked)
-                                    setExcessAmount(0)
+                                    setIncludeExcessFee(e.target.checked);
+                                    setExcessAmount(0);
                                   }}
                                 />
                               </span>
@@ -1407,17 +1413,11 @@ const CollectStudentFees: React.FC = () => {
                             <Input
                               type="number"
                               value={excessAmount}
-                              onChange={(e) =>
-                                setExcessAmount(Number(e.target.value))
-                              }
+                              onChange={(e) => setExcessAmount(Number(e.target.value))}
                               placeholder="Enter late fee"
                               min={0}
                               disabled={!includeExcessFee}
-                              style={{
-                                backgroundColor: !includeExcessFee
-                                  ? "#f5f5f5"
-                                  : "#fff",
-                              }}
+                              style={{ backgroundColor: !includeExcessFee ? "#f5f5f5" : "#fff" }}
                               addonBefore="₹"
                             />
                           </Form.Item>
@@ -1429,25 +1429,18 @@ const CollectStudentFees: React.FC = () => {
                             <Input
                               type="number"
                               value={amountPaid}
-                              onChange={(e) =>
-                                setAmountPaid(Number(e.target.value))
-                              }
+                              onChange={(e) => setAmountPaid(Number(e.target.value))}
                               placeholder="Enter amount paid"
                               min={0}
                               addonBefore="₹"
                             />
                           </Form.Item>
                         </Col>
-
                         <Col span={12}>
                           <Form.Item label="Total Amount">
                             <Input
                               type="number"
-                              value={
-                                amountPaid +
-                                (includeExcessFee ? excessAmount : 0) +
-                                (includeDiscount ? discountAmount : 0)
-                              }
+                              value={amountPaid + (includeExcessFee ? excessAmount : 0)}
                               disabled
                               style={{ backgroundColor: "#f5f5f5" }}
                               addonBefore="₹"
@@ -1455,18 +1448,13 @@ const CollectStudentFees: React.FC = () => {
                           </Form.Item>
                         </Col>
                       </Row>
-
-                      {/* Optional: Partially Paid Info */}
                       {selectedFeeRow?.status === "partially_paid" && (
                         <Row gutter={16}>
                           <Col span={12}>
                             <Form.Item label="Amount Already Paid">
                               <Input
                                 type="number"
-                                value={
-                                  (selectedFeeRow?.totalAmount || 0) -
-                                  (selectedFeeRow?.balanceAmount || 0)
-                                }
+                                value={(selectedFeeRow?.totalAmount || 0) - (selectedFeeRow?.balanceAmount || 0)}
                                 disabled
                                 style={{ backgroundColor: "#f5f5f5" }}
                                 addonBefore="₹"
@@ -1486,8 +1474,6 @@ const CollectStudentFees: React.FC = () => {
                           </Col>
                         </Row>
                       )}
-
-                      {/* Notes */}
                       <Row gutter={16}>
                         <Col span={12}>
                           <Form.Item label="Remarks">

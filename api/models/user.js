@@ -31,6 +31,7 @@ const userSchema = new mongoose.Schema(
     lastLogin: {
       type: Date,
     },
+    photo: { type: String, default: '' },
     branchId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Branch",

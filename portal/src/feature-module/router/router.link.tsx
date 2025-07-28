@@ -276,6 +276,7 @@ import AdvertisementManager from "../management/media/advertisement";
 import StoriesManager from "../management/media/stories";
 import VideoManager from "../management/media/videos";
 import StaffAttendanceReport from "../hrm/attendance/teacher-attendance-report";
+import FeeReport from "../management/feescollection/feesReport";
 const routes = all_routes;
 interface StudentLeaves {
   admissionNumber: string; // Updated prop name to match API field
@@ -1058,6 +1059,10 @@ export const protectedPublicRoutes = [
   {
     path: routes.teacherAttendanceReport,
     element: <StaffAttendanceReport />,
+  },
+  {
+    path: routes.feeReport,
+    element: <FeeReport />,
   },
   {
     path: routes.addBranch,

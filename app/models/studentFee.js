@@ -4,7 +4,7 @@ const paymentDetailSchema = new mongoose.Schema({
   paymentId: { type: String, required: true },
   modeOfPayment: {
     type: String,
-    enum: ["Cash", "BankTransfer", "Cheque", "CardPayment", "Wallet", "IMPS", "UPI"],
+    enum: ["Cash", "BankTransfer", "Cheque", "CardPayment", "Wallet", "IMPS"],
     required: true,
   },
   collectionDate: {
@@ -67,10 +67,10 @@ const feeComponentSchema = new mongoose.Schema({
 
 const studentFeeSchema = new mongoose.Schema({
   branchId: { 
-        type: mongoose.Schema.Types.ObjectId, 
-        ref: "Branch", 
-        required: true 
-      },
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: "Branch", 
+    required: true 
+  },
   studentId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Student",
@@ -113,6 +113,13 @@ const studentFeeSchema = new mongoose.Schema({
     enum: ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"],
     required: true,
   },
+  // Add this field to your studentFeeSchema in studentFee.js
+quarterMonths: {
+  type: [String],
+  enum: ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"],
+  default: null,
+},
+
   isCustom: {
     type: Boolean,
     default: false,
@@ -135,6 +142,15 @@ const studentFeeSchema = new mongoose.Schema({
     default: null,
   },
   generationGroupId: { type: String },
+  quarterlyGroupId: { 
+    type: String, 
+    default: null 
+  },
+  periodicity: {
+    type: String,
+    enum: ["Monthly", "Quarterly"],
+    default: "Monthly",
+  },
   merchantTransactionId: {
     type: String,
     default: null,
@@ -146,7 +162,9 @@ const studentFeeSchema = new mongoose.Schema({
     min: 0,
   },
 });
+
 studentFeeSchema.index({ studentId: 1, sessionId: 1, month: 1 });
+
 studentFeeSchema.pre("save", function (next) {
   this.updatedAt = Date.now();
   next();

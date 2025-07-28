@@ -11,9 +11,9 @@
 // export default router;
 
 import express from "express";
-import { signup, login, adminSignup, searchParents, getAllUsers, editAdmin, updateUserPassword, getAdmins, createAdmin  } from "../controllers/authController.js";
+import { signup, login, adminSignup, searchParents, getAllUsers, editAdmin, updateUserPassword, getAdmins, createAdmin , uploadAdminProfilePhoto, getAdminProfile } from "../controllers/authController.js";
 import authMiddleware from "../middleware/auth.js";
-
+import { adminUpload } from "../middleware/multer.js";
 const router = express.Router();
 
 // Public signup (parents and teachers)
@@ -30,6 +30,8 @@ router.get("/parents/search", searchParents);
 
 
 router.get("/", authMiddleware(["admin"]), getAllUsers);
+router.post("/upload-photo", authMiddleware(["admin"]), adminUpload.single('profilePhoto'), uploadAdminProfilePhoto);
+router.get("/profile", authMiddleware(["admin"]), getAdminProfile);
 
 router.get("/admins", authMiddleware(["superadmin"]), getAdmins);
 // Update user password (Admin only)

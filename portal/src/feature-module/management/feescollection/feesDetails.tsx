@@ -11,7 +11,8 @@ import {
   Modal,
   Row,
   Col,
-  Input, Descriptions
+  Input,
+  Descriptions,
 } from "antd";
 import { all_routes } from "../../router/all_routes";
 import moment from "moment";
@@ -39,8 +40,8 @@ interface Student {
   name: string;
   classId: string;
   className?: string;
-  fatherName?:string;
-  motherName?:string;
+  fatherName?: string;
+  motherName?: string;
 }
 
 interface PaymentDetail {
@@ -83,8 +84,8 @@ interface GeneratedFee {
     _id: string;
     name: string;
     admissionNumber: string;
-    fatherName?:string;
-    motherName?:string;
+    fatherName?: string;
+    motherName?: string;
   };
   fees: FeeDetail[];
   amount: number;
@@ -97,6 +98,9 @@ interface GeneratedFee {
   month?: string;
   paymentDetails: PaymentDetail[];
   excessAmount: number;
+  periodicity?: string;
+  quarterlyGroupId?: string;
+  quarterMonths?: string[];
 }
 
 interface FeeTableRow {
@@ -119,22 +123,78 @@ interface FeeTableRow {
 
 const API_URL = process.env.REACT_APP_URL;
 
+// Month mapping for converting abbreviated to full month names
+const monthMap: { [key: string]: string } = {
+  Apr: "April",
+  May: "May",
+  Jun: "June",
+  Jul: "July",
+  Aug: "August",
+  Sep: "September",
+  Oct: "October",
+  Nov: "November",
+  Dec: "December",
+  Jan: "January",
+  Feb: "February",
+  Mar: "March",
+};
+
 const StudentFeeData: React.FC = () => {
   const routes = all_routes;
   const { token } = useAuth();
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [classes, setClasses] = useState<Class[]>([]); // Added state for classes
+  const [classes, setClasses] = useState<Class[]>([]);
   const [selectedSession, setSelectedSession] = useState<string>("");
   const [students, setStudents] = useState<Student[]>([]);
   const [monthlyFees, setMonthlyFees] = useState<FeeTableRow[]>([]);
   const [filteredFees, setFilteredFees] = useState<FeeTableRow[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [isDetailsModalVisible, setIsDetailsModalVisible] =
-    useState<boolean>(false);
-  const [selectedFeeDetails, setSelectedFeeDetails] =
-    useState<GeneratedFee | null>(null);
+  const [isDetailsModalVisible, setIsDetailsModalVisible] = useState<boolean>(false);
+  const [selectedFeeDetails, setSelectedFeeDetails] = useState<GeneratedFee | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [quarterlyStudentIds, setQuarterlyStudentIds] = useState<Set<string>>(new Set());
+  const [selectedMonth, setSelectedMonth] = useState("");
+  const [allFees, setAllFees] = useState<FeeTableRow[]>([]);
+
+  const quarters = [
+    {
+      value: "Q1",
+      label: "Quarter 1 (April, May, June)",
+      months: ["April", "May", "June"],
+    },
+    {
+      value: "Q2",
+      label: "Quarter 2 (July, August, September)",
+      months: ["July", "August", "September"],
+    },
+    {
+      value: "Q3",
+      label: "Quarter 3 (October, November, December)",
+      months: ["October", "November", "December"],
+    },
+    {
+      value: "Q4",
+      label: "Quarter 4 (January, February, March)",
+      months: ["January", "February", "March"],
+    },
+  ];
+
+  const months = [
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+    "January",
+    "February",
+    "March",
+  ];
+
   const config = {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -146,10 +206,7 @@ const StudentFeeData: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get<Session[]>(
-        `${API_URL}/api/session/get`,
-        config
-      );
+      const response = await axios.get<Session[]>(`${API_URL}/api/session/get`, config);
       setSessions(response.data || []);
     } catch (err) {
       const errorMessage = axios.isAxiosError(err)
@@ -193,11 +250,12 @@ const StudentFeeData: React.FC = () => {
         config
       );
       const studentsData = response.data?.data || [];
+
       // Fetch class names for each student
       const studentsWithClassNames = await Promise.all(
         studentsData.map(async (student) => {
           try {
-            const classResponse = await axios.get<Class>(
+            const classResponse = await axios.get(
               `${API_URL}/api/class/${student.classId}`,
               config
             );
@@ -210,6 +268,7 @@ const StudentFeeData: React.FC = () => {
           }
         })
       );
+
       setStudents(studentsWithClassNames);
     } catch (err) {
       const errorMessage = axios.isAxiosError(err)
@@ -228,7 +287,6 @@ const StudentFeeData: React.FC = () => {
     try {
       const url = `${API_URL}/api/studentFees/${studentId}/fees-by-session/${selectedSession}`;
       const response = await axios.get<GeneratedFee[]>(url, config);
-      console.log(response.data);
       return response.data || [];
     } catch (err) {
       const errorMessage = axios.isAxiosError(err)
@@ -247,32 +305,96 @@ const StudentFeeData: React.FC = () => {
     setError(null);
     try {
       const allFees: FeeTableRow[] = [];
+      const newQuarterlyStudentIds = new Set<string>();
+
       for (const student of students) {
         const fees = await fetchFeesForStudent(student._id);
-        fees.forEach((fee) => {
-          if (fee.month) {
+
+        // Check if student has quarterly fees
+        const hasQuarterlyFees = fees.some(
+          (fee) => fee.periodicity === "Quarterly" && fee.quarterlyGroupId
+        );
+
+        if (hasQuarterlyFees) {
+          newQuarterlyStudentIds.add(student._id);
+        }
+
+        // Group quarterly fees by quarterlyGroupId
+        if (hasQuarterlyFees) {
+          const quarterlyGroups = new Map();
+          fees.forEach((fee) => {
+            if (fee.quarterlyGroupId) {
+              if (!quarterlyGroups.has(fee.quarterlyGroupId)) {
+                quarterlyGroups.set(fee.quarterlyGroupId, []);
+              }
+              quarterlyGroups.get(fee.quarterlyGroupId)!.push(fee);
+            }
+          });
+
+          // Create rows for each quarterly group
+          quarterlyGroups.forEach((groupFees, quarterlyGroupId) => {
+            const representativeFee = groupFees[0];
+            const quarter = quarters.find((q) =>
+              q.months.some((month) => month === monthMap[representativeFee.month!])
+            );
+
             const row: FeeTableRow = {
-              key: `${student._id}-${fee.month}`,
+              key: `${student._id}-${quarterlyGroupId}`,
               student: {
                 _id: student._id,
                 name: student.name,
                 admissionNumber: student.admissionNumber,
               },
               className: student.className || "Unknown",
-              month: fee.month,
-              totalAmount: fee.amount || 0,
-              totalNetPayable:
-                fee.netPayable || fee.amount - (fee.discount || 0),
-              amountPaid: fee.amountPaid || 0,
-              balanceAmount: fee.balanceAmount || 0,
-              dueDate: fee.dueDate,
-              status: fee.status || "pending",
-              feeDetails: [fee],
+              month: quarter?.value || monthMap[representativeFee.month!] || "N/A",
+              totalAmount: groupFees.reduce((sum: any, fee: any) => sum + (fee.amount || 0), 0),
+              totalNetPayable: groupFees.reduce(
+                (sum: any, fee: any) => sum + (fee.netPayable || fee.amount - (fee.discount || 0)),
+                0
+              ),
+              amountPaid: groupFees.reduce(
+                (sum: any, fee: any) => sum + (fee.amountPaid || 0),
+                0
+              ),
+              balanceAmount: groupFees.reduce(
+                (sum: any, fee: any) => sum + (fee.balanceAmount || 0),
+                0
+              ),
+              dueDate: representativeFee.dueDate,
+              status: representativeFee.status || "pending",
+              feeDetails: groupFees,
             };
             allFees.push(row);
-          }
-        });
+          });
+        } else {
+          // Handle monthly fees
+          fees.forEach((fee) => {
+            if (fee.month) {
+              const row: FeeTableRow = {
+                key: `${student._id}-${fee.month}`,
+                student: {
+                  _id: student._id,
+                  name: student.name,
+                  admissionNumber: student.admissionNumber,
+                },
+                className: student.className || "Unknown",
+                month: monthMap[fee.month] || fee.month,
+                totalAmount: fee.amount || 0,
+                totalNetPayable: fee.netPayable || fee.amount - (fee.discount || 0),
+                amountPaid: fee.amountPaid || 0,
+                balanceAmount: fee.balanceAmount || 0,
+                dueDate: fee.dueDate,
+                status: fee.status || "pending",
+                feeDetails: [fee],
+              };
+              allFees.push(row);
+            }
+          });
+        }
       }
+
+      setQuarterlyStudentIds(newQuarterlyStudentIds);
+      setAllFees(allFees);
       setMonthlyFees(allFees);
       setFilteredFees(allFees);
     } catch (err) {
@@ -287,12 +409,28 @@ const StudentFeeData: React.FC = () => {
 
   const handleSearch = (value: string) => {
     setSearchQuery(value);
+
+    // Apply month/quarter filter first
+    let feesToFilter = allFees;
+    if (selectedMonth) {
+      feesToFilter = allFees.filter((fee) => {
+        const isQuarterlyStudent = quarterlyStudentIds.has(fee.student._id!);
+
+        if (isQuarterlyStudent) {
+          return fee.month === selectedMonth;
+        } else {
+          return fee.month === selectedMonth;
+        }
+      });
+    }
+
     if (!value) {
-      setFilteredFees(monthlyFees);
+      setFilteredFees(feesToFilter);
       return;
     }
+
     const lowerValue = value.toLowerCase();
-    const filtered = monthlyFees.filter(
+    const filtered = feesToFilter.filter(
       (fee) =>
         fee.student.name.toLowerCase().includes(lowerValue) ||
         fee.className.toLowerCase().includes(lowerValue) ||
@@ -306,11 +444,15 @@ const StudentFeeData: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    handleSearch(searchQuery);
+  }, [selectedMonth, allFees, searchQuery]);
+
+  useEffect(() => {
     if (selectedSession) {
-      fetchClasses(); // Fetch classes when session is selected
+      fetchClasses();
       fetchStudentsForSession();
     } else {
-      setClasses([]); // Reset classes when no session is selected
+      setClasses([]);
       setStudents([]);
       setMonthlyFees([]);
       setFilteredFees([]);
@@ -339,7 +481,6 @@ const StudentFeeData: React.FC = () => {
       return;
     }
     setSelectedFeeDetails(feeDetail);
-    console.log(setSelectedFeeDetails)
     setIsDetailsModalVisible(true);
   };
 
@@ -349,60 +490,51 @@ const StudentFeeData: React.FC = () => {
       dataIndex: "student",
       render: (student: { name: string; admissionNumber: string }) => (
         <div>
-          <div>{student?.name || "N/A"}</div>
-          <small className="text-muted">
-            ({student?.admissionNumber || "N/A"})
-          </small>
+          {student?.name || "N/A"}
+          <br />
+          <small>({student?.admissionNumber || "N/A"})</small>
         </div>
       ),
-      sorter: (a: FeeTableRow, b: FeeTableRow) =>
-        a.student.name.localeCompare(b.student.name),
+      sorter: (a: FeeTableRow, b: FeeTableRow) => a.student.name.localeCompare(b.student.name),
     },
     {
       title: "Class",
       dataIndex: "className",
       render: (className: string) => <span>{className || "N/A"}</span>,
-      sorter: (a: FeeTableRow, b: FeeTableRow) =>
-        a.className.localeCompare(b.className),
+      sorter: (a: FeeTableRow, b: FeeTableRow) => a.className.localeCompare(b.className),
     },
     {
-      title: "Month",
+      title: "Month/Quarter",
       dataIndex: "month",
-      render: (month: string) => (
-        <span style={{ color: "black" }}>{month || "N/A"}</span>
-      ),
-      sorter: (a: FeeTableRow, b: FeeTableRow) =>
-        a.month.localeCompare(b.month),
+      render: (month: string, record: FeeTableRow) => {
+        const isQuarterlyStudent = quarterlyStudentIds.has(record.student._id!);
+
+        if (isQuarterlyStudent) {
+          const quarter = quarters.find((q) => q.value === month);
+          return (
+            <span style={{ color: "#1890ff", fontWeight: "bold" }}>
+              📅 {quarter ? quarter.label : month || "N/A"}
+            </span>
+          );
+        }
+
+        return <span>📆 {month || "N/A"}</span>;
+      },
+      sorter: (a: FeeTableRow, b: FeeTableRow) => a.month.localeCompare(b.month),
     },
     {
       title: "Due Date",
       dataIndex: "dueDate",
       render: (duedate: string) => (
-        <span style={{ color: "black" }}>
-          {duedate ? dayjs(duedate).format("DD MMM YYYY") : "N/A"}
-        </span>
+        <span>{duedate ? dayjs(duedate).format("DD MMM YYYY") : "N/A"}</span>
       ),
-      sorter: (a: FeeTableRow, b: FeeTableRow) =>
-        a.month.localeCompare(b.month),
+      sorter: (a: FeeTableRow, b: FeeTableRow) => a.month.localeCompare(b.month),
     },
     {
       title: "Status",
       dataIndex: "status",
       render: (status?: string) => (
-        <span
-          className={`badge ${
-            status === "paid"
-              ? "bg-success"
-              : status === "partially_paid"
-              ? "bg-info"
-              : status === "pending"
-              ? "bg-warning"
-              : status
-              ? "bg-danger"
-              : "bg-secondary"
-          }`}
-          aria-label={`Status: ${status || "Not Generated"}`}
-        >
+        <span>
           {status
             ? status
                 .replace("_", " ")
@@ -420,11 +552,9 @@ const StudentFeeData: React.FC = () => {
       key: "action",
       render: (_: any, record: FeeTableRow) => (
         <Button
-          type="default"
-          size="small"
           onClick={() => handleViewDetails(record)}
           disabled={!record.feeDetails || record.feeDetails.length === 0}
-          icon={<i className="ti ti-eye me-1" />}
+          size="small"
         >
           View Details
         </Button>
@@ -436,9 +566,7 @@ const StudentFeeData: React.FC = () => {
     {
       title: "Fee Group",
       dataIndex: "feesGroup",
-      render: (feesGroup: { name: string }) => (
-        <span>{feesGroup?.name || "N/A"}</span>
-      ),
+      render: (feesGroup: { name: string }) => <span>{feesGroup?.name || "N/A"}</span>,
     },
     {
       title: "Amount",
@@ -447,11 +575,9 @@ const StudentFeeData: React.FC = () => {
     },
   ];
 
-  const renderPaymentDetails = (
-    paymentDetails: PaymentDetail[]
-  ) => {
+  const renderPaymentDetails = (paymentDetails: PaymentDetail[]) => {
     if (!paymentDetails || paymentDetails.length === 0) return null;
-  
+
     return paymentDetails.map((detail, index) => {
       const relevantFields: { label: string; value: string | undefined }[] = [
         { label: "Payment ID", value: detail.paymentId },
@@ -464,28 +590,20 @@ const StudentFeeData: React.FC = () => {
         },
         {
           label: "Amount Paid",
-          value: detail.amountPaid
-            ? `₹${detail.amountPaid.toFixed(2)}`
-            : undefined,
+          value: detail.amountPaid ? `₹${detail.amountPaid.toFixed(2)}` : undefined,
         },
       ];
-  
-      if (
-        detail.modeOfPayment !== "Cash" &&
-        detail.modeOfPayment !== "Cheque"
-      ) {
+
+      if (detail.modeOfPayment !== "Cash" && detail.modeOfPayment !== "Cheque") {
         if (detail.transactionNo)
-          relevantFields.push({
-            label: "Transaction No",
-            value: detail.transactionNo,
-          });
+          relevantFields.push({ label: "Transaction No", value: detail.transactionNo });
         if (detail.transactionDate)
           relevantFields.push({
             label: "Transaction Date",
             value: moment(detail.transactionDate).format("MMM DD, YYYY"),
           });
       }
-  
+
       if (detail.modeOfPayment === "Cheque") {
         if (detail.chequeNo)
           relevantFields.push({ label: "Cheque No", value: detail.chequeNo });
@@ -495,26 +613,22 @@ const StudentFeeData: React.FC = () => {
             value: moment(detail.chequeDate).format("MMM DD, YYYY"),
           });
       }
-  
+
       if (["BankTransfer", "IMPS", "Cheque"].includes(detail.modeOfPayment)) {
         if (detail.bankName)
           relevantFields.push({ label: "Bank Name", value: detail.bankName });
       }
-  
+
       if (detail.remarks)
         relevantFields.push({ label: "Remarks", value: detail.remarks });
-  
+
       if (detail.internalNotes)
-        relevantFields.push({
-          label: "Internal Notes",
-          value: detail.internalNotes,
-        });
-  
+        relevantFields.push({ label: "Internal Notes", value: detail.internalNotes });
+
       return (
         <div
           key={index}
           style={{
-            
             borderRadius: "8px",
             padding: "10px",
             marginBottom: "16px",
@@ -524,7 +638,7 @@ const StudentFeeData: React.FC = () => {
           <h6 style={{ marginBottom: "12px", color: "#333", fontSize: "16px" }}>
             Payment {index + 1}
           </h6>
-  
+
           <Descriptions
             bordered
             size="small"
@@ -607,7 +721,7 @@ const StudentFeeData: React.FC = () => {
                     onClick={() => {
                       setError(null);
                       if (selectedSession) {
-                        fetchClasses(); // Retry fetching classes
+                        fetchClasses();
                         fetchStudentsForSession();
                       } else {
                         fetchSessions();
@@ -691,37 +805,35 @@ const StudentFeeData: React.FC = () => {
                           </div>
                         </div>
                         <Descriptions
-  bordered
-  size="small"
-  column={2}
-  style={{ marginBottom: "20px" }}
-  labelStyle={{ fontWeight: 500, width: "160px" }}
-  contentStyle={{ textAlign: "left" }}
->
-  <Descriptions.Item label="Student Name">
-    {selectedFeeDetails.student.name || "N/A"}
-  </Descriptions.Item>
-  <Descriptions.Item label="Father's Name">
-    {selectedFeeDetails?.student?.fatherName || "N/A"}
-  </Descriptions.Item>
-
-  <Descriptions.Item label="Admission Number">
-    {selectedFeeDetails.student.admissionNumber || "N/A"}
-  </Descriptions.Item>
-  <Descriptions.Item label="Mother's Name">
-    {selectedFeeDetails?.student?.motherName || "N/A"}
-  </Descriptions.Item>
-
-  <Descriptions.Item label="Class" span={2}>
-    {classes.find((c: Class) =>
-      c._id ===
-      students.find(
-        (s) => s._id === selectedFeeDetails.student._id
-      )?.classId
-    )?.name || "N/A"}
-  </Descriptions.Item>
-</Descriptions>
-
+                          bordered
+                          size="small"
+                          column={2}
+                          style={{ marginBottom: "20px" }}
+                          labelStyle={{ fontWeight: 500, width: "160px" }}
+                          contentStyle={{ textAlign: "left" }}
+                        >
+                          <Descriptions.Item label="Student Name">
+                            {selectedFeeDetails.student.name || "N/A"}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="Father's Name">
+                            {selectedFeeDetails?.student?.fatherName || "N/A"}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="Admission Number">
+                            {selectedFeeDetails.student.admissionNumber || "N/A"}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="Mother's Name">
+                            {selectedFeeDetails?.student?.motherName || "N/A"}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="Class" span={2}>
+                            {classes.find(
+                              (c: Class) =>
+                                c._id ===
+                                students.find(
+                                  (s) => s._id === selectedFeeDetails.student._id
+                                )?.classId
+                            )?.name || "N/A"}
+                          </Descriptions.Item>
+                        </Descriptions>
                         <Row gutter={24}>
                           <Col
                             span={
@@ -735,69 +847,48 @@ const StudentFeeData: React.FC = () => {
                             <Table
                               dataSource={selectedFeeDetails.fees}
                               columns={feeColumns}
-                              rowKey={(record, index) =>
-                                `${selectedFeeDetails._id}-${index}`
-                              }
+                              rowKey={(record, index) => `${selectedFeeDetails._id}-${index}`}
                               pagination={false}
                               footer={() => {
-                                const totalAmount =
-                                  selectedFeeDetails.amount || 0;
-                                const amountPaid =
-                                  selectedFeeDetails.amountPaid || 0;
-                                const balanceAmount =
-                                  selectedFeeDetails.balanceAmount || 0;
+                                const totalAmount = selectedFeeDetails.amount || 0;
+                                const amountPaid = selectedFeeDetails.amountPaid || 0;
+                                const balanceAmount = selectedFeeDetails.balanceAmount || 0;
                                 const discount = selectedFeeDetails.discount || 0;
-                                const netPayable =
-                                  selectedFeeDetails.netPayable || 0;
-                                const excessAmount =
-                                  selectedFeeDetails.excessAmount || 0;
-                                const month = selectedFeeDetails.month || "N/A";
+                                const netPayable = selectedFeeDetails.netPayable || 0;
+                                const excessAmount = selectedFeeDetails.excessAmount || 0;
+                                const month = monthMap[selectedFeeDetails.month!] || selectedFeeDetails.month || "N/A";
                                 return (
                                   <div className="text-right">
                                     <div>
-                                      <strong>Month: {month}</strong>{" "}
+                                      <strong>Month: {month}</strong>
                                     </div>
                                     <div>
-                                      <strong>
-                                        Total Fees: ₹{totalAmount.toFixed(2)}
-                                      </strong>
+                                      <strong>Total Fees: ₹{totalAmount.toFixed(2)}</strong>
                                     </div>
                                     {discount > 0 && (
                                       <div>
-                                        <strong>
-                                          Discount: ₹{discount.toFixed(2)}
-                                        </strong>
+                                        <strong>Discount: ₹{discount.toFixed(2)}</strong>
                                       </div>
                                     )}
                                     {amountPaid > 0 && (
                                       <div>
-                                        <strong>
-                                          Amount Paid: ₹{amountPaid.toFixed(2)}
-                                        </strong>
+                                        <strong>Amount Paid: ₹{amountPaid.toFixed(2)}</strong>
                                       </div>
                                     )}
                                     {balanceAmount > 0 && (
                                       <div>
-                                        <strong>
-                                          Balance Amount: ₹
-                                          {balanceAmount.toFixed(2)}
-                                        </strong>
+                                        <strong>Balance Amount: ₹{balanceAmount.toFixed(2)}</strong>
                                       </div>
                                     )}
                                     {excessAmount > 0 && (
                                       <div>
-                                        <strong>
-                                          Late Fee: ₹{excessAmount.toFixed(2)}
-                                        </strong>
+                                        <strong>Late Fee: ₹{excessAmount.toFixed(2)}</strong>
                                       </div>
                                     )}
                                     {selectedFeeDetails.dueDate && (
                                       <div>
                                         <strong>
-                                          Due Date:{" "}
-                                          {moment(
-                                            selectedFeeDetails.dueDate
-                                          ).format("MMM DD, YYYY")}
+                                          Due Date: {moment(selectedFeeDetails.dueDate).format("MMM DD, YYYY")}
                                         </strong>
                                       </div>
                                     )}
@@ -808,19 +899,16 @@ const StudentFeeData: React.FC = () => {
                                           className={`badge ${
                                             selectedFeeDetails.status === "paid"
                                               ? "bg-success"
-                                              : selectedFeeDetails.status ===
-                                                "partially_paid"
+                                              : selectedFeeDetails.status === "partially_paid"
                                               ? "bg-info"
-                                              : selectedFeeDetails.status ===
-                                                "pending"
+                                              : selectedFeeDetails.status === "pending"
                                               ? "bg-warning"
                                               : selectedFeeDetails.status
                                               ? "bg-danger"
                                               : "bg-secondary"
                                           }`}
                                           aria-label={`Status: ${
-                                            selectedFeeDetails.status ||
-                                            "Not Generated"
+                                            selectedFeeDetails.status || "Not Generated"
                                           }`}
                                         >
                                           {selectedFeeDetails.status
@@ -828,9 +916,7 @@ const StudentFeeData: React.FC = () => {
                                                 .replace("_", " ")
                                                 .split(" ")
                                                 .map(
-                                                  (word) =>
-                                                    word.charAt(0).toUpperCase() +
-                                                    word.slice(1)
+                                                  (word) => word.charAt(0).toUpperCase() + word.slice(1)
                                                 )
                                                 .join(" ")
                                             : "Not Generated"}
@@ -855,9 +941,7 @@ const StudentFeeData: React.FC = () => {
                                 >
                                   Payment Details
                                 </h5>
-                                {renderPaymentDetails(
-                                  selectedFeeDetails.paymentDetails
-                                )}
+                                {renderPaymentDetails(selectedFeeDetails.paymentDetails)}
                               </Col>
                             )}
                         </Row>
