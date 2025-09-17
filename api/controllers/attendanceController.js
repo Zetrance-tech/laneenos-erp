@@ -4,7 +4,7 @@ import CCTV from "../models/cctv.js";
 import Class from "../models/class.js"; // Assuming you have a Class model
 import mongoose from "mongoose";
 const ObjectId = mongoose.Types.ObjectId;
-import StaffAttendance from "../models/staffAttendance.js";
+import staffAttendance from "../models/staffAttendance.js";
 import Teacher from "../models/teacher.js";
 import User from "../models/user.js";
 //*******************Student Attendance******************** *//
