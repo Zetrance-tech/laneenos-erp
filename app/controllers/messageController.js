@@ -3,95 +3,6 @@ import Student from "../models/student.js";
 import Class from "../models/class.js";
 import User from "../models/user.js";
 
-// export const sendMessage = async (req, res) => {
-//   const { recipients, subject, body, attachment } = req.body;
-//   const senderId = req.user.userId;
-//   const senderRole = req.user.role;
-
-//   try {
-//     if (!recipients || !subject || !body) {
-//       return res.status(400).json({ error: "Recipients, subject, and body are required" });
-//     }
-
-//     let validRecipients = { users: [], students: [], classes: [] };
-
-//     if (senderRole === "admin") {
-//       const allTeachers = await User.find({ role: "teacher" }).select("_id"); // Changed: Use User instead of Teacher
-//       const allParents = await User.find({ role: "parent" }).select("_id");
-//       const allStudents = await Student.find().select("_id");
-//       const allClasses = await Class.find().select("_id");
-
-//       validRecipients.users = (recipients.users || []).filter(id =>
-//         [...allTeachers.map(t => t._id.toString()), ...allParents.map(p => p._id.toString())].includes(id.toString())
-//       );
-//       validRecipients.students = (recipients.students || []).filter(id =>
-//         allStudents.some(s => s._id.toString() === id.toString())
-//       );
-//       validRecipients.classes = (recipients.classes || []).filter(id =>
-//         allClasses.some(c => c._id.toString() === id.toString())
-//       );
-
-//       if (validRecipients.users.length === 0 && validRecipients.students.length === 0 && validRecipients.classes.length === 0) {
-//         return res.status(400).json({ error: "No valid recipients provided" });
-//       }
-//     } else if (senderRole === "teacher") {
-//       const teacherClasses = await Class.find({ teacherId: senderId }); // Changed: Use User._id directly
-//       const allowedClassIds = teacherClasses.map(c => c._id);
-//       const allowedStudents = await Student.find({ classId: { $in: allowedClassIds } }).select("_id");
-//       const allowedAdmins = await User.find({ role: "admin" }).select("_id");
-
-//       validRecipients.students = (recipients.students || []).filter(id =>
-//         allowedStudents.some(s => s._id.toString() === id.toString())
-//       );
-//       validRecipients.users = (recipients.users || []).filter(id =>
-//         allowedAdmins.some(a => a._id.toString() === id.toString())
-//       );
-
-//       if (validRecipients.users.length === 0 && validRecipients.students.length === 0) {
-//         return res.status(403).json({ error: "You can only message your class students or an admin" });
-//       }
-//     } else if (senderRole === "parent") {
-//       const student = await Student.findOne({
-//         $or: [
-//           { "fatherInfo.email": req.user.email },
-//           { "motherInfo.email": req.user.email },
-//         ],
-//       });
-//       if (!student) return res.status(404).json({ error: "Student not found" });
-
-//       const classData = await Class.findById(student.classId).populate("teacherId");
-//       if (!classData) return res.status(404).json({ error: "Class not found" });
-
-//       const allowedTeachers = classData.teacherId.map(t => t._id.toString()); // Changed: teacherId is User._id
-//       const allowedAdmins = (await User.find({ role: "admin" }).select("_id")).map(a => a._id.toString());
-
-//       validRecipients.users = (recipients.users || []).filter(id =>
-//         [...allowedTeachers, ...allowedAdmins].includes(id.toString())
-//       );
-
-//       if (validRecipients.users.length === 0) {
-//         return res.status(403).json({ error: "You can only message your child’s teacher(s) or an admin" });
-//       }
-//     } else {
-//       return res.status(403).json({ error: "Unauthorized role" });
-//     }
-
-//     const newMessage = new Message({
-//       sender: senderId,
-//       recipients: validRecipients,
-//       subject,
-//       body,
-//       attachment,
-//     });
-//     await newMessage.save();
-
-//     res.status(201).json({ message: "Message sent successfully", data: newMessage });
-//   } catch (error) {
-//     console.error("Error in sendMessage:", error);
-//     res.status(500).json({ error: "Failed to send message" });
-//   }
-// };
-
 
 export const sendMessage = async (req, res) => {
   const { recipients, subject, body, attachment } = req.body;
@@ -350,3 +261,4 @@ export const getMessageRecipients = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch recipients" });
   }
 };
+

@@ -5,7 +5,7 @@ import {
   getPaymentHistory,
   getFeeSummary,
 } from "../controllers/studentFeeController.js";
-import { initiatePayment, checkStatus} from "../controllers/paymentController.js";
+import { createRazorpayOrder, verifyRazorpayPayment} from "../controllers/paymentController.js";
 import authMiddleware from "../middleware/auth.js";
 const router = express.Router();
 
@@ -24,9 +24,14 @@ router.get("/summary", authMiddleware(["admin", "parent", "teacher"]),getFeeSumm
 
 
 
-router.post("/pay", authMiddleware(["admin", "parent", "teacher"]), initiatePayment)
+// router.post("/pay", authMiddleware(["admin", "parent", "teacher"]), initiatePayment)
 
-router.get("/payment/status/:merchantTransactionId", authMiddleware(["admin", "parent", "teacher"]), checkStatus);
+// router.get("/payment/status/:merchantTransactionId", authMiddleware(["admin", "parent", "teacher"]), checkStatus);
+
+router.post("/create-order", authMiddleware(["admin", "parent", "teacher"]), createRazorpayOrder);
+router.post("/verify-payment", authMiddleware(["admin", "parent", "teacher"]), verifyRazorpayPayment);
+
+
 
 
 export default router;
