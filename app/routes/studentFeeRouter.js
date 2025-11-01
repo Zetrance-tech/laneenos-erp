@@ -24,10 +24,6 @@ router.get("/summary", authMiddleware(["admin", "parent", "teacher"]),getFeeSumm
 
 
 
-// router.post("/pay", authMiddleware(["admin", "parent", "teacher"]), initiatePayment)
-
-// router.get("/payment/status/:merchantTransactionId", authMiddleware(["admin", "parent", "teacher"]), checkStatus);
-
 router.post("/create-order", authMiddleware(["admin", "parent", "teacher"]), createRazorpayOrder);
 router.post("/verify-payment", authMiddleware(["admin", "parent", "teacher"]), verifyRazorpayPayment);
 
