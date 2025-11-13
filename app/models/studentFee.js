@@ -4,7 +4,7 @@ const paymentDetailSchema = new mongoose.Schema({
   paymentId: { type: String, required: true },
   modeOfPayment: {
     type: String,
-    enum: ["Cash", "BankTransfer", "Cheque", "CardPayment", "Wallet", "IMPS"],
+    // enum: ["Cash", "BankTransfer", "Cheque", "CardPayment", "Wallet", "IMPS"],
     required: true,
   },
   collectionDate: {
