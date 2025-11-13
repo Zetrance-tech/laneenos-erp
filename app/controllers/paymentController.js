@@ -399,91 +399,166 @@ const razorpay = new Razorpay({
 });
 
 
+// export const createRazorpayOrder = async (req, res) => {
+//   try {
+//     // Extract user and fee details from request
+//     console.log(1);
+//     const { branchId, role, email } = req.user;
+//     const { feeId } = req.body;
+
+//     // Debug: Log user role and feeId
+//     console.log(`User Role: ${role}, Fee ID: ${feeId}`);
+
+//     if (role !== "parent") {
+//       console.log("Unauthorized access attempt: User is not a parent");
+//       return res.status(403).json({ message: "Only parents can initiate payments" });
+//     }
+
+//     // Get studentIds based on parent email and branchId
+//     const studentIds = await getStudentIdsForParent(email, branchId);
+//     console.log(`Student IDs for parent ${email}:`, studentIds);
+
+//     if (!studentIds.length) {
+//       console.log("No active students found for this parent");
+//       return res.status(404).json({ message: "No active students found for this parent" });
+//     }
+
+//     // Fetch the fee details
+//     const fee = await StudentFee.findOne({
+//       _id: feeId,
+//       branchId,
+//       studentId: { $in: studentIds },
+//       status: { $in: ["pending", "partially_paid"] },
+//     }).populate("studentId", "name email");
+
+//     // Debug: Log fee details or no fee found
+//     if (!fee) {
+//       console.log("Fee not found or not payable for feeId:", feeId);
+//       return res.status(404).json({ message: "Fee not found or not payable" });
+//     }
+
+//     console.log("Found fee for student:", fee.studentId.name, "Balance Amount:", fee.amount);
+
+//     // Convert balance amount to paise
+//     const amountToPay = fee.amount * 100;
+//     console.log(`Amount to Pay (in paise): ${amountToPay}`);
+
+//     // Razorpay order options
+//     const options = {
+//       amount: amountToPay,
+//       currency: "INR",
+//       receipt: `fee_${fee._id}`,
+//       notes: {
+//         studentId: fee.studentId._id.toString(),
+//         feeId: fee._id.toString(),
+//         branchId: branchId.toString(),
+//       },
+//     };
+
+//     console.log("Razorpay Order Options:", options);
+
+//     // Create the Razorpay order
+//     const order = await razorpay.orders.create(options);
+//     console.log("Razorpay Order Created:", order);
+
+//     // Update the StudentFee record with the Razorpay order ID
+//     await StudentFee.findByIdAndUpdate(fee._id, {
+//       merchantTransactionId: order.id,
+//     });
+
+//     // Send response with order details
+//     res.status(200).json({
+//       orderId: order.id,
+//       amount: order.amount,
+//       currency: order.currency,
+//       studentName: fee.studentId.name,
+//       keyId: process.env.RAZORPAY_KEY_ID,
+//     });
+
+//   } catch (error) {
+//     console.error("Error creating Razorpay order:", error.message);
+//     res.status(500).json({ message: error.message || "Failed to create payment order" });
+//   }
+// };
+
+
 export const createRazorpayOrder = async (req, res) => {
   try {
-    // Extract user and fee details from request
     const { branchId, role, email } = req.user;
     const { feeId } = req.body;
 
-    // Debug: Log user role and feeId
-    console.log(`User Role: ${role}, Fee ID: ${feeId}`);
-
     if (role !== "parent") {
-      console.log("Unauthorized access attempt: User is not a parent");
       return res.status(403).json({ message: "Only parents can initiate payments" });
     }
 
-    // Get studentIds based on parent email and branchId
-    const studentIds = await getStudentIdsForParent(email, branchId);
-    console.log(`Student IDs for parent ${email}:`, studentIds);
+    if (!feeId) {
+      return res.status(400).json({ message: "Missing required field: feeId" });
+    }
 
+    const studentIds = await getStudentIdsForParent(email, branchId);
     if (!studentIds.length) {
-      console.log("No active students found for this parent");
       return res.status(404).json({ message: "No active students found for this parent" });
     }
 
-    // Fetch the fee details
-    const fee = await StudentFee.findOne({
+    const studentFee = await StudentFee.findOne({
       _id: feeId,
       branchId,
       studentId: { $in: studentIds },
-      status: { $in: ["pending", "partially_paid"] },
-    }).populate("studentId", "name email");
+    })
+      .populate([
+        { path: "fees.feesGroup", select: "name periodicity" },
+        { path: "studentId", select: "name admissionNumber" },
+      ]);
 
-    // Debug: Log fee details or no fee found
-    if (!fee) {
-      console.log("Fee not found or not payable for feeId:", feeId);
-      return res.status(404).json({ message: "Fee not found or not payable" });
+    if (!studentFee) {
+      return res.status(404).json({ message: "Fee record not found or not associated with this parent" });
     }
 
-    console.log("Found fee for student:", fee.studentId.name, "Balance Amount:", fee.amount);
+    if (studentFee.status === "paid") {
+      return res.status(400).json({ message: "Fee already fully paid" });
+    }
 
-    // Convert balance amount to paise
-    const amountToPay = fee.amount * 100;
-    console.log(`Amount to Pay (in paise): ${amountToPay}`);
+    // Determine payable amount (same logic as PhonePe)
+    const amount =
+      studentFee.status === "partially_paid" ? studentFee.balanceAmount : studentFee.amount;
 
-    // Razorpay order options
-    const options = {
-      amount: amountToPay,
+    if (amount <= 0) {
+      return res.status(400).json({ message: "No remaining balance to pay" });
+    }
+
+    const razorpayOrder = await razorpay.orders.create({
+      amount: Math.round(amount * 100), // INR → paise
       currency: "INR",
-      receipt: `fee_${fee._id}`,
+      receipt: `fee_${studentFee._id}`,
       notes: {
-        studentId: fee.studentId._id.toString(),
-        feeId: fee._id.toString(),
+        studentId: studentFee.studentId._id.toString(),
+        feeId: studentFee._id.toString(),
         branchId: branchId.toString(),
       },
-    };
-
-    console.log("Razorpay Order Options:", options);
-
-    // Create the Razorpay order
-    const order = await razorpay.orders.create(options);
-    console.log("Razorpay Order Created:", order);
-
-    // Update the StudentFee record with the Razorpay order ID
-    await StudentFee.findByIdAndUpdate(fee._id, {
-      merchantTransactionId: order.id,
     });
 
-    // Send response with order details
-    res.status(200).json({
-      orderId: order.id,
-      amount: order.amount,
-      currency: order.currency,
-      studentName: fee.studentId.name,
+    // Persist Razorpay order id
+    studentFee.merchantTransactionId = razorpayOrder.id;
+    studentFee.status = studentFee.amountPaid > 0 ? "partially_paid" : "pending";
+    await studentFee.save();
+
+    res.json({
+      studentName: studentFee.studentId.name,
+      orderId: razorpayOrder.id,
+      amount: razorpayOrder.amount,
+      currency: razorpayOrder.currency,
       keyId: process.env.RAZORPAY_KEY_ID,
     });
-
   } catch (error) {
-    console.error("Error creating Razorpay order:", error.message);
-    res.status(500).json({ message: error.message || "Failed to create payment order" });
+    console.error("Razorpay order creation error:", error);
+    res.status(500).json({ message: "Payment initiation failed", error: error.message });
   }
 };
-
-
 // Verify Razorpay Payment and Update Fee Status
 export const verifyRazorpayPayment = async (req, res) => {
   try {
+    console.log("🔹 Starting Razorpay payment verification...");
+
     const { branchId, role, email } = req.user;
     const {
       razorpay_payment_id,
@@ -492,11 +567,18 @@ export const verifyRazorpayPayment = async (req, res) => {
       feeId,
     } = req.body;
 
+    console.log("User info:", { branchId, role, email });
+    console.log("Payment info from request:", { razorpay_payment_id, razorpay_order_id, razorpay_signature, feeId });
+
     if (role !== "parent") {
+      console.log("❌ Unauthorized attempt: user is not a parent");
       return res.status(403).json({ message: "Only parents can verify payments" });
     }
 
+    console.log("Fetching student IDs for parent...");
     const studentIds = await getStudentIdsForParent(email, branchId);
+    console.log("Student IDs found:", studentIds);
+
     const fee = await StudentFee.findOne({
       _id: feeId,
       branchId,
@@ -505,8 +587,18 @@ export const verifyRazorpayPayment = async (req, res) => {
     });
 
     if (!fee) {
+      console.log("❌ Fee or order not found for feeId:", feeId, "and orderId:", razorpay_order_id);
       return res.status(404).json({ message: "Fee or order not found" });
     }
+
+    console.log("Fee record found:", {
+      feeId: fee._id,
+      studentId: fee.studentId,
+      amount: fee.amount,
+      amountPaid: fee.amountPaid,
+      discount: fee.discount,
+      status: fee.status,
+    });
 
     // Verify payment signature
     const generatedSignature = crypto
@@ -514,23 +606,35 @@ export const verifyRazorpayPayment = async (req, res) => {
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
       .digest("hex");
 
+    console.log("Generated Signature:", generatedSignature);
+    console.log("Provided Signature:", razorpay_signature);
+
     if (generatedSignature !== razorpay_signature) {
+      console.log("❌ Invalid payment signature");
       return res.status(400).json({ message: "Invalid payment signature" });
     }
 
-    // Fetch payment details from Razorpay
+    console.log("Fetching payment details from Razorpay...");
     const payment = await razorpay.payments.fetch(razorpay_payment_id);
+    console.log("Payment details from Razorpay:", payment);
+
     if (payment.status !== "captured") {
+      console.log("❌ Payment not captured yet. Status:", payment.status);
       return res.status(400).json({ message: "Payment not captured" });
     }
 
     const amountPaid = payment.amount / 100; // Convert from paise to INR
+    console.log(`Amount paid by student: ₹${amountPaid}`);
 
     // Update fee record
     fee.amountPaid += amountPaid;
     fee.amount = fee.amount - fee.amountPaid - fee.discount;
     fee.status = fee.balanceAmount <= 0 ? "paid" : "partially_paid";
-
+    const remarks = payment.notes
+  ? typeof payment.notes === 'object'
+    ? JSON.stringify(payment.notes)
+    : String(payment.notes)
+  : null;
     fee.paymentDetails.push({
       paymentId: razorpay_payment_id,
       modeOfPayment: payment.method === "upi" ? "UPI" : payment.method.charAt(0).toUpperCase() + payment.method.slice(1),
@@ -539,14 +643,16 @@ export const verifyRazorpayPayment = async (req, res) => {
       transactionNo: razorpay_payment_id,
       transactionDate: new Date(payment.created_at * 1000),
       bankName: payment.bank || null,
-      remarks: payment.notes || null,
+      remarks
     });
 
+    console.log("Saving updated fee record...");
     await fee.save();
+    console.log("✅ Fee record updated successfully");
 
     res.status(200).json({ message: "Payment verified and recorded successfully" });
   } catch (error) {
-    console.error("Error verifying Razorpay payment:", error.message);
+    console.error("❌ Error verifying Razorpay payment:", error);
     res.status(500).json({ message: error.message || "Failed to verify payment" });
   }
 };
